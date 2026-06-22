@@ -130,16 +130,28 @@ export async function updateCatalogImageStatus(
 ): Promise<void> {
   if (updates.length === 0) return
 
+  // ADR-213 D-213-2/5：确定性判定（ok/low_quality/broken）同步写 <kind>_checked_at；
+  // pending_review/missing 非「判定」（待复检/缺图）→ 不动 checked_at（避免 stale 被冒充已验证）。
+  // 列名 + checkedCol 均来自 allowedKinds 白名单常量（非请求输入），无注入。
+  const DETERMINISTIC_STATUSES = new Set<ImageStatus>(['ok', 'low_quality', 'broken'])
   const allowedKinds = ['poster', 'backdrop', 'logo', 'banner_backdrop'] as const
   for (const { catalogId, kind, status } of updates) {
     if (!allowedKinds.includes(kind as (typeof allowedKinds)[number])) {
       throw new Error(`Invalid image kind for status update: ${kind}`)
     }
     const col = `${kind}_status`
-    await db.query(
-      `UPDATE media_catalog SET ${col} = $1, updated_at = NOW() WHERE id = $2`,
-      [status, catalogId]
-    )
+    if (DETERMINISTIC_STATUSES.has(status)) {
+      const checkedCol = `${kind}_checked_at`
+      await db.query(
+        `UPDATE media_catalog SET ${col} = $1, ${checkedCol} = NOW(), updated_at = NOW() WHERE id = $2`,
+        [status, catalogId]
+      )
+    } else {
+      await db.query(
+        `UPDATE media_catalog SET ${col} = $1, updated_at = NOW() WHERE id = $2`,
+        [status, catalogId]
+      )
+    }
   }
 }
 
@@ -586,6 +598,51 @@ export async function listPendingImageUrls(
      ORDER BY url
      LIMIT $1 OFFSET $2`,
     params,
+  )
+  return result.rows.map(r => ({
+    catalogId: r.catalog_id,
+    videoId: r.video_id,
+    kind: r.kind as PendingImageRow['kind'],
+    url: r.url,
+  }))
+}
+
+/**
+ * ADR-213 D-213-5 ③（A-SCAN）：读取 `<kind>_url` 非空但 `<kind>_checked_at IS NULL`（从未确定性判定）
+ * 的图片 URL，供「部署后一次性真实健康扫描」入队 health-check——worker 跑完给 checked_at 落真值、
+ * 排空 migration 121 后的初始 unknown 桶（C 硬前置门）。
+ * 与 listPendingImageUrls 同 UNION 结构，仅过滤谓词由 `status='pending_review'` 改为 `checked_at IS NULL`。
+ * 幂等：worker 落 checked_at 后该行不再命中 → 可安全分页/重跑。
+ */
+export async function listUncheckedImageUrls(
+  db: Pool,
+  limit = 500,
+  offset = 0,
+): Promise<PendingImageRow[]> {
+  const result = await db.query<{
+    catalog_id: string
+    video_id: string
+    kind: string
+    url: string
+  }>(
+    `SELECT mc.id AS catalog_id, v.id AS video_id, 'poster' AS kind, mc.cover_url AS url
+       FROM media_catalog mc JOIN videos v ON v.catalog_id = mc.id
+      WHERE mc.cover_url IS NOT NULL AND mc.poster_checked_at IS NULL AND v.deleted_at IS NULL
+     UNION ALL
+     SELECT mc.id, v.id, 'backdrop', mc.backdrop_url
+       FROM media_catalog mc JOIN videos v ON v.catalog_id = mc.id
+      WHERE mc.backdrop_url IS NOT NULL AND mc.backdrop_checked_at IS NULL AND v.deleted_at IS NULL
+     UNION ALL
+     SELECT mc.id, v.id, 'logo', mc.logo_url
+       FROM media_catalog mc JOIN videos v ON v.catalog_id = mc.id
+      WHERE mc.logo_url IS NOT NULL AND mc.logo_checked_at IS NULL AND v.deleted_at IS NULL
+     UNION ALL
+     SELECT mc.id, v.id, 'banner_backdrop', mc.banner_backdrop_url
+       FROM media_catalog mc JOIN videos v ON v.catalog_id = mc.id
+      WHERE mc.banner_backdrop_url IS NOT NULL AND mc.banner_backdrop_checked_at IS NULL AND v.deleted_at IS NULL
+     ORDER BY url
+     LIMIT $1 OFFSET $2`,
+    [limit, offset],
   )
   return result.rows.map(r => ({
     catalogId: r.catalog_id,

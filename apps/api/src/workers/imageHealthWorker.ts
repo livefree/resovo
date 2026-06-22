@@ -52,14 +52,6 @@ function waitForDomainSlot(domain: string): Promise<void> {
   return next
 }
 
-function extractDomain(url: string): string {
-  try {
-    return new URL(url).hostname
-  } catch {
-    return url
-  }
-}
-
 // ── 尺寸验证 ──────────────────────────────────────────────────────
 
 interface DimensionSpec {
@@ -101,89 +93,107 @@ async function headRequest(url: string): Promise<{ ok: boolean; status: number }
   }
 }
 
-// ── 连续失败计数（内存，进程重启重置，可接受）────────────────────
-
-const consecutiveFailures = new Map<string, number>()
-const MAX_CONSECUTIVE_FAIL = 3
-
-function recordFailure(key: string): number {
-  const n = (consecutiveFailures.get(key) ?? 0) + 1
-  consecutiveFailures.set(key, n)
-  return n
-}
-
-function clearFailure(key: string): void {
-  consecutiveFailures.delete(key)
+// ── 尺寸/解码判别结果（ADR-213 D-213-9：区分确定性失败 vs 瞬态）──────────
+// 取代旧「内存连败计数器」（进程重启重置 → broken 非确定性，ADR-213 D-213-5 弃用）：
+//   确定性失败（HTTP 404/5xx / sharp 解码失败）单次即判 broken；
+//   瞬态失败（fetch 网络/超时/abort/DNS/TLS）不改 status、不写 checked_at（消 timeout 误报）。
+interface DimensionResult {
+  width: number
+  height: number
+  failure?: 'http_4xx' | 'http_5xx' | 'decode' | 'transient'
 }
 
 // ── 单图健康检查逻辑 ──────────────────────────────────────────────
 
 export async function checkImageHealth(data: ImageHealthJobData): Promise<void> {
   const { catalogId, videoId, kind, url } = data
-  const failKey = `${catalogId}:${kind}`
+  const sizedKind = kind as 'poster' | 'backdrop' | 'logo' | 'banner_backdrop'
+  // 确定性出口写 status；updateCatalogImageStatus 内据 status∈{ok,low_quality,broken} 同步写 checked_at（D-213-5）
+  const writeStatus = (status: 'ok' | 'low_quality' | 'broken') =>
+    updateCatalogImageStatus(db, [{ catalogId, kind: sizedKind, status }])
 
-  // URL 语法校验
+  // URL 语法非法 = 确定性破损
   let parsedUrl: URL
   try {
     parsedUrl = new URL(url)
   } catch {
     await upsertBrokenImageEvent(db, { videoId, imageKind: kind, url, eventType: 'fetch_404' })
-    await updateCatalogImageStatus(db, [{ catalogId, kind: kind as 'poster' | 'backdrop' | 'logo' | 'banner_backdrop', status: 'broken' }])
+    await writeStatus('broken')
     return
   }
 
-  const domain = parsedUrl.hostname
-  await waitForDomainSlot(domain)
-
+  await waitForDomainSlot(parsedUrl.hostname)
   const { ok, status } = await headRequest(url)
 
   if (!ok) {
-    const eventType = status === 404 ? 'fetch_404' : status >= 500 ? 'fetch_5xx' : 'timeout'
-    await upsertBrokenImageEvent(db, { videoId, imageKind: kind, url, eventType })
-
-    const failures = recordFailure(failKey)
-    if (failures >= MAX_CONSECUTIVE_FAIL) {
-      await updateCatalogImageStatus(db, [{ catalogId, kind: kind as 'poster' | 'backdrop' | 'logo' | 'banner_backdrop', status: 'broken' }])
+    // HEAD 404/5xx = 确定性破损（单次即判，无内存连败计数器）；
+    // status===0（网络/超时/abort）= 瞬态 → 记遥测、保留上次 status + checked_at（D-213-5，消 timeout 误报）
+    if (status === 404 || status >= 500) {
+      await upsertBrokenImageEvent(db, { videoId, imageKind: kind, url, eventType: status === 404 ? 'fetch_404' : 'fetch_5xx' })
+      await writeStatus('broken')
+      return
     }
+    await upsertBrokenImageEvent(db, { videoId, imageKind: kind, url, eventType: 'timeout' })
     return
   }
 
-  clearFailure(failKey)
-
-  // 有尺寸约束的种类才做 GET + 尺寸检查
+  // HEAD ok：有尺寸约束 kind（poster/backdrop）再 GET+sharp 取尺寸；logo/banner 无约束 → 直接 ok
   const spec = DIMENSION_SPECS[kind]
   if (spec) {
-    const { width, height } = await fetchImageDimensions(url)
-    if (width === 0 || !checkAspectRatio(width, height, spec)) {
-      const eventType = width < spec.minWidth ? 'dimension_too_small' : 'aspect_mismatch'
+    const dim = await fetchImageDimensions(url)
+    if (dim.failure) {
+      if (dim.failure === 'transient') {
+        // GET 瞬态失败：遥测 + 不改 status/checked_at（worker 侧瞬态，浏览器可能仍可渲染）
+        await upsertBrokenImageEvent(db, { videoId, imageKind: kind, url, eventType: 'timeout' })
+        return
+      }
+      // http_4xx/http_5xx/decode = body 取不到/解不开 = 确定性真破损（D-213-9 消「width===0 假阴性」）
+      const eventType = dim.failure === 'http_5xx' ? 'fetch_5xx' : dim.failure === 'http_4xx' ? 'fetch_404' : 'decode_fail'
       await upsertBrokenImageEvent(db, { videoId, imageKind: kind, url, eventType })
-      await updateCatalogImageStatus(db, [{ catalogId, kind: kind as 'poster' | 'backdrop' | 'logo' | 'banner_backdrop', status: 'low_quality' }])
+      await writeStatus('broken')
+      return
+    }
+    // body 取回解码成功（width>0）：仅尺寸/比例不达标 → low_quality（图能用、质量不合）
+    if (!checkAspectRatio(dim.width, dim.height, spec)) {
+      const eventType = dim.width < spec.minWidth ? 'dimension_too_small' : 'aspect_mismatch'
+      await upsertBrokenImageEvent(db, { videoId, imageKind: kind, url, eventType })
+      await writeStatus('low_quality')
       return
     }
   }
 
-  await updateCatalogImageStatus(db, [{ catalogId, kind: kind as 'poster' | 'backdrop' | 'logo' | 'banner_backdrop', status: 'ok' }])
+  await writeStatus('ok')
 }
 
 // ── 获取图片尺寸（GET + sharp）───────────────────────────────────
 
-async function fetchImageDimensions(url: string): Promise<{ width: number; height: number }> {
+async function fetchImageDimensions(url: string): Promise<DimensionResult> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 5000)
+  let buf: Buffer
   try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 5000)
-    let buf: Buffer
-    try {
-      const res = await fetch(url, { signal: controller.signal })
-      if (!res.ok) return { width: 0, height: 0 }
-      buf = Buffer.from(await res.arrayBuffer())
-    } finally {
-      clearTimeout(timer)
+    const res = await fetch(url, { signal: controller.signal })
+    if (!res.ok) {
+      // GET HTTP 错误 = 确定性（D-213-9）：5xx→http_5xx，其余 4xx→http_4xx
+      return { width: 0, height: 0, failure: res.status >= 500 ? 'http_5xx' : 'http_4xx' }
     }
+    buf = Buffer.from(await res.arrayBuffer())
+  } catch {
+    // fetch 网络/超时/abort/DNS/TLS = 瞬态（worker 侧失败，非「body 确定取不到」）
+    return { width: 0, height: 0, failure: 'transient' }
+  } finally {
+    clearTimeout(timer)
+  }
+  // body 取回成功 → 解码取尺寸；sharp 抛或尺寸缺失 = 确定性解码失败
+  try {
     const sharp = (await import('sharp')).default
     const meta = await sharp(buf).metadata()
-    return { width: meta.width ?? 0, height: meta.height ?? 0 }
+    const width = meta.width ?? 0
+    const height = meta.height ?? 0
+    if (width === 0 || height === 0) return { width: 0, height: 0, failure: 'decode' }
+    return { width, height }
   } catch {
-    return { width: 0, height: 0 }
+    return { width: 0, height: 0, failure: 'decode' }
   }
 }
 

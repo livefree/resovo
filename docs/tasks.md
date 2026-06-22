@@ -19,6 +19,7 @@
 - **涉及文件**：`apps/api/src/workers/imageHealthWorker.ts`（判别式 + 映射）、`apps/api/src/db/queries/imageHealth.ts`（updateCatalogImageStatus 加 checked_at）、`apps/api/src/services/ImageHealthService.ts`（A-SCAN 入队）+ 可能 `imageHealth.ts` 新查询（列 ok 行供 A-SCAN）、`tests/unit/api/image-health-*.test.ts`。
 - **门禁**：typecheck/lint/test:changed + 单测（404/5xx/decode→broken · 尺寸小→low_quality · **瞬态→status 不变且 checked_at 不推进** · 确定性出口刷 checked_at · A-SCAN 入队 ok 行）+ `verify:adr-contracts`。**关键路径**：worker 图片健康巡检 status 写入，改后回归。
 - **备注**：A 部署后跑 A-SCAN 再起 C（C 硬依赖扫描完成）；B 可与 A 并行。Subagents trailer 引 ADR-213 arch-reviewer（设计背书）。
+- **进展（2026-06-22）**：worker 三改（`fetchImageDimensions` 判别式 / `checkImageHealth` 确定性→broken·瞬态→不改 status·不写 checked_at / 删内存连败计数器 + 死代码 extractDomain）+ `updateCatalogImageStatus` 确定性出口写 checked_at + `listUncheckedImageUrls` 查询 + `ImageHealthService.enqueueHealthScanForUnchecked`（A-SCAN）+ 触发脚本 `scripts/run-imgh-ascan.ts` 全落；单测覆盖（404/5xx→broken·HEAD/GET 瞬态→不改 status·GET 5xx→broken·checked_at 条件写入·A-SCAN 入队）。**门禁**：typecheck=0/lint=0/test:changed=181/verify:adr-contracts=0。**待**：部署后跑 A-SCAN（`run-imgh-ascan.ts`）落 checked_at 真值 → 收口 A、起 C（B 可先行）。
 
 ---
 

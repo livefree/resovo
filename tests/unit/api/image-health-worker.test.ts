@@ -15,6 +15,7 @@ vi.mock('@/api/db/queries/imageHealth', () => ({
   updateCatalogImageStatus: (...args: unknown[]) => mockUpdateCatalogImageStatus(...args),
   updateCatalogImageBlurhash: vi.fn().mockResolvedValue(undefined),
   listPendingImageUrls: vi.fn().mockResolvedValue([]),
+  listUncheckedImageUrls: vi.fn().mockResolvedValue([]),
   listMissingBlurhashUrls: vi.fn().mockResolvedValue([]),
 }))
 
@@ -58,43 +59,51 @@ describe('imageHealthWorker — checkImageHealth', () => {
     )
   })
 
-  it('404 响应 → upsert fetch_404 事件，不立即置 broken（连续失败未达 3 次）', async () => {
+  it('HEAD 404 → 单次即置 broken（ADR-213 D-213-5：确定性失败，无内存连败计数器）', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }))
 
     const { checkImageHealth } = await import('@/api/workers/imageHealthWorker')
     await checkImageHealth({
-      type: 'health-check',
-      catalogId: 'cat-distinct-1',
-      videoId: 'vid-2',
-      kind: 'poster',
+      type: 'health-check', catalogId: 'cat-404', videoId: 'vid-2', kind: 'poster',
       url: 'https://example.com/poster.jpg',
     })
     expect(mockUpsertBrokenImageEvent).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ eventType: 'fetch_404' })
+      expect.anything(), expect.objectContaining({ eventType: 'fetch_404' })
+    )
+    expect(mockUpdateCatalogImageStatus).toHaveBeenCalledWith(
+      expect.anything(), expect.arrayContaining([expect.objectContaining({ status: 'broken' })])
     )
   })
 
-  it('连续 3 次 404 → status 置 broken', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }))
+  it('HEAD 5xx → 单次即置 broken（确定性）', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }))
 
     const { checkImageHealth } = await import('@/api/workers/imageHealthWorker')
-    const data = {
-      type: 'health-check' as const,
-      catalogId: 'cat-seq-3',
-      videoId: 'vid-3',
-      kind: 'poster' as const,
-      url: 'https://cdn.example.com/broken.jpg',
-    }
-
-    await checkImageHealth(data)
-    await checkImageHealth(data)
-    await checkImageHealth(data)
-
-    const brokenCalls = mockUpdateCatalogImageStatus.mock.calls.filter(
-      ([, updates]) => Array.isArray(updates) && updates.some((u: { status: string }) => u.status === 'broken')
+    await checkImageHealth({
+      type: 'health-check', catalogId: 'cat-5xx', videoId: 'vid-5xx', kind: 'poster',
+      url: 'https://cdn.example.com/p.jpg',
+    })
+    expect(mockUpsertBrokenImageEvent).toHaveBeenCalledWith(
+      expect.anything(), expect.objectContaining({ eventType: 'fetch_5xx' })
     )
-    expect(brokenCalls.length).toBeGreaterThanOrEqual(1)
+    expect(mockUpdateCatalogImageStatus).toHaveBeenCalledWith(
+      expect.anything(), expect.arrayContaining([expect.objectContaining({ status: 'broken' })])
+    )
+  })
+
+  it('HEAD 瞬态（status 0 网络/超时）→ 记 timeout 遥测、不改 status（D-213-5 消 timeout 误报）', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 0 }))
+
+    const { checkImageHealth } = await import('@/api/workers/imageHealthWorker')
+    await checkImageHealth({
+      type: 'health-check', catalogId: 'cat-transient', videoId: 'vid-t', kind: 'poster',
+      url: 'https://slow.example.com/p.jpg',
+    })
+    expect(mockUpsertBrokenImageEvent).toHaveBeenCalledWith(
+      expect.anything(), expect.objectContaining({ eventType: 'timeout' })
+    )
+    // 瞬态不改 status（也不写 checked_at）：updateCatalogImageStatus 不应被调用
+    expect(mockUpdateCatalogImageStatus).not.toHaveBeenCalled()
   })
 
   it('200 且 sharp 返回合规尺寸 → status ok，不写 broken event', async () => {
@@ -134,6 +143,40 @@ describe('imageHealthWorker — checkImageHealth', () => {
       expect.anything(),
       expect.arrayContaining([expect.objectContaining({ status: 'ok' })])
     )
+  })
+
+  it('HEAD ok 但 GET 5xx → broken（D-213-9：body 取不到=确定性真破损，非 low_quality）', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200 })   // HEAD
+      .mockResolvedValueOnce({ ok: false, status: 502 })  // GET
+    )
+    const { checkImageHealth } = await import('@/api/workers/imageHealthWorker')
+    await checkImageHealth({
+      type: 'health-check', catalogId: 'cat-get5xx', videoId: 'vid-g5', kind: 'poster',
+      url: 'https://cdn.example.com/g.jpg',
+    })
+    expect(mockUpsertBrokenImageEvent).toHaveBeenCalledWith(
+      expect.anything(), expect.objectContaining({ eventType: 'fetch_5xx' })
+    )
+    expect(mockUpdateCatalogImageStatus).toHaveBeenCalledWith(
+      expect.anything(), expect.arrayContaining([expect.objectContaining({ status: 'broken' })])
+    )
+  })
+
+  it('HEAD ok 但 GET fetch 抛（瞬态）→ 记 timeout、不改 status', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200 })   // HEAD
+      .mockRejectedValueOnce(new Error('ECONNRESET'))      // GET 网络失败
+    )
+    const { checkImageHealth } = await import('@/api/workers/imageHealthWorker')
+    await checkImageHealth({
+      type: 'health-check', catalogId: 'cat-gett', videoId: 'vid-gt', kind: 'poster',
+      url: 'https://cdn.example.com/gt.jpg',
+    })
+    expect(mockUpsertBrokenImageEvent).toHaveBeenCalledWith(
+      expect.anything(), expect.objectContaining({ eventType: 'timeout' })
+    )
+    expect(mockUpdateCatalogImageStatus).not.toHaveBeenCalled()
   })
 
   it('registerImageHealthWorker 注册 health-check processor', async () => {
@@ -182,6 +225,26 @@ describe('ImageHealthService — named job 入队', () => {
       'blurhash-extract',
       expect.objectContaining({ type: 'blurhash-extract' }),
       expect.anything()
+    )
+  })
+
+  it('enqueueHealthScanForUnchecked（A-SCAN）扫 unchecked 行入队 health-check（dedup jobId）', async () => {
+    const mod = await import('@/api/db/queries/imageHealth')
+    ;(mod.listUncheckedImageUrls as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      { catalogId: 'cat-u', videoId: 'vid-u', kind: 'poster', url: 'https://cdn.example.com/u.jpg' },
+    ]) // 1 行（< pageSize）→ 单页即终止
+
+    const { ImageHealthService } = await import('@/api/services/ImageHealthService')
+    const svc = new ImageHealthService({} as import('pg').Pool)
+    const res = await svc.enqueueHealthScanForUnchecked(
+      { add: mockAdd } as unknown as import('@/api/workers/imageHealthWorker').ImageHealthQueue,
+    )
+
+    expect(res.enqueued).toBe(1)
+    expect(mockAdd).toHaveBeenCalledWith(
+      'health-check',
+      expect.objectContaining({ type: 'health-check', catalogId: 'cat-u', kind: 'poster' }),
+      expect.objectContaining({ jobId: 'health-check-cat-u-poster' }),
     )
   })
 })

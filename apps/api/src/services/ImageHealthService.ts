@@ -8,6 +8,7 @@ import type { Pool } from 'pg'
 import type { ImageHealthQueue } from '@/api/workers/imageHealthWorker'
 import {
   listPendingImageUrls,
+  listUncheckedImageUrls,
   listMissingBlurhashUrls,
   updateCatalogImageStatus,
   getImageHealthStats,
@@ -47,6 +48,36 @@ export class ImageHealthService {
       )
     )
     return { enqueued: rows.length }
+  }
+
+  /**
+   * ADR-213 D-213-5 ③：A-SCAN——部署后一次性扫描所有 `<kind>_checked_at IS NULL` 行入 health-check，
+   * worker 跑完给 checked_at 落真值、排空 migration 121 后的初始 unknown 桶（C 硬前置门）。
+   * 分页遍历 unchecked 快照（worker 异步处理，入队窗口内集合基本稳定）；dedup jobId 保证重跑/重叠不重复 add。
+   */
+  async enqueueHealthScanForUnchecked(
+    queue: ImageHealthQueue,
+    pageSize = 500,
+  ): Promise<{ enqueued: number }> {
+    let offset = 0
+    let total = 0
+    for (;;) {
+      const rows = await listUncheckedImageUrls(this.db, pageSize, offset)
+      if (rows.length === 0) break
+      await Promise.all(
+        rows.map(row =>
+          queue.add(
+            'health-check',
+            { type: 'health-check', ...row },
+            { jobId: `health-check-${row.catalogId}-${row.kind}`, removeOnComplete: 50 },
+          ),
+        ),
+      )
+      total += rows.length
+      if (rows.length < pageSize) break
+      offset += pageSize
+    }
+    return { enqueued: total }
   }
 
   /** 将缺 blurhash 的图片批量入 imageHealthQueue */
