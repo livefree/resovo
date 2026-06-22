@@ -26,6 +26,7 @@
 ### ⏸️ IMGH-P3-5 — 图片治理抽屉四图替换增强 + 精修（SEQ-20260621-01）— parked·待用户视觉验收 + commit
 
 - **状态**：⏸️ 代码完成·门禁全绿·**未提交**（parked，阻塞在用户视觉验收，非主循环活跃）｜ **执行模型**：claude-opus-4-8 ｜**子代理**：无
+- **改动归位（2026-06-22）**：为隔离 `chore/card-sizing-governance-20260622` 工作区，4 文件改动（`ImageGovernanceDrawer.tsx` / `ImageHealthProblemBoard.tsx` / 新增 `ImageMatrixCell.tsx` / drawer 测试）已存入具名 stash。**恢复**：`git stash list` 找 message 含「IMGH-P3-5 parked」的条目 → `git stash apply <ref>`（用 apply 不用 pop，保留 stash 直至验收 commit 后再 drop）。
 - **进展**：A 基础 + B 精修全落地（focusKind 内部 state 四图切换 / cell 填充式选中态 vs 候选卡 ring 分层 / `ImageMatrixCell` 按 kind 比例精致化 + hover 预览按钮 / 替换区改前小窗 + 改后大图双预览 / 成功不关抽屉留存连续治理）。Codex 候选竞态 + 用户报 border shorthand 运行时警告均已闭环。**门禁**：typecheck=0 / lint=0 / test:changed=58 passed。
 - **待办（用户验收后收尾）**：填完成备注 → 更新 task-queue → 删卡 → changelog → git commit。**未 commit**（用户仍在视觉迭代）。
 
