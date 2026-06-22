@@ -191,7 +191,6 @@
   --shelf-gap: var(--space-4);
   --shelf-bottom-padding: var(--space-2);
   --shelf-card-w-portrait: 170px;
-  --shelf-card-w-landscape: 300px;
   --shelf-card-w-top10: 170px;
   --shelf-empty-opacity: 0.32;
   --shelf-empty-min-slots: 4;

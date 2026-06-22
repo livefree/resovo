@@ -29,7 +29,6 @@ export function SearchEmptyState({ hasQuery }: SearchEmptyStateProps) {
         </h3>
         <VideoGrid
           query="period=week&limit=20"
-          variant="portrait"
           layout="grid"
           stagger
           data-testid="search-recommended-grid"
