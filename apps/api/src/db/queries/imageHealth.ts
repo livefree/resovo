@@ -705,6 +705,61 @@ export async function listUncheckedImageUrls(
 }
 
 /**
+ * ADR-213 D-213-9①（P4-S 周期巡检）：读取 `<kind>_status='ok'` 但 `<kind>_checked_at` 陈旧
+ * （早于 staleDays 或 NULL）的图片 URL，供周期巡检重入 health-check——worker 复检落新 checked_at
+ * （保持 ok 或翻 broken），自动消化 D-213-7 的 `unknown` 桶、根治 stale-ok 假阴性（ADV-213-4）。
+ * 谓词与 D-213-7 problemReason `unknown` 分支同源：`status='ok' ∧ COALESCE(checked_at,'-infinity') < NOW()-staleDays`。
+ * staleDays 经 `make_interval(days => $1)` 参数化（单一常量 STALE_CHECK_DAYS 由 service 传入，禁散落硬编码）。
+ * 幂等：worker 落新 checked_at 后该行不再命中 → 可安全分页/重跑。
+ */
+export async function listStaleOkImageUrls(
+  db: Pool,
+  staleDays: number,
+  limit = 500,
+  offset = 0,
+): Promise<PendingImageRow[]> {
+  const result = await db.query<{
+    catalog_id: string
+    video_id: string
+    kind: string
+    url: string
+  }>(
+    `SELECT mc.id AS catalog_id, v.id AS video_id, 'poster' AS kind, mc.cover_url AS url
+       FROM media_catalog mc JOIN videos v ON v.catalog_id = mc.id
+      WHERE mc.cover_url IS NOT NULL AND mc.poster_status = 'ok'
+        AND COALESCE(mc.poster_checked_at, '-infinity'::timestamptz) < NOW() - make_interval(days => $1)
+        AND v.deleted_at IS NULL
+     UNION ALL
+     SELECT mc.id, v.id, 'backdrop', mc.backdrop_url
+       FROM media_catalog mc JOIN videos v ON v.catalog_id = mc.id
+      WHERE mc.backdrop_url IS NOT NULL AND mc.backdrop_status = 'ok'
+        AND COALESCE(mc.backdrop_checked_at, '-infinity'::timestamptz) < NOW() - make_interval(days => $1)
+        AND v.deleted_at IS NULL
+     UNION ALL
+     SELECT mc.id, v.id, 'logo', mc.logo_url
+       FROM media_catalog mc JOIN videos v ON v.catalog_id = mc.id
+      WHERE mc.logo_url IS NOT NULL AND mc.logo_status = 'ok'
+        AND COALESCE(mc.logo_checked_at, '-infinity'::timestamptz) < NOW() - make_interval(days => $1)
+        AND v.deleted_at IS NULL
+     UNION ALL
+     SELECT mc.id, v.id, 'banner_backdrop', mc.banner_backdrop_url
+       FROM media_catalog mc JOIN videos v ON v.catalog_id = mc.id
+      WHERE mc.banner_backdrop_url IS NOT NULL AND mc.banner_backdrop_status = 'ok'
+        AND COALESCE(mc.banner_backdrop_checked_at, '-infinity'::timestamptz) < NOW() - make_interval(days => $1)
+        AND v.deleted_at IS NULL
+     ORDER BY url
+     LIMIT $2 OFFSET $3`,
+    [staleDays, limit, offset],
+  )
+  return result.rows.map(r => ({
+    catalogId: r.catalog_id,
+    videoId: r.video_id,
+    kind: r.kind as PendingImageRow['kind'],
+    url: r.url,
+  }))
+}
+
+/**
  * 读取 media_catalog 中 blurhash 为空但 URL 有效的图片，供 imageBlurhashWorker 消费。
  */
 export async function listMissingBlurhashUrls(

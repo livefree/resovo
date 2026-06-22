@@ -2354,3 +2354,18 @@
 - **新增依赖**：无
 - **数据库变更**：无（消费 0M migration 121 的 `<kind>_client_error_at` 列）
 - **注意事项**：信号列驱动 P4-C 健康读路径（自过期 7d 窗口）；events 降级纯遥测（趋势/域名/`brokenLast7Days`）。**双写漂移定性**（ADV-213-2）：仅遥测写失败时健康判定不受影响（信号列已写），`brokenLast7Days` 定性为遥测口径、非权威健康计数。门禁：typecheck=0/lint=0/test:changed=189/verify:endpoint-adr=0（契约不变·无新端点）/verify:adr-contracts=0。未含 IMGH-P3-5 parked 代码。
+
+## [IMGH-P4-S] 方案C 图片健康周期巡检 scheduler — stale-ok 行重入 health-check 自动消化 unknown（ADR-213 D-213-9①）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 02:20
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8, a06695fa2c0aa033c — D-213-9① 周期巡检设计已由 ADR-213 背书)
+- **修改文件**：
+  - `apps/api/src/db/queries/imageHealth.ts` — 新增 `listStaleOkImageUrls(db,staleDays,limit,offset)`：UNION ALL 4 kind，谓词 `<kind>_url 非空 AND <kind>_status='ok' AND COALESCE(<kind>_checked_at,'-infinity') < NOW()-make_interval(days=>$1) AND v.deleted_at IS NULL`，与 D-213-7 `unknown` 分支同源；staleDays 参数化（禁裸插值）
+  - `apps/api/src/services/ImageHealthService.ts` — 新增 `enqueueStaleHealthRecheck(queue,pageSize)`：分页扫 stale-ok 行入 health-check（dedup jobId `health-check-<catalogId>-<kind>`），阈值取单一常量 `STALE_CHECK_DAYS`（import 自 imageHealth.scan）
+  - `apps/api/src/server.ts` — scheduler 接线（仿 verify-scheduler：`setTimeout` 5min 首跑 + `setInterval` 24h），env gate `IMAGE_HEALTH_SCHEDULER_ENABLED`（默认关，dev 防误发 HEAD；prod 显式开）；启用/禁用各 `log.info`
+  - `tests/unit/api/image-health-worker.test.ts` — `enqueueStaleHealthRecheck` 服务测（stale 行入队 dedup jobId / 空集→enqueued=0 不入队）
+  - `tests/unit/api/image-health-stale-recheck.test.ts`（新建）— `listStaleOkImageUrls` 谓词 SQL（status='ok'∧checked_at 陈旧·COALESCE -infinity / staleDays·limit·offset 参数化 / 行映射）
+- **新增依赖**：无
+- **数据库变更**：无（消费 0M migration 121 的 `<kind>_checked_at` 列 + scan.ts `STALE_CHECK_DAYS=30` 常量）
+- **注意事项**：**A-SCAN ≠ P4-S**——A-SCAN（P4-A）是 C 前的一次性初始排空门（`checked_at IS NULL`），P4-S 是上线后周期维护（`checked_at` 陈旧）。**非阻塞根治收尾卡**：过渡正确性已由 P4-C `unknown` 面兜底，P4-S 上线（prod `IMAGE_HEALTH_SCHEDULER_ENABLED=true`）后健康板方宣称「零漏检/完备」。门禁：typecheck=0/lint=0/test:changed=194/verify:endpoint-adr=0（无新端点·scheduler 非 route）/verify:adr-contracts=0。未含 IMGH-P3-5 parked 代码。

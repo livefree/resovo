@@ -9,6 +9,7 @@ import type { ImageHealthQueue } from '@/api/workers/imageHealthWorker'
 import {
   listPendingImageUrls,
   listUncheckedImageUrls,
+  listStaleOkImageUrls,
   listMissingBlurhashUrls,
   updateCatalogImageStatus,
   getImageHealthStats,
@@ -23,6 +24,7 @@ import {
   type ProblemImageRow,
   type ProblemImageCounts,
 } from '@/api/db/queries/imageHealth'
+import { STALE_CHECK_DAYS } from '@/api/db/queries/imageHealth.scan'
 import type { ImageKind } from '@/types'
 
 export type { ImageHealthStats }
@@ -63,6 +65,38 @@ export class ImageHealthService {
     let total = 0
     for (;;) {
       const rows = await listUncheckedImageUrls(this.db, pageSize, offset)
+      if (rows.length === 0) break
+      await Promise.all(
+        rows.map(row =>
+          queue.add(
+            'health-check',
+            { type: 'health-check', ...row },
+            { jobId: `health-check-${row.catalogId}-${row.kind}`, removeOnComplete: 50 },
+          ),
+        ),
+      )
+      total += rows.length
+      if (rows.length < pageSize) break
+      offset += pageSize
+    }
+    return { enqueued: total }
+  }
+
+  /**
+   * ADR-213 D-213-9①（P4-S 周期巡检）：分页扫所有「stale-ok」行（`status='ok'` 但 `checked_at`
+   * 早于 STALE_CHECK_DAYS 或 NULL）入 health-check → worker 复检落新 checked_at，自动消化 D-213-7
+   * 的 `unknown` 桶、根治 stale-ok 假阴性。dedup jobId 保证与 A-SCAN/重叠周期不重复 add。
+   * 阈值取单一常量 STALE_CHECK_DAYS（与 D-213-7 读端 unknown 谓词同源，禁散落硬编码）。
+   * A-SCAN ≠ P4-S：前者部署后一次性初始排空（checked_at IS NULL），后者上线后周期维护（checked_at 陈旧）。
+   */
+  async enqueueStaleHealthRecheck(
+    queue: ImageHealthQueue,
+    pageSize = 500,
+  ): Promise<{ enqueued: number }> {
+    let offset = 0
+    let total = 0
+    for (;;) {
+      const rows = await listStaleOkImageUrls(this.db, STALE_CHECK_DAYS, pageSize, offset)
       if (rows.length === 0) break
       await Promise.all(
         rows.map(row =>

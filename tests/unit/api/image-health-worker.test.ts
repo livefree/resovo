@@ -16,6 +16,7 @@ vi.mock('@/api/db/queries/imageHealth', () => ({
   updateCatalogImageBlurhash: vi.fn().mockResolvedValue(undefined),
   listPendingImageUrls: vi.fn().mockResolvedValue([]),
   listUncheckedImageUrls: vi.fn().mockResolvedValue([]),
+  listStaleOkImageUrls: vi.fn().mockResolvedValue([]),
   listMissingBlurhashUrls: vi.fn().mockResolvedValue([]),
 }))
 
@@ -246,5 +247,39 @@ describe('ImageHealthService — named job 入队', () => {
       expect.objectContaining({ type: 'health-check', catalogId: 'cat-u', kind: 'poster' }),
       expect.objectContaining({ jobId: 'health-check-cat-u-poster' }),
     )
+  })
+
+  it('enqueueStaleHealthRecheck（P4-S 周期巡检）stale-ok 行入队 health-check（dedup jobId）', async () => {
+    const mod = await import('@/api/db/queries/imageHealth')
+    ;(mod.listStaleOkImageUrls as ReturnType<typeof vi.fn>).mockResolvedValueOnce([
+      { catalogId: 'cat-s', videoId: 'vid-s', kind: 'backdrop', url: 'https://cdn.example.com/s.jpg' },
+    ]) // 1 行（< pageSize）→ 单页即终止
+
+    const { ImageHealthService } = await import('@/api/services/ImageHealthService')
+    const svc = new ImageHealthService({} as import('pg').Pool)
+    const res = await svc.enqueueStaleHealthRecheck(
+      { add: mockAdd } as unknown as import('@/api/workers/imageHealthWorker').ImageHealthQueue,
+    )
+
+    expect(res.enqueued).toBe(1)
+    expect(mockAdd).toHaveBeenCalledWith(
+      'health-check',
+      expect.objectContaining({ type: 'health-check', catalogId: 'cat-s', kind: 'backdrop' }),
+      expect.objectContaining({ jobId: 'health-check-cat-s-backdrop' }),
+    )
+  })
+
+  it('enqueueStaleHealthRecheck 无 stale-ok 行（空集）→ enqueued=0、不入队', async () => {
+    const mod = await import('@/api/db/queries/imageHealth')
+    ;(mod.listStaleOkImageUrls as ReturnType<typeof vi.fn>).mockResolvedValueOnce([])
+
+    const { ImageHealthService } = await import('@/api/services/ImageHealthService')
+    const svc = new ImageHealthService({} as import('pg').Pool)
+    const res = await svc.enqueueStaleHealthRecheck(
+      { add: mockAdd } as unknown as import('@/api/workers/imageHealthWorker').ImageHealthQueue,
+    )
+
+    expect(res.enqueued).toBe(0)
+    expect(mockAdd).not.toHaveBeenCalled()
   })
 })
