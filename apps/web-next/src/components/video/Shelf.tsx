@@ -3,9 +3,8 @@
 /**
  * ShelfRow — HANDOFF-14 对齐 docs/frontend_design_spec_20260423.md §11
  *
- * 4 种 template：
+ * 3 种 template：
  *   poster-row     — 横向滚动，portrait 卡 170px，2:3 比例
- *   landscape-row  — 横向滚动，portrait 卡 170px，2:3 比例（HANDOFF-20 统一竖版）
  *   top10-row      — 横向滚动，portrait 卡 170px + 排名数字叠层
  *   featured-grid  — 5 列网格，portrait 卡
  *
@@ -13,7 +12,6 @@
  *   card gap       → var(--shelf-gap)              16px
  *   bottom padding → var(--shelf-bottom-padding)   8px
  *   portrait 宽    → var(--shelf-card-w-portrait)  170px
- *   landscape 宽   → var(--shelf-card-w-landscape) 300px
  *   top10 宽       → var(--shelf-card-w-top10)     170px
  *   empty opacity  → var(--shelf-empty-opacity)    0.32
  *
@@ -37,7 +35,7 @@ const MIN_SLOTS = 4  // --shelf-empty-min-slots
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type ShelfTemplate = 'featured-grid' | 'top10-row' | 'poster-row' | 'landscape-row'
+type ShelfTemplate = 'featured-grid' | 'top10-row' | 'poster-row'
 
 interface ShelfRowProps {
   readonly template: ShelfTemplate
@@ -297,12 +295,6 @@ function PosterTrack({ videos, testId }: { readonly videos: VideoCardType[]; rea
   )
 }
 
-// ── landscape-row track（统一竖版，HANDOFF-20，与 PosterTrack 完全一致）────────
-
-function LandscapeTrack({ videos, testId }: { readonly videos: VideoCardType[]; readonly testId?: string }) {
-  return <PosterTrack videos={videos} testId={testId} />
-}
-
 // ── top10-row track ───────────────────────────────────────────────────────────
 
 function Top10Track({ videos, testId }: { readonly videos: VideoCardType[]; readonly testId?: string }) {
@@ -458,8 +450,6 @@ export function ShelfRow({
         />
       ) : template === 'poster-row' ? (
         <PosterTrack videos={videos} testId={testId} />
-      ) : template === 'landscape-row' ? (
-        <LandscapeTrack videos={videos} testId={testId} />
       ) : template === 'top10-row' ? (
         <Top10Track videos={videos} testId={testId} />
       ) : (

@@ -2972,3 +2972,20 @@
 
 - **原子化判据**：ADR gate 卡（D-213-1~9 决策）独立先行；方案 C 实施拆**五卡 0M/A/B/C/S**——0M（media_catalog +8 列 + 回填，**全链硬前置**，D-213-2/3）/ A（worker 单真源 + D-212-9 判别式，D-213-5）/ B（internal 信号列双写 + URL 守卫，D-213-6）/ C（读端单一谓词 + DTO + stale-ok 面，D-213-7/9②）/ **S（周期巡检 scheduler，stale-ok 根治收尾卡·非阻塞，D-213-9①）**。跨 schema/worker/internal/读端多层 → 强制拆（符合 workflow-rules 原子化四问 + CLAUDE.md「schema 跨 3 层须拆」）。**0M 含 schema 变更（media_catalog +8 列）→ migration + 同步 architecture.md §5.11**。**时序 `0M→A→A-SCAN门→C`**（C 硬依赖 A-SCAN 完成，Codex round-4 HIGH：扫描须在 A 写 checked_at 之后跑）；B 依赖 0M、与 A 并行；S 依赖 0M+A（非阻塞，A-SCAN≠S：前者一次性初始排空、后者周期维护）。
 - **范围红线**：ADR 先行（方案 C dissolve 方向 + D-213-2/3 schema 形态 + D-213-7 DTO 值域变更为裁决点，**已过 arch-reviewer CONDITIONAL-PASS**，待 Codex 对抗审核）；`media_catalog` schema 改动需 ADR 背书；**🚨 schema 变更必须同步 `architecture.md` §5.11**（0M 卡 BLOCKER 级）；颜色 N/A（后端，C 卡前端分色用 design-tokens）；不新增 admin route（复用既有 worker/internal/查询，`verify:endpoint-adr` 不触发）；0M 真库回填演练；**worker 周期巡检缺口（D-213-9）登记独立 follow-up 卡，不阻塞 P4**。
+
+---
+
+## SEQ-20260622-01 — 前台视频卡片尺寸碎片化治理（清理 + 规范统一，中力度）🔄
+
+- **状态**：🔄 进行中（CARD-SIZING-A 清理已起卡 tasks.md）｜ **创建时间**：2026-06-22
+- **来源**：调查报告 `docs/designs/client-video-card-sizing-audit_20260622.md`（前台卡片尺寸三层分离结构 + 7 条碎片化问题清单）。用户裁定**中力度**治理：清理死代码/死配置 + 规范统一（gap token / 响应式列数 / 标题字号）；**不含**高风险的定宽机制重构与 VideoCard/BrowseCard 组件合并。
+- **依赖**：无 BLOCKER；调查报告已落盘。
+- **原子化判据**：中力度合计 8 项（清理 5 + 规范统一 3）> 5 → 拆 **A/B 子卡**；A（纯死代码收敛、零视觉、无需 Opus）与 B（token 结构设计、轻微视觉对齐、强制 Opus arch-reviewer）性质不同 → 强制拆。A→B 串行（A 先清掉 landscape token，B 处理 gap token 更干净）。
+
+| 卡 | 内容 | 范围项 | 建议模型 | 依赖 | 门禁 |
+|---|---|---|---|---|---|
+| **CARD-SIZING-A**（清理） | 删 `VideoCardWide`（零引用）/ 删 `--shelf-card-w-landscape` token + 注释 / 删 `ShelfRow` `landscape-row` template + `LandscapeTrack`（零调用）/ 删 `VideoGrid` 死 `variant` prop（含 `RelatedVideos` 传值）/ 修 `VideoGrid` scroll `cardWidth` 160px→`--shelf-card-w-portrait`。**零视觉变化**（全为零消费死路径）。 | 5 | sonnet（主循环本会话 opus） | 无 | typecheck/lint/test:changed + 视觉零变化回归 |
+| **CARD-SIZING-B**（规范统一） | 统一 gap token（收敛 `--shelf-gap` 16 / `--browse-grid-gap` 20 / VideoGrid `gap-4 lg:gap-6` 三值）+ 统一响应式列数断点体系（search 2/3/5 与 related 3/4/6 与 browse 固定 5 归一）+ VideoCard/BrowseCard 标题字号/截断归一（14·clamp-1 vs 13·clamp-2）。**轻微视觉对齐**。 | 3 | **opus** | CARD-SIZING-A | **arch-reviewer (claude-opus-*) token 方案 PASS**（CLAUDE.md 强制升 Opus 第 5 条：Token 层字段结构与引用规则）+ typecheck/lint/test:changed + 逐页视觉回归（首页/搜索/详情/分类） |
+
+- **范围红线**：颜色 N/A（仅尺寸/间距 token，前台 `globals.css` 体系）；不新增 admin route；不动定宽机制重构与组件合并（高力度，本序列不含）；B 的 token 结构与断点体系为裁决点，**必须先过 arch-reviewer**。
+- **Follow-up 登记**：① `VideoGrid` `layout="scroll"` 路径零消费方（含 `scrollContainerStyle` + cardWidth），A 卡仅 token 化未删；建议后续小卡评估整段删除（API 收窄需确认）。② 高力度选项（定宽机制 5→1 共享 CardGrid + VideoCard/BrowseCard 合并）未采纳，如需另起序列。

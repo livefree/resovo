@@ -7,7 +7,6 @@ import type { VideoCard as VideoCardType, ApiListResponse } from '@resovo/types'
 
 interface VideoGridProps {
   query: string
-  variant?: 'portrait' | 'landscape'
   gridCols?: string
   layout?: 'grid' | 'scroll'
   /** PC 端 stagger fade（分类页 Sibling 过渡用） */
@@ -19,7 +18,6 @@ function VideoGridSkeleton({
   gridCols = 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
   testId,
 }: {
-  variant?: 'portrait' | 'landscape'
   gridCols?: string
   testId?: string
 }) {
@@ -34,7 +32,6 @@ function VideoGridSkeleton({
 
 export function VideoGrid({
   query,
-  variant = 'portrait',
   gridCols = 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
   layout = 'grid',
   stagger = false,
@@ -61,7 +58,7 @@ export function VideoGrid({
     paddingBottom: '4px',
   }
 
-  const cardWidth = '160px'
+  const cardWidth = 'var(--shelf-card-w-portrait)'
 
   if (loading) {
     if (layout === 'scroll') {

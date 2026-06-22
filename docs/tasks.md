@@ -6,6 +6,23 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
+### 🔄 CARD-SIZING-A — 前台视频卡片尺寸碎片化治理·死代码/死配置清理（SEQ-20260622-01）
+
+- **状态**：🔄 进行中 ｜ **创建/开始**：2026-06-22 ｜ **执行模型**：claude-opus-4-8（主循环）｜**子代理**：无（纯死代码收敛，零架构决策；规范统一 token 设计移至子卡 -B 经 arch-reviewer）
+- **依据**：调查报告 `docs/designs/client-video-card-sizing-audit_20260622.md`（问题清单 5/6/7 项）；用户选定中力度治理「清理 + 规范统一」，本卡 = 清理半（零视觉变化）。
+- **范围（清理 5 项，纯收敛·零视觉变化）**：
+  - ① 删 `VideoCardWide.tsx`（`@deprecated` 全仓零引用，无 barrel 导出）。
+  - ② 删 `--shelf-card-w-landscape` token（`globals.css`）+ `Shelf.tsx` 头部注释 landscape 行（landscape-row 经 HANDOFF-20 已统一竖版，token 零消费）。
+  - ③ 删 `ShelfRow` 的 `landscape-row` template（type union 值 + `LandscapeTrack` 函数 + render 分支）——零调用方（实际仅 poster-row/top10-row/featured-grid）。
+  - ④ 删 `VideoGrid` 死 `variant` prop（`VideoGridProps` + `VideoGridSkeleton` props + 解构默认值，函数体零使用）+ 同步移除 `RelatedVideos.tsx:142` 的 `variant="portrait"` 传值（注意 `RelatedVideos` 自身 `variant="sidebar"|"grid"` 是另一 prop，不动）。
+  - ⑤ 修 `VideoGrid` scroll 模式 `cardWidth='160px'` 硬编码 → `var(--shelf-card-w-portrait)`（消 token 漂移；scroll 路径零消费方，仅 token 化、不删路径以尊重选定范围）。
+- **不做**：gap token 统一 / 响应式列数断点归一 / 标题字号归一（→ 子卡 -B，需 Opus token 方案）；定宽机制重构 / 组件合并（中力度不含）；删 VideoGrid scroll 死路径（→ follow-up 登记 task-queue）。
+- **涉及文件**：`apps/web-next/src/components/video/VideoCardWide.tsx`（删）、`apps/web-next/src/app/globals.css`、`apps/web-next/src/components/video/Shelf.tsx`、`apps/web-next/src/components/video/VideoGrid.tsx`、`apps/web-next/src/components/detail/RelatedVideos.tsx` + 相关前台单测（如引用 variant/landscape-row）。
+- **门禁**：typecheck=0 / lint=0 / test:changed 全过（VideoGrid/Shelf/RelatedVideos 相关测试零回归）+ 视觉零变化（landscape-row/variant/scroll 均零消费）。**关键路径**：首页 shelf（poster-row/top10/featured 不受 landscape-row 删除影响，回归确认）。
+- **验收口径（一句话）**：移除 5 处死代码/死配置后全量前台测试零回归且任何已渲染页面视觉零变化。
+
+---
+
 ### ⏸️ IMGH-P4-A — 方案C worker：确定性出口写 checked_at + fetchImageDimensions 判别式 + A-SCAN 门（ADR-213，SEQ-20260621-02）
 
 - **状态**：⏸️ **代码已交付**（commit `968d4efb`，门禁全绿）·**待部署期跑 A-SCAN**（`scripts/run-imgh-ascan.ts` 落 `checked_at` 真值、排空初始 unknown 桶 → C 硬前置门）——A-SCAN 属运维步、非编码工作台占用，**不占单 🔄 槽**｜ **创建/开始**：2026-06-22 ｜ **执行模型**：claude-opus-4-8（主循环）｜**子代理**：无（实施按 ADR-213 D-213-5；worker 逻辑非新架构决策）

@@ -139,7 +139,6 @@ export function RelatedVideos({ video, variant = 'grid' }: RelatedVideosProps) {
           </h2>
           <VideoGrid
             query={query}
-            variant="portrait"
             gridCols="grid-cols-3 sm:grid-cols-4 md:grid-cols-6"
             stagger
             data-testid="related-videos-grid"
