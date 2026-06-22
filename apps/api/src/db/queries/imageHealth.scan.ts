@@ -54,6 +54,17 @@ export const BROKEN_SAMPLE_EVENT_TYPES = [
   'client_load_error', 'empty_src', 'fetch_404', 'fetch_5xx', 'decode_fail',
 ] as const
 
+// ── 方案 C 健康判定窗口常量（ADR-213，migration 121 落地；P4-C 读端谓词消费）──────────
+//
+// CLIENT_ERROR_WINDOW_DAYS：浏览器自过期信号窗口（D-213-3）。前台 beacon 写 <kind>_client_error_at，
+//   读端 `client_error_at >= NOW()-INTERVAL 'N days'` 内计入真破损（client_error），超窗自动衰减出板，
+//   无需写端清理。与 brokenLast7Days（imageHealth.ts，7 天）口径对齐。migration 121 回填同用 7 天。
+export const CLIENT_ERROR_WINDOW_DAYS = 7
+//
+// STALE_CHECK_DAYS：stale-ok 阈值（D-213-9）。status='ok' 但 checked_at 早于此（或 NULL）→ 判 'unknown'
+//   （未验证，非 healthy），防 worker 久未确定性复检的 ok 行被当健康（确证假阴性类，Codex round-2 ADV-213-4）。
+export const STALE_CHECK_DAYS = 30
+
 // ── 查询：问题图片可视化治理板（ADR-211，supersede ADR-210 破损样本区）────
 
 export const PROBLEM_IMAGE_KINDS = ['poster', 'backdrop', 'logo', 'banner_backdrop'] as const

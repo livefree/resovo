@@ -11,14 +11,16 @@
 - **状态**：🔄 进行中（schema 硬前置，时序 `0M→A→A-SCAN门→C` 首卡）｜ **创建/开始**：2026-06-22 ｜ **执行模型**：claude-opus-4-8（主循环）｜**子代理**：无（schema 设计已由 ADR-213 `arch-reviewer` (claude-opus-4-8, a06695fa2c0aa033c) 背书；commit 带 Subagents trailer 引用之）
 - **依据**：ADR-213 **Accepted**（D-213-2/3/8）。方案 C 实施第一卡 = 加列 + client_error_at 回填，**不动 worker/读端/端点**（A/B/C）。
 - **范围（≤4 项，schema 单层）**：
-  - ① 新 migration `NNN_image_health_dissolve.sql`：`media_catalog` 加 8 列 `ADD COLUMN IF NOT EXISTS`——4×`<kind>_checked_at` + 4×`<kind>_client_error_at`（均 `TIMESTAMPTZ` nullable，无 CHECK/索引）。
+  - ① 新 migration `121_image_health_dissolve.sql`：`media_catalog` 加 8 列 `ADD COLUMN IF NOT EXISTS`——4×`<kind>_checked_at` + 4×`<kind>_client_error_at`（均 `TIMESTAMPTZ` nullable，无 CHECK/索引）。
   - ② `<kind>_client_error_at` 回填：仅当未解决 `client_load_error` 的 **`b.url=m2.<url_col>`（当前 URL 守卫）** 且 `last_seen_at>=NOW()-7d` 才 seed（D-213-8④）；**`checked_at` 不回填、留 NULL**（D-213-8③，→ 读端 COALESCE 判 unknown）。
   - ③ `CLIENT_ERROR_WINDOW_DAYS=7` + `STALE_CHECK_DAYS=30` 常量落 `imageHealth.scan.ts`（单一真源，禁散落硬编码）。
   - ④ **同步 `docs/architecture.md` §5.11**（media_catalog 表定义 +8 列）。
 - **不做**：checked_at 扫描（A-SCAN 在 P4-A 后）；`broken_image_events` 零改动；worker 判别式/读端谓词/internal 端点（属 A/B/C）。
-- **涉及文件**：`apps/api/src/db/migrations/NNN_image_health_dissolve.sql`（新，取真实下一编号——ADR 文中 049 是 ADR-212 占位语义已废）、`apps/api/src/db/queries/imageHealth.scan.ts`（常量）、`docs/architecture.md`（§5.11）、`tests/integration/...`（migration/回填：**旧 URL 事件不 populate client_error_at**）。
-- **门禁**：🚨 **architecture.md §5.11 同步（BLOCKER 级）** + **真库回填演练（需 DB 访问，可能用户跑）** + typecheck/lint/test:changed + commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer（schema 已 ADR 背书）。
-- **备注**：上游 IMGH-P4-0（ADR-213 草案 gate）已收口——ADR-213 **Accepted**（Draft v1→v5，arch-reviewer CONDITIONAL-PASS + Codex 4 轮全吸收），见 changelog [IMGH-P4-0]。本卡进入实施。时序 `0M→A→A-SCAN门→C`：0M 为 schema 硬前置，A/B 物理可并行，C 依赖 A-SCAN，S 非阻塞收尾。
+- **涉及文件**：`apps/api/src/db/migrations/121_image_health_dissolve.sql`（新）、`apps/api/src/db/queries/imageHealth.scan.ts`（常量）、`docs/architecture.md`（§5.11）。
+- **测试口径（诚实再放置）**：migration 一次性回填的 URL 守卫**由真库演练直接验**（一次性 SQL，post-migration 难用 seeding 测真实执行）；URL 守卫**可复用逻辑**的自动化回归落 **P4-B**（beacon 写同款 `mc.<url>=$url`，route/query 层 seeding 更自然）——避免脆弱的一次性 SQL 测。
+- **门禁**：🚨 **architecture.md §5.11 同步（BLOCKER 级）** + **真库回填演练（需 DB 访问，用户跑）** + typecheck/lint/test:changed + commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer（schema 已 ADR 背书）。
+- **备注**：上游 IMGH-P4-0（ADR-213 草案 gate）已收口——ADR-213 **Accepted**，见 changelog [IMGH-P4-0]。时序 `0M→A→A-SCAN门→C`：0M schema 硬前置，A/B 可并行，C 依赖 A-SCAN，S 非阻塞收尾。
+- **进展（2026-06-22）**：migration 121（+8 列 + client_error_at 回填带 URL 守卫，checked_at 留 NULL）+ scan.ts 常量（CLIENT_ERROR_WINDOW_DAYS=7/STALE_CHECK_DAYS=30）+ architecture.md §5.11（+8 列 + ADR-213 dissolve 说明）已落；**typecheck=0 / lint=0**。**待**：真库回填演练（用户跑：迁移 + 验回填 counts/URL 守卫）→ 演练通过即 0M 收口、起 P4-A。
 
 ---
 
