@@ -17,7 +17,7 @@
  *   ② 治理动作成功 → refreshKey++ 重拉当前页 + counts（防 total 失真）
  *   ③ 切 kind/scope → 主 effect 重置 rows+offset（非追加）
  */
-import { useState, useEffect, useCallback, useMemo, type CSSProperties } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, type CSSProperties } from 'react'
 import {
   AdminCard,
   AdminButton,
@@ -135,22 +135,27 @@ export function ImageHealthProblemBoard() {
   const [drawerRow, setDrawerRow] = useState<ProblemImageRow | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
 
+  // fetch 代次守卫（IMGH-P4-LOADMORE-RACE）：每次重置（切 kind/scope/reasonFilter/refreshKey）+1 → 作废在途 load-more。
+  // useEffect 自带 cancelled 守自身；handleLoadMore 无 cleanup → 靠 seq 比对，防过期响应 dedupeAppend 污染已切换的视图。
+  const fetchSeqRef = useRef(0)
+
   // ③ 切 kind/scope/reasonFilter/refreshKey → 重置 rows+offset 拉第一页（非追加）
   //    reason 服务端过滤（IMGH-P4-REASON-SSF）：切子筛选触发重取，不再客户端过滤已加载行（消分页假空）
   useEffect(() => {
+    const seq = ++fetchSeqRef.current // 新代次：作废所有在途 load-more
     let cancelled = false
     setLoading(true)
     setError(null)
     getProblemImages({ kind, scope, offset: 0, limit: PAGE_LIMIT, reason: reasonFilter })
       .then((res) => {
-        if (cancelled) return
+        if (cancelled || seq !== fetchSeqRef.current) return
         setRows(res.data)
         setCounts(res.counts)
         setTotal(res.total)
         setRequested(PAGE_LIMIT)
       })
       .catch((e: unknown) => {
-        if (cancelled) return
+        if (cancelled || seq !== fetchSeqRef.current) return
         setError(e instanceof Error ? e : new Error('问题图片加载失败'))
       })
       .finally(() => {
@@ -160,9 +165,12 @@ export function ImageHealthProblemBoard() {
   }, [kind, scope, reasonFilter, refreshKey])
 
   const handleLoadMore = useCallback(async () => {
+    const seq = fetchSeqRef.current // 捕获当前代次
     setLoadingMore(true)
     try {
       const res = await getProblemImages({ kind, scope, offset: requested, limit: PAGE_LIMIT, reason: reasonFilter })
+      // 上下文已切换（kind/scope/reasonFilter 变更触发 useEffect → seq++）→ 丢弃过期响应，不污染新视图
+      if (seq !== fetchSeqRef.current) return
       // ① 去重追加（防边界重复行）
       setRows((prev) => dedupeAppend(prev, res.data))
       // ② 同步 counts/total（活动集随治理变化，防失真）

@@ -2464,3 +2464,17 @@
 - **问题（Codex stop-gate）**：reason 子筛选客户端 `rows.filter` 仅覆盖已加载页 → 任何沉在加载窗口外的 reason（A 排序后 low_quality 在第 ~60 页）点筛选即**假空**（其实有 2793 个，未加载到）。客户端过滤分页数据的固有缺陷，对 unknown/pending 早已存在，A 让 low_quality 显形。
 - **修复要点**：①reason 过滤下沉服务端 → 任何 reason 精确命中、不受排序/分页影响；②`COUNT(*) OVER()` 返回过滤后真总数 → hasMore 准（不再 over-fetch 空页）；③保留 A 排序（默认视图可操作项浮顶）+ B 未验证筛选（现服务端生效）+ C 分辨率显示。端点加 query 参不增端点（verify:endpoint-adr 绿）。
 - **门禁**：typecheck=0/lint=0/test:changed=232/集成 admin-image-health=13（真库 {rows,total}+reason 过滤）/verify:endpoint-adr=0/verify:adr-contracts=0。board 改动经 stash 隔离 parked IMGH-P3-5。
+
+## [IMGH-P4-LOADMORE-RACE] handleLoadMore 加 fetch 代次守卫，消「过期 load-more 污染已切换筛选」（Codex stop-gate）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 11:57
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（前端竞态守卫，非架构）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthProblemBoard.tsx` — 加 `fetchSeqRef = useRef(0)`；useEffect 每次重置 `++fetchSeqRef.current`（新代次，作废在途 load-more）+ `.then`/`.catch` 加 `seq !== fetchSeqRef.current` 守卫；handleLoadMore 捕获 `seq`，响应后 `if (seq !== fetchSeqRef.current) return`（上下文已切 → 丢弃，不 dedupeAppend 污染）。
+  - `tests/unit/components/server-next/admin/image-health/ImageHealthProblemBoard.test.tsx` — 竞态测：在途 load-more（reason=all 挂起）+ 切 reason=broken → 过期响应 resolve 后不污染（仍仅 broken）。
+- **新增依赖**：无
+- **数据库变更**：无
+- **问题（Codex stop-gate）**：REASON-SSF 后 reason 变更触发 useEffect 重取；但 handleLoadMore 无 cleanup/守卫 → load-more 在途时切 reason/kind/scope，旧响应回来仍 `setRows(dedupeAppend)`/setCounts/setTotal/setRequested → 旧筛选数据污染新视图（且 requested 错位）。useEffect 有 cancelled 守自身，handleLoadMore 无。
+- **修复要点**：单一 `fetchSeqRef` 代次计数——重置即 +1（useEffect），load-more 捕获并在响应后比对，不匹配即整体丢弃（数据 + requested 均不动）。保留 dedupeAppend（防同代次边界重复）。
+- **门禁**：typecheck=0/lint=0/test:changed=60/verify:adr-contracts=0。board 改动经手动 toggle 隔离 parked 不关抽屉（避 stash-pop 冲突，上次教训）。
