@@ -2298,3 +2298,16 @@
 - **新增依赖**：无
 - **数据库变更**：无
 - **注意事项**：4C 核出唯一前台裂图漏网点修复 → **前台「用户端零裂图」全闭环**。**上报权衡（修正 4C 报告建议）**：DailyAnime 封面为 Bangumi calendar 外部源（非站内 media_catalog 治理对象），仅做 SafeImage 不裂图兜底、**不接** `reportBrokenImage`（broken_image_events 需 video_id，未入站项无、语义不符）。改进：coverUrl=null 旧显空 sunken 块、现显 FallbackCover（标题+动画图标）。门禁：typecheck/lint（去 no-img-element warning）/test:changed 5/**test:e2e:smoke 19**（首页含 DailyAnimeRow 渲染正常）全过。
+
+## [IMGH-P4-0] ADR-213《图片健康双真源溶解（方案 C）》起草 + Accepted（supersede ADR-212）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 00:30
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8, a06695fa2c0aa033c — 方案 C 设计 CONDITIONAL-PASS) / codex-rescue (adversarial-review r1–r4：a1d0700349d19909a + threads 019eedf0/019eee13/019eee21)
+- **修改文件**：
+  - `docs/decisions.md` — 新增 **ADR-213**（D-213-1~9，方案 C dissolve）+ **ADR-212 转 Rejected/Superseded by ADR-213**（保留 patch 三轮论证作审计）+ **ADR-211 D-211-2/3 refined-by 标记**
+  - `docs/tasks.md` — IMGH-P4-0 gate 收口 → IMGH-P4-0M 实施卡
+  - `docs/task-queue.md` — SEQ-20260621-02 状态：ADR Accepted + P4-0M 进入实施
+- **新增依赖**：无
+- **数据库变更**：无（本卡为设计 gate；schema 实施在 P4-0M）
+- **注意事项**：调查 image-health 发现 problem-images「真破损」对已恢复封面系统性误报，根因＝双权威真源（`media_catalog.<kind>_status` vs `broken_image_events`）结构性漂移。**方案 C（dissolve）取代 ADR-212 patch**：健康判定不再读 events，收敛为 status + 新增 `<kind>_checked_at`（确定性判定时间）+ `<kind>_client_error_at`（浏览器自过期信号 7d）；events 降级纯遥测；读端单一 `problemFilterSqlV2`（含 stale-ok=unknown）counts/list 逐字共用。**Codex 4 轮对抗审核**（r1 3H+2M+1L / r2 2H+1M / r3 1H / r4 1H；findings 收敛，rounds 1–3 数据模型封板、round-4 属 rollout 时序）全吸收 → Draft v5 → **Accepted**。实施拆 **0M/A/B/C/S**，时序 `0M→A→A-SCAN门→C`。未含 IMGH-P3-5 parked 代码。

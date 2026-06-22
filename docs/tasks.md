@@ -6,24 +6,19 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-### 🔄 IMGH-P4-0 — ADR-213 草案《图片健康双真源溶解（方案 C）》（supersede ADR-212）（SEQ-20260621-02）
+### 🔄 IMGH-P4-0M — 方案C migration：media_catalog +8 列 + client_error_at 回填 + architecture.md 同步（ADR-213，SEQ-20260621-02）
 
-- **状态**：🔄 进行中（ADR 草案 gate，**不写实现代码**）｜ **创建/开始**：2026-06-21 ｜ **执行模型**：claude-opus-4-8（主循环）｜**子代理**：`arch-reviewer`（claude-opus-4-8, a06695fa2c0aa033c — 方案 C 设计 CONDITIONAL-PASS；早期 ab6f77498087aab55 / ad7eedc3859a734ba 出 ADR-212 patch 裁决〔随 ADR-212 废弃〕）
-- **问题理解**：problem-images「真破损」桶对**已恢复**封面系统性误报——7 张 `poster_status='ok'` 正常显示的图被判真破损。
-- **根因**：两套真源结构性漂移——`media_catalog.<kind>_status`（当前态/per-catalog）vs `broken_image_events`（事件流/per-video，`resolved_at` 仅人工写）；problem-images CASE（`imageHealth.scan.ts:173-179`）让 `broken_event` 分支无条件压过当前 status；worker 复检写 `ok`（`imageHealthWorker.ts:165`）/ apply-candidate / rescan **均不联动 resolve 旧事件**。
-- **方向转向（用户批准方案 C / dissolve，取代 ADR-212 的 patch/align）**：健康判定**不再读 events**，收敛为「`<kind>_status` 当前态 + `<kind>_client_error_at` 浏览器自过期信号」两列真源；events 降级纯遥测。ADR-212 全部对齐机制（event_class/写端 resolve/url_hash/migration 049）整类不需要。
-- **方案（产出 ADR-213，固化 D-213-1~9）**：
-  - **D-213-2/3** schema：`media_catalog` +8 列（4×`checked_at` + 4×`client_error_at`，纯 ADD COLUMN；窗口 N=7 单一常量）。
-  - **D-213-4** `broken_image_events` schema 零改动 + 退出健康读路径（仅留遥测：brokenLast7Days/趋势/域名）。
-  - **D-213-5** worker：status 写入同步 checked_at + 吸收 ADR-212 D-212-9 判别式（HTTP/decode→broken，瞬态→不改 status）。
-  - **D-213-6** 前台 beacon 端点契约不变，内部改写信号列（per-catalog）+ events 双写（best-effort）。
-  - **D-213-7** 读端单一 `problemFilterSqlV2`（counts/list 共用，total 不漂移）+ problemReason `broken_event`→`client_error`（DTO 值域变更）。
-  - **D-213-8** 存量：7 误报上线即消失零运维 + **checked_at 不回填（留 NULL→unknown，A 后 A-SCAN 一次性真实扫描排空）** + client_error_at 从 events 回填（带当前 URL 守卫）。时序硬约束 `0M→A→A-SCAN门→C`。
-  - **D-213-9** 已知缺口：worker 无周期巡检 scheduler（不阻塞，登记 follow-up 卡）。
-- **涉及文件**：`docs/decisions.md`（ADR-213 草案落盘 + ADR-212 转 Superseded）+ `docs/tasks.md`（本卡）。**不改业务代码**（实施在 P4-0M/A/B/C）。
-- **门禁**：Opus `arch-reviewer` 裁决（ADR + 跨 worker/service/query/读端 3+ 消费方 schema）→ Codex 对抗性独立审核（ADR 非代码产物，落盘后定稿前）→ Subagents trailer。
-- **备注**：本卡为设计 gate，不触发 typecheck/lint/test（无代码改动）；ADR Accepted 后拆 A/B 实施卡。
-- **进展（2026-06-21）**：① ADR-212（patch 路线）经 **3 轮 Codex + 2 轮 arch-reviewer** 收敛到 event_class 分行 + migration 049，复杂度高且脆弱；② **用户批准方案 C（dissolve）**——spawn **arch-reviewer (claude-opus-4-8, a06695fa2c0aa033c)** 独立设计，核实全部代码事实（4 补正 + 发现 worker 无周期巡检/无 checked_at 列）→ **CONDITIONAL-PASS**：方案 C 在正确性 #1 与边界复用 #2 显著优于 ADR-212 patch，7 修订全吸收；③ **ADR-213 落盘** `docs/decisions.md`（Draft v1，D-213-1~9 + 0M/A/B/C 拆卡）；④ **ADR-212 转 Rejected/Superseded by ADR-213**（保留 D-212-9 吸收 + 「patch 路线行不通」三轮论证作审计）。**🚨 含 schema 变更（media_catalog +8 列）→ 0M 须同步 architecture.md §5.11**。⑤ **Codex 对抗审核 round-1 (a1d0700349d19909a) needs-attention：3 HIGH+2 MEDIUM+1 LOW 全吸收** → ADR-213 Draft v2：ADV-213-1 信号列 URL 同源守卫 / ADV-213-4 stale-ok：P4-C 加 **`unknown` 可观测面**兜底 + **P4-S 周期巡检（非阻塞根治收尾卡）** / ADV-213-6 信号列仅 4 kind（stills/thumbnail 仅遥测）/ ADV-213-2 双写 warn + brokenLast7Days 定性遥测 / ADV-213-5 recall 取舍 / ADV-213-3 total 回归测。⑥ **Codex re-review round-2 needs-attention：2 HIGH+1 MEDIUM**（均 round-1 修正的传播/一致性缺口）**全吸收** → **Draft v3**：R2-HIGH-1 回填补 URL 守卫（D-213-8）/ R2-HIGH-2 checked_at 仅确定性出口推进、瞬态不刷（D-213-2/5）/ R2-MEDIUM stale-ok 并入单一谓词 `problemFilterSqlV2` + problemReason 加 `unknown`（D-213-7）。⑦ **Codex re-review round-3：1 HIGH 全吸收** → Draft v4：checked_at 改不回填、留 NULL→unknown（D-213-8③）。⑧ **Codex re-review round-4：1 HIGH = rollout 时序缺口全吸收** → **Draft v5**：一次性扫描移到 A 之后（A-SCAN 门），时序 `0M→A→A-SCAN门→C`、C 硬依赖扫描完成。**数据模型 rounds 1–3 已封板，问题下沉到实施编排层**。**待办**：① **Codex re-review**（验证 round-4 闭环，用户触发）② 放行后 ADR-213 转 Accepted + 拆 0M/A/B/C/S。未 commit。
+- **状态**：🔄 进行中（schema 硬前置，时序 `0M→A→A-SCAN门→C` 首卡）｜ **创建/开始**：2026-06-22 ｜ **执行模型**：claude-opus-4-8（主循环）｜**子代理**：无（schema 设计已由 ADR-213 `arch-reviewer` (claude-opus-4-8, a06695fa2c0aa033c) 背书；commit 带 Subagents trailer 引用之）
+- **依据**：ADR-213 **Accepted**（D-213-2/3/8）。方案 C 实施第一卡 = 加列 + client_error_at 回填，**不动 worker/读端/端点**（A/B/C）。
+- **范围（≤4 项，schema 单层）**：
+  - ① 新 migration `NNN_image_health_dissolve.sql`：`media_catalog` 加 8 列 `ADD COLUMN IF NOT EXISTS`——4×`<kind>_checked_at` + 4×`<kind>_client_error_at`（均 `TIMESTAMPTZ` nullable，无 CHECK/索引）。
+  - ② `<kind>_client_error_at` 回填：仅当未解决 `client_load_error` 的 **`b.url=m2.<url_col>`（当前 URL 守卫）** 且 `last_seen_at>=NOW()-7d` 才 seed（D-213-8④）；**`checked_at` 不回填、留 NULL**（D-213-8③，→ 读端 COALESCE 判 unknown）。
+  - ③ `CLIENT_ERROR_WINDOW_DAYS=7` + `STALE_CHECK_DAYS=30` 常量落 `imageHealth.scan.ts`（单一真源，禁散落硬编码）。
+  - ④ **同步 `docs/architecture.md` §5.11**（media_catalog 表定义 +8 列）。
+- **不做**：checked_at 扫描（A-SCAN 在 P4-A 后）；`broken_image_events` 零改动；worker 判别式/读端谓词/internal 端点（属 A/B/C）。
+- **涉及文件**：`apps/api/src/db/migrations/NNN_image_health_dissolve.sql`（新，取真实下一编号——ADR 文中 049 是 ADR-212 占位语义已废）、`apps/api/src/db/queries/imageHealth.scan.ts`（常量）、`docs/architecture.md`（§5.11）、`tests/integration/...`（migration/回填：**旧 URL 事件不 populate client_error_at**）。
+- **门禁**：🚨 **architecture.md §5.11 同步（BLOCKER 级）** + **真库回填演练（需 DB 访问，可能用户跑）** + typecheck/lint/test:changed + commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer（schema 已 ADR 背书）。
+- **备注**：上游 IMGH-P4-0（ADR-213 草案 gate）已收口——ADR-213 **Accepted**（Draft v1→v5，arch-reviewer CONDITIONAL-PASS + Codex 4 轮全吸收），见 changelog [IMGH-P4-0]。本卡进入实施。时序 `0M→A→A-SCAN门→C`：0M 为 schema 硬前置，A/B 物理可并行，C 依赖 A-SCAN，S 非阻塞收尾。
 
 ---
 
