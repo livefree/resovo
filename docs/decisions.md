@@ -23732,6 +23732,12 @@ ADR-211（refine D-211-2「EXISTS 未解决事件」口径——读端改 event_
   - **① 周期巡检 scheduler = 非阻塞根治收尾卡 IMGH-P4-S**（仿 server.ts:295 verify-scheduler setInterval：定期把 `checked_at` 超阈值的 ok/缺检行重入 health-check 队列，自动消化 unknown→ok/broken）。**不阻塞 0M/A/B/C 开发与合并**（过渡正确性已由 ② 兜底）；P4-S 上线后健康板方可宣称「零漏检/完备」。
   - 注：「ok 行永不复检」是**先存缺口**（ADR-211/212 同样不复检），非方案 C 引入；但方案 C 让健康判定单靠 status → 必须正面处理它，不能再隐于 events 读路径。
 
+- **D-213-10（信号 URL 绑定·URL 替换即失效 / Codex stop-gate 修订，refine D-213-3/6/7）**：`<kind>_client_error_at` 与 `<kind>_checked_at` 是**裸时间戳、不记录对应哪个 URL**。写入侧已有 URL 守卫（beacon D-213-6 + migration 121 回填仅在 `url=当前 <kind>_url` 时写），但**信号写入后 URL 被替换**（apply-candidate / 手填 / crawler / enrichment）则旧信号失效却残留 → 读端 `problemFilterSqlV2`（D-213-7）把**已替换的新图**继续判 `client_error`（≤7d 假阳性，正是 dissolve 要消的那类，同构 ADR-212 r1-HIGH-1）/ `fresh-ok`（masks 未验证的新图）。「自过期 7d 窗口」只解时间衰减，**不解 URL 替换**。
+  - **修复 = URL 变更即清信号（migration 122 BEFORE UPDATE 触发器 `trg_media_catalog_clear_image_signals`，路径无关）**：任一 `<kind>_url` 变更 → NULL 掉该 kind 的 `<kind>_client_error_at` + `<kind>_checked_at`（新 URL 回到「未知/未检」，待 worker A-SCAN/P4-S 重新评估）。**为何 DB 触发器而非应用层**：URL 写入散落多路径（apply-candidate/手填/crawler/enrichment），逐一挂钩易漏（ADR 教训：修命名问题须扫孪生路径）；触发器路径无关、一次到位。
+  - **为何不靠 worker 服务端复检清 client_error**：client_error 信号专为捕捉「服务端 HEAD/GET 通过、但浏览器渲染失败」（防盗链/CORS/格式）而生——让服务端检查清掉浏览器信号 = 低保真信号覆盖高保真信号，重新引入假阴性。信号只应在 **URL 变更**（旧 URL 信号对新 URL 无意义）时失效，**不应**被同 URL 的服务端复检清除。
+  - **孪生修复 `checked_at`**：同根因（时间戳描述旧 URL），故触发器一并清 `<kind>_checked_at`——URL 替换后新图未验证，checked_at 残留会让 stale-ok 谓词把新（未验证）图当 fresh-ok。
+  - **不干扰既有写**：worker `updateCatalogImageStatus`（只改 status/checked_at、不改 url）与 beacon `markCatalogClientError`（只匹配 url、不改 url）的 UPDATE 不触发清除，其 `NOW()` 写入照常生效。
+
 ### 实施拆分（沿用 IMGH-P4 命名）
 
 | 卡 | 范围 | 依赖 | 建议模型 | 前置 |

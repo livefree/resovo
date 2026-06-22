@@ -2386,3 +2386,19 @@
 - **数据库变更**：无（消费 0M migration 121 的 `checked_at`/`client_error_at` 列）
 - **A-SCAN 部署门 = flag 门控（用户裁定）**：依赖 `checked_at` 的 **stale-ok→unknown** 道用 `IMAGE_HEALTH_STALE_OK_ENABLED`（默认 OFF）门控——A-SCAN 跑前存量 ok 行 checked_at 全 NULL，若开启会误判全部健康 ok 行 unknown 泛滥（ADR-213 Codex round-4 红线）。**flag OFF 即生效的核心修复**：events 退出读路径 → 7 张 `status='ok'` 误报封面**上线即消失**（无需重扫/resolve）；client_error 窗口道 + 分色。**flag ON（A-SCAN 排空后运维开启）**：stale-ok 行入板标 `unknown`（诚实未验证，非健康）。**counts/list 逐字共用 problemFilterSqlV2**（ADR-209 §17.3.2 total 不漂移）。
 - **门禁**：typecheck=0/lint=0/test:changed=235/verify:endpoint-adr=0（无新端点·读端改写不触契约）/verify:adr-contracts=0。**建议合并前补跑 `test:e2e:admin`**。未含 IMGH-P3-5 parked 代码（git stash 隔离 ImageHealthProblemBoard 视觉改动）。
+
+## [IMGH-P4-D213-10] 方案C 信号 URL 绑定修复 — URL 替换即清 client_error_at + checked_at（migration 122 触发器，Codex stop-gate）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 03:12
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（Codex stop-gate 对抗审核发现；修复按 D-213-10，触发器为既有 trg_media_catalog_updated_at 同构范式，非新架构决策）
+- **修改文件**：
+  - `apps/api/src/db/migrations/122_image_signals_clear_on_url_change.sql`（新建）— BEFORE UPDATE 触发器 `trg_media_catalog_clear_image_signals`：任一 `<kind>_url` 变更即 NULL 掉该 kind 的 `<kind>_client_error_at` + `<kind>_checked_at`（4 kind，`IS DISTINCT FROM` 处理增删图 NULL）+ DO-block 存在性验证
+  - `docs/decisions.md` — ADR-213 新增 **D-213-10**（refine D-213-3/6/7）：信号/checked_at 裸时间戳不绑 URL → URL 替换后须清；为何 DB 触发器（路径无关，扫孪生）、为何不靠 worker 服务端复检清（低保真覆盖高保真→假阴性）
+  - `docs/architecture.md` — §5.11 加触发器说明
+  - `tests/integration/api/image-health-url-change-trigger.test.ts`（新建）— 触发器行为集成测（cover_url 变更→poster 双信号清空 / 非 url 变更→保留；单连接事务 ROLLBACK 非破坏性）
+- **新增依赖**：无
+- **数据库变更**：**是**——migration 122 加触发器（幂等 CREATE OR REPLACE FUNCTION + DROP TRIGGER IF EXISTS + CREATE TRIGGER；无表/列改动）；同步 architecture.md §5.11
+- **问题（Codex stop-gate）**：`<kind>_client_error_at`/`<kind>_checked_at` 是裸时间戳、不记录对应 URL。写入侧有 URL 守卫，但信号写入后 URL 被替换（apply-candidate/手填/crawler）则旧信号残留 → 读端 `problemFilterSqlV2` 把**已替换的新图**继续判 client_error（≤7d 假阳性，同构 ADR-212 r1-HIGH-1）/ fresh-ok（masks 未验证新图）。「自过期 7d」只解时间衰减、不解 URL 替换。
+- **修复要点**：①触发器路径无关（覆盖所有 URL 写入路径，避免逐一挂钩漏网）②不靠 worker 复检清 client_error（服务端 HEAD/GET ok 但浏览器裂的防盗链/CORS 场景，清掉会重引假阴性）——信号只在 URL 变更时失效 ③孪生清 checked_at（同根因）④不干扰 worker（不改 url）/beacon（不改 url）的 NOW() 写入。
+- **门禁**：typecheck=0/lint=0/test:changed=58/verify:adr-contracts=0。触发器行为由 migration DO-block（存在性）+ 集成测 `image-health-url-change-trigger`（需 DB，随集成 suite/CI 跑）验证。部署 staging/prod 应用 122 后建议跑集成测确认。未含 IMGH-P3-5 parked 代码。
