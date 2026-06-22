@@ -2417,3 +2417,16 @@
 - **问题（Codex stop-gate 续）**：122 只清了 `client_error_at`/`checked_at`，**未扫全 url 派生列**。`<kind>_status` 本身描述旧 URL——crawler/douban/tmdb/VideoService 改 url 均不重置 status（已核实）→ 旧 `ok` 掩盖未验证新图、旧 `broken` 误判新图。渲染占位（blurhash/primary_color/dimensions）旧图派生且 worker 仅拾 NULL 行再生 → 陈旧占位永久残留。
 - **修复要点**：①扫全 url 派生列（status + 渲染占位，补 122 之缺，ADR 教训：修命名问题须扫孪生）②status「尊重显式写」——不覆盖 apply-candidate/rescan 显式 pending_review；worker 写 verified status 不改 url 故永不触发本分支（不变式 `status='ok'`=worker 验证当前 url 不破）③渲染占位清 NULL → blurhash worker 对新图重生、尺寸下次健康检查重测。
 - **门禁**：typecheck=0/lint=0/test:changed=58/verify:adr-contracts=0。触发器行为由 migration DO-block + 集成测（需 DB）验证。部署应用 121+122+123 后建议跑集成测确认。未含 IMGH-P3-5 parked 代码。
+
+## [IMGH-P4-FIX-HEAD-TIMEOUT] worker HEAD 超时 300ms→env 可配（默认 5000ms），消 A-SCAN 大面积 timeout 瞬态
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 10:50
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（worker 超时调优，A-SCAN 真库诊断驱动，非架构决策）
+- **修改文件**：
+  - `apps/api/src/workers/imageHealthWorker.ts` — 抽 `resolveHeadTimeoutMs(raw)` 纯函数（`Number.isFinite && >0 ? n : 5000` 防御解析）+ 模块常量 `HEAD_TIMEOUT_MS = resolveHeadTimeoutMs(process.env.IMAGE_HEALTH_HEAD_TIMEOUT_MS)`；`headRequest` 用之替换硬编码 300。GET 超时（5000）不动。
+  - `tests/unit/api/image-health-worker.test.ts` — `resolveHeadTimeoutMs` 单测（未设/空/非数/0/负→5000 默认；合法正数透传）
+- **新增依赖**：无
+- **数据库变更**：无
+- **触发背景（A-SCAN 真库诊断）**：用户跑 A-SCAN 后报「未见后台处理」。诊断证实 worker **已正常处理全部 URL**（poster 4857 已检〔ok 2424/low_quality 2422/broken 11〕+ 1062 未检；加总=5919 无漏入队，排除分页漂移）；「未见」实为队列已 drained + removeOnComplete 仅留 50 条 + A-SCAN 系 fire-and-forget。**真问题**：近 2h `timeout` 事件 1105 ≈ 未检数——`headRequest` 硬编码 300ms 对外部 CDN HEAD 过激进 → 慢但正常图判瞬态（D-213-5）不写 checked_at → 永停未检（300ms 下重跑无效），且 P4-C flag 开后会污染 unknown 桶。原始反思 B3 早标「300ms 误报慢 CDN」。
+- **注意事项**：默认 5000ms（与 GET 一致）；env `IMAGE_HEALTH_HEAD_TIMEOUT_MS` 可覆盖（CI/dev 调小）。**改后需重跑 A-SCAN** 排空 timeout 行 → 复跑 `verify-imgh-121` → 再置 `IMAGE_HEALTH_STALE_OK_ENABLED=true`（否则 ~1137 慢图污染 unknown）。**未修**：low_quality 阈值（minWidth=300/2:3±10% 判半数 poster 低质，独立阈值判断，待用户定）。门禁：typecheck=0/lint=0/test:changed=74/verify:adr-contracts=0。未含 IMGH-P3-5 parked 代码。

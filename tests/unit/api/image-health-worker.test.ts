@@ -305,3 +305,21 @@ describe('ImageHealthService — named job 入队', () => {
     expect(mockAdd).not.toHaveBeenCalled()
   })
 })
+
+// ── HEAD 超时 env 配置（IMGH-P4-FIX-HEAD-TIMEOUT）─────────────────
+describe('resolveHeadTimeoutMs — HEAD 超时 env 防御解析', () => {
+  it('未设 / 空 / 非数 / 0 / 负数 → 默认 5000', async () => {
+    const { resolveHeadTimeoutMs } = await import('@/api/workers/imageHealthWorker')
+    expect(resolveHeadTimeoutMs(undefined)).toBe(5000)
+    expect(resolveHeadTimeoutMs('')).toBe(5000)
+    expect(resolveHeadTimeoutMs('abc')).toBe(5000)
+    expect(resolveHeadTimeoutMs('0')).toBe(5000)
+    expect(resolveHeadTimeoutMs('-100')).toBe(5000)
+  })
+
+  it('合法正数 → 透传（CI/dev 可调小）', async () => {
+    const { resolveHeadTimeoutMs } = await import('@/api/workers/imageHealthWorker')
+    expect(resolveHeadTimeoutMs('300')).toBe(300)
+    expect(resolveHeadTimeoutMs('8000')).toBe(8000)
+  })
+})

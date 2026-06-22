@@ -78,11 +78,21 @@ function checkAspectRatio(
   return Math.abs(actual - target) <= tolerance
 }
 
-// ── HEAD 请求（300ms 超时）────────────────────────────────────────
+// ── HEAD 请求（超时 env 可配，默认 5000ms）──────────────────────────
+//
+// 旧硬编码 300ms 对外部 CDN HEAD 过激进：真实 HEAD 经常 >300ms → 判瞬态（D-213-5）不写 checked_at →
+// 慢但正常图永停未检、将污染 P4-C unknown 桶（A-SCAN 真库实测 ~1105 timeout）。默认提至 5000ms（与 GET
+// 超时一致），可经 IMAGE_HEALTH_HEAD_TIMEOUT_MS 覆盖（CI/dev 可调小）。防御解析：未设/0/非数 → 5000。
+export function resolveHeadTimeoutMs(raw: string | undefined): number {
+  const n = Number(raw)
+  return Number.isFinite(n) && n > 0 ? n : 5000
+}
+
+const HEAD_TIMEOUT_MS = resolveHeadTimeoutMs(process.env.IMAGE_HEALTH_HEAD_TIMEOUT_MS)
 
 async function headRequest(url: string): Promise<{ ok: boolean; status: number }> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 300)
+  const timer = setTimeout(() => controller.abort(), HEAD_TIMEOUT_MS)
   try {
     const res = await fetch(url, { method: 'HEAD', signal: controller.signal })
     return { ok: res.ok, status: res.status }
