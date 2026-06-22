@@ -84,6 +84,8 @@ import { adminTaskControlRoutes } from '@/api/routes/admin/tasks'
 // CW1-E-EP / ADR-152：admin shell topbar 后台事件铃铛端点
 import { adminSystemBackgroundEventsRoutes } from '@/api/routes/admin/systemBackgroundEvents'
 import { VerifyService } from '@/api/services/VerifyService'
+import { ImageHealthService } from '@/api/services/ImageHealthService'
+import { imageHealthQueue } from '@/api/lib/queue'
 import { db } from '@/api/lib/postgres'
 
 /**
@@ -299,6 +301,25 @@ async function start() {
     fastify.log.info({ worker: 'verify-scheduler' }, 'enabled — first scan in 5 min, then every 24h')
   } else {
     fastify.log.info({ worker: 'verify-scheduler' }, 'disabled (set VERIFY_SCHEDULER_ENABLED=true to enable)')
+  }
+
+  // ADR-213 D-213-9①（P4-S）：图片健康周期巡检——定期把 stale-ok（status='ok' 但 checked_at 超阈值/NULL）
+  // 行重入 health-check，worker 复检落新 checked_at → 自动消化 D-213-7 的 unknown 桶、根治 stale-ok 假阴性。
+  // 默认关闭（避免 dev 误发大量 HEAD 请求，同 verify-scheduler 范式），prod 置 IMAGE_HEALTH_SCHEDULER_ENABLED=true。
+  const imageHealthSchedulerEnabled = process.env.IMAGE_HEALTH_SCHEDULER_ENABLED === 'true'
+  if (imageHealthSchedulerEnabled) {
+    const imageHealthService = new ImageHealthService(db)
+    const IMAGE_HEALTH_RECHECK_INTERVAL_MS = 24 * 60 * 60 * 1000  // 24h
+    // 启动后延迟 5min 再首扫，避免与服务启动争抢资源
+    setTimeout(() => {
+      void imageHealthService.enqueueStaleHealthRecheck(imageHealthQueue)
+      setInterval(() => {
+        void imageHealthService.enqueueStaleHealthRecheck(imageHealthQueue)
+      }, IMAGE_HEALTH_RECHECK_INTERVAL_MS)
+    }, 5 * 60 * 1000)
+    fastify.log.info({ worker: 'image-health-scheduler' }, 'enabled — first stale-ok rescan in 5 min, then every 24h')
+  } else {
+    fastify.log.info({ worker: 'image-health-scheduler' }, 'disabled (set IMAGE_HEALTH_SCHEDULER_ENABLED=true to enable)')
   }
 
   fastify.get('/v1/health', async (_request, reply) => {

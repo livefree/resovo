@@ -8,14 +8,24 @@ import type { Pool } from 'pg'
 import type { ImageHealthQueue } from '@/api/workers/imageHealthWorker'
 import {
   listPendingImageUrls,
+  listUncheckedImageUrls,
+  listStaleOkImageUrls,
   listMissingBlurhashUrls,
   updateCatalogImageStatus,
   getImageHealthStats,
   resolveImageEvents,
   getCatalogIdsByVideoIds,
   rescanPostersByCatalogIds,
+  getProblemImages,
+  getProblemImageCounts,
   type ImageHealthStats,
+  type ProblemImageKind,
+  type ProblemImageScope,
+  type ProblemReasonFilter,
+  type ProblemImagesPage,
+  type ProblemImageCounts,
 } from '@/api/db/queries/imageHealth'
+import { STALE_CHECK_DAYS } from '@/api/db/queries/imageHealth.scan'
 import type { ImageKind } from '@/types'
 
 export type { ImageHealthStats }
@@ -41,6 +51,73 @@ export class ImageHealthService {
       )
     )
     return { enqueued: rows.length }
+  }
+
+  /**
+   * ADR-213 D-213-5 ③：A-SCAN——部署后一次性扫描所有 `<kind>_checked_at IS NULL` 行入 health-check，
+   * worker 跑完给 checked_at 落真值、排空 migration 121 后的初始 unknown 桶（C 硬前置门）。
+   * 分页遍历 unchecked 快照（worker 异步处理，入队窗口内集合基本稳定）；dedup jobId 保证重跑/重叠不重复 add。
+   */
+  async enqueueHealthScanForUnchecked(
+    queue: ImageHealthQueue,
+    pageSize = 500,
+  ): Promise<{ enqueued: number }> {
+    let offset = 0
+    let total = 0
+    for (;;) {
+      const rows = await listUncheckedImageUrls(this.db, pageSize, offset)
+      if (rows.length === 0) break
+      await Promise.all(
+        rows.map(row =>
+          queue.add(
+            'health-check',
+            { type: 'health-check', ...row },
+            { jobId: `health-check-${row.catalogId}-${row.kind}`, removeOnComplete: 50 },
+          ),
+        ),
+      )
+      total += rows.length
+      if (rows.length < pageSize) break
+      offset += pageSize
+    }
+    return { enqueued: total }
+  }
+
+  /**
+   * ADR-213 D-213-9①（P4-S 周期巡检）：分页扫所有「stale-ok」行（`status='ok'` 但 `checked_at`
+   * 早于 STALE_CHECK_DAYS 或 NULL）入 health-check → worker 复检落新 checked_at，自动消化 D-213-7
+   * 的 `unknown` 桶、根治 stale-ok 假阴性。dedup jobId 保证与 A-SCAN/重叠周期不重复 add。
+   * 阈值取单一常量 STALE_CHECK_DAYS（与 D-213-7 读端 unknown 谓词同源，禁散落硬编码）。
+   * A-SCAN ≠ P4-S：前者部署后一次性初始排空（checked_at IS NULL），后者上线后周期维护（checked_at 陈旧）。
+   */
+  async enqueueStaleHealthRecheck(
+    queue: ImageHealthQueue,
+    pageSize = 500,
+  ): Promise<{ enqueued: number }> {
+    // 周期巡检 jobId 必须按「巡检周期」唯一，**不能复用一次性扫描的固定 jobId**：Bull 对已存在的
+    // jobId（含 removeOnComplete:50 保留的已完成 job）会静默忽略 add → 同一 (catalog,kind) 行复检过一次后，
+    // 其保留的已完成 job 会让后续周期的重入被**永久静默跳过**，彻底丧失「周期」语义（Codex stop-gate）。
+    // 以本次调用时间戳为周期戳：单次调用内（分页/数据漂移致同行重现）仍 dedup，跨周期 jobId 不同、不被旧 job 阻塞。
+    const cycleStamp = Date.now()
+    let offset = 0
+    let total = 0
+    for (;;) {
+      const rows = await listStaleOkImageUrls(this.db, STALE_CHECK_DAYS, pageSize, offset)
+      if (rows.length === 0) break
+      await Promise.all(
+        rows.map(row =>
+          queue.add(
+            'health-check',
+            { type: 'health-check', ...row },
+            { jobId: `health-check-${row.catalogId}-${row.kind}-${cycleStamp}`, removeOnComplete: 50 },
+          ),
+        ),
+      )
+      total += rows.length
+      if (rows.length < pageSize) break
+      offset += pageSize
+    }
+    return { enqueued: total }
   }
 
   /** 将缺 blurhash 的图片批量入 imageHealthQueue */
@@ -82,6 +159,25 @@ export class ImageHealthService {
 
   async getStats(): Promise<ImageHealthStats> {
     return getImageHealthStats(this.db)
+  }
+
+  /**
+   * ADR-211：问题图片可视化治理板数据源（按 kind/scope 返回「有非空 URL 但可能失效」的图）。
+   * 只读，无审计；supersede ADR-210 破损样本区。
+   */
+  async getProblemImages(
+    kind: ProblemImageKind,
+    scope: ProblemImageScope,
+    offset = 0,
+    limit = 48,
+    reasonFilter: ProblemReasonFilter = 'all',
+  ): Promise<ProblemImagesPage> {
+    return getProblemImages(this.db, kind, scope, offset, limit, reasonFilter)
+  }
+
+  /** ADR-211 D-211-4：4 类问题图片计数（tab badge + 当前 kind 的 total）。 */
+  async getProblemImageCounts(scope: ProblemImageScope): Promise<ProblemImageCounts> {
+    return getProblemImageCounts(this.db, scope)
   }
 
   /**

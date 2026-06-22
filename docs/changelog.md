@@ -2225,3 +2225,256 @@
 - **Codex stop-time review FIX**：原 next.config 硬编码 `(en|zh-CN)` 重复 i18n SSOT → 改 `routing.locales.join('|')` 派生（零漂移）；web-next typecheck + browse-tvshow 3/3 重验通过
 - **ADR 核对**：落在 ADR-048/042 既定 tvshow↔variety 映射 + 308 永久范式 D6，无新 ADR / admin route / schema / architecture.md 同步
 - **注意事项**：mini-player.spec 作为 WEB_MOBILE_SPECS「显式移动入口」保留，移动 device 仅跑 §5(display:none)+§6(theme)，§1/§2/§4/§7 桌面专属由 web-chromium 覆盖。`/codex:adversarial-review`（≥3 项卡应做）因 skill 不在本会话工具集未执行，已在卡片登记。
+
+## [IMGH-P3-4A] 后端：problem-images 端点（ADR-211 Accepted，supersede ADR-210）
+- **完成时间**：2026-06-20
+- **记录时间**：2026-06-20 22:20
+- **执行模型**：claude-opus-4-8（主循环；新增 admin route + 实现 ADR-211 决策）
+- **子代理**：arch-reviewer (claude-opus-4-8)
+- **修改文件**：
+  - `apps/api/src/db/queries/imageHealth.scan.ts` — `getProblemImages`/`getProblemImageCounts` + `PROBLEM_KIND_COLS` 白名单（含 poster→cover_url 历史名）+ `problemFilterSql` + 类型/常量/`problemReason` 派生排序
+  - `apps/api/src/db/queries/imageHealth.ts` — re-export
+  - `apps/api/src/services/ImageHealthService.ts` — 两方法（守 Route→Service→DB）
+  - `apps/api/src/routes/admin/image-health.ts` — `ProblemImagesQuerySchema` + `GET /admin/image-health/problem-images`（total=counts[kind]）
+  - `tests/unit/api/admin-image-health-problem-images.test.ts` — 新 15 端点测试
+  - `tests/unit/api/image-health-actions.test.ts` — mock 补 `PROBLEM_IMAGE_KINDS`（route 顶层 z.enum 模块加载求值）
+  - `tests/integration/api/admin-image-health.test.ts` — 3 真库 SQL 断言（url 守卫/problemReason 排序/total=counts 等价）
+  - `docs/decisions.md` — D-211-4 per-video 计数注释
+- **新增依赖**：无
+- **数据库变更**：无（仅新只读 query；ADR-211 零 migration）
+- **注意事项**：口径 D-211-2（url 非空 btrim 守卫 + status<>ok ∪ 真坏事件白名单，排除 timeout/dimension/aspect 误报）；真库验证 poster published 27（broken_event 7 排首+low_quality 20）、banner 0（url-guard 生效）。门禁全绿：typecheck/lint/test:changed 127/verify:endpoint-adr 249/集成 12。arch-reviewer PASS 3 LOW 全吸收/登记。**4B**：问题板 + recent-broken-samples 退役（同 commit checklist）+「加载更多」按 videoId+kind 去重（per-video 计数）。
+
+## [IMGH-P3-1A/1B + IMGH-P3-2] 破损样本区事件流口径根治 + KPI 卡片信息密度增强（补登记）
+- **完成时间**：2026-06-20
+- **记录时间**：2026-06-20 22:30
+- **执行模型**：claude-opus-4-8（用户交互直驱；P3-2 建议 sonnet 经人工覆盖）
+- **子代理**：无（P3-1A/1B 的 ADR-210 arch-reviewer + Codex 双审在前序会话完成，见 ADR-210 文末）
+- **修改文件**（合并提交 `f804de79`，两任务在共享文件交织、环境不支持 git add -p 拆分）：
+  - 后端：`apps/api/src/db/queries/imageHealth.scan.ts`（getRecentBrokenSamples 事件流口径 + BROKEN_SAMPLE_EVENT_TYPES 白名单）/ `imageHealth.ts`（getImageHealthStats 改双口径 published/all × 4 类 FILTER + re-export）/ `ImageHealthService.ts` / `routes/admin/image-health.ts`（recent-broken-samples route）
+  - 前端：`lib/image-health/api.ts`（BrokenSampleRow + getRecentBrokenSamples + ImageHealthStats 双口径 DTO）/ `_client/BrokenSamplesGrid.tsx`（独立数据源去 client 过滤）/ `_client/ImageHealthKpiCards.tsx`（新，3 卡：图片正常视频/4 类覆盖率/近 7 日破损，复用共享 KpiCard value:ReactNode 槽不改 admin-ui Props）/ `_client/ImageHealthClient.tsx`（591→541 收敛）
+  - 测试：endpoint/component/integration 多文件
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：P3-1A/1B 根因＝poster_status 与 broken_image_events 双不可靠（详见 ADR-210/211）；P3-2 卡①健康口径=封面 poster_status='ok'（用户 AskUserQuestion 选定，后续经实测发现该口径仍失准 → 催生 ADR-211 problem-images 看图分诊方案）。门禁：typecheck/lint/test:changed 192/verify:endpoint-adr/集成。
+
+## [IMGH-P3-4B] 前端：问题图片可视化治理板 + recent-broken-samples 退役（ADR-211）
+- **完成时间**：2026-06-20
+- **记录时间**：2026-06-20 23:25
+- **执行模型**：claude-opus-4-8（会话以 Opus 启动；卡建议 sonnet）
+- **子代理**：无（按已审 ADR-211 实现；`focusKind` 为 server-next 模块内组件 Props、非 admin-ui 公开 Props，设计 §9 裁定不触发强制 Opus 组件契约）
+- **修改文件**：
+  - `apps/server-next/src/lib/image-health/api.ts` — 加 `ProblemImage*` 类型 + `getProblemImages(params)` fetcher；删 `BrokenSampleRow` + `getRecentBrokenSamples`
+  - `apps/server-next/src/app/admin/image-health/_client/ProblemImageCard.tsx` — 新：缩略真实 URL + `<img onError>`→`--state-error-border` 失败态（不复用 admin Thumb，D-211-6）+ 标题取代域名 + hover 详情浮层（secondary 空字段隐藏 L-2）+ problemReason 分色
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthProblemBoard.tsx` — 新：2×Segment（kind tab badge=counts + scope）+ reason 子筛选 + 网格 + 加载更多（offset 累积+videoId+kind 去重）+ 自带 ImageGovernanceDrawer；漂移三缓解（H-3）
+  - `apps/server-next/src/app/admin/image-health/_client/ImageGovernanceDrawer.tsx` — 加 `focusKind?: VideoImageKind`（默认 poster 向后兼容 Tab B）→ 候选字段/替换/手填/标题按 kind（banner_backdrop 无候选→仅手填）
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthClient.tsx` — 概览布局 KPI→问题板（全宽）→TOP 破损域名（下移全宽）；删 brokenSamples state/调用/BrokenSamplesGrid
+  - 删 `apps/server-next/src/app/admin/image-health/_client/BrokenSamplesGrid.tsx`
+  - 后端退役：`apps/api/src/db/queries/imageHealth.scan.ts`（删 `RecentBrokenSampleRow` + `getRecentBrokenSamples`，**保留** `BROKEN_SAMPLE_EVENT_TYPES`——problem-images 复用）/ `imageHealth.ts`（re-export）/ `ImageHealthService.ts`（方法+import）/ `routes/admin/image-health.ts`（route + schema + 头注释）
+  - 测试：新增 `ProblemImageCard.test.tsx`(11) + `ImageHealthProblemBoard.test.tsx`(10)；改 `ImageHealthClient.test.tsx`/`ImageGovernanceDrawer.test.tsx`（focusKind 用例）；删 `BrokenSamplesGrid.test.tsx` + `admin-image-health-recent-broken-samples.test.ts`；`image-health-scan-queries.test.ts` 去 getRecentBrokenSamples 段
+  - `docs/decisions.md` — ADR-210 端点契约表行删除（D-211-5 checklist）+ 状态行标「端点已退役」
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：退役 checklist 6 项同 commit（D-211-5）；verify:endpoint-adr 133 端点（删 recent-broken 表行 -1）。**已知 gap（follow-up）**：problem-images DTO 无 `eventId` → 板进抽屉「标记已解决」disabled（resolve 在 Tab B 治理表完整支持）；如需板内 resolve 须后端 DTO 加 eventId（改 ADR-211 端点契约，另起卡）。门禁全绿：typecheck/lint/test:changed 199/verify:endpoint-adr 248·133/verify:adr-contracts。`<img>` lint warning 与 ImageGovernanceDrawer/TabImages 后台范式一致（外部任意 URL + onError 失败态，next/image 不适用）。
+
+## [IMGH-P3-4C] 核查：前台 SafeImage 零裂图覆盖面（ADR-211 §8 / Codex LOW-2/L-4）
+- **完成时间**：2026-06-20
+- **记录时间**：2026-06-20 23:45
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `docs/research/imgh-p3-4c-safeimage-coverage_20260620.md` — 新核查报告（`git grep` 枚举 web-next 全图片入口 + 安全网架构 + 12 消费点清单 + 漏网点清单）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：**仅核查不修复**（apps/web-next 只读）。结论：前台 12/13 图片入口走 `SafeImage` 安全网（`onError`→`FallbackCover` 零裂图，含 VideoCard→StackedPosterFrame→SafeImage 主链路）；**唯一漏网点 = `components/home/DailyAnimeRow.tsx:97`** 裸 `<img src={item.coverUrl}>`（无 onError/不经 SafeImage，首页「每日新番」公开行）→ 用户端裂图风险。建议起 **IMGH-P3-4D 修复卡**（改 SafeImage 不裂图兜底，对齐 BrowseCard 范式；**不接 reportBrokenImage**——DailyAnime 为 Bangumi calendar 外部源、非站内 media_catalog，已按此实施 `c39707bc`）。**工具教训**：本环境 `find -type f`/`grep -rn` 递归**静默失败返假空**（误判 components 目录为空），核查类任务一律用 `git grep`/`git ls-files`。
+
+## [IMGH-P3-4D] 修复 DailyAnimeRow 裸 img → SafeImage（前台零裂图闭环）
+- **完成时间**：2026-06-20
+- **记录时间**：2026-06-20 23:50
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **修改文件**：
+  - `apps/web-next/src/components/home/DailyAnimeRow.tsx` — 裸 `<img src={item.coverUrl}>` → `SafeImage`（`fallback={{ title, type:'anime', seed: bangumiSubjectId }}`，对齐 BrowseCard 容器 2/3 + absolute inset-0 范式），去 `eslint-disable no-img-element`
+  - `tests/unit/web-next/DailyAnimeRow.test.tsx` — 加用例：coverUrl=null → SafeImage 渲染 FallbackCover(`role="img"`)（不裂图兜底）
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：4C 核出唯一前台裂图漏网点修复 → **前台「用户端零裂图」全闭环**。**上报权衡（修正 4C 报告建议）**：DailyAnime 封面为 Bangumi calendar 外部源（非站内 media_catalog 治理对象），仅做 SafeImage 不裂图兜底、**不接** `reportBrokenImage`（broken_image_events 需 video_id，未入站项无、语义不符）。改进：coverUrl=null 旧显空 sunken 块、现显 FallbackCover（标题+动画图标）。门禁：typecheck/lint（去 no-img-element warning）/test:changed 5/**test:e2e:smoke 19**（首页含 DailyAnimeRow 渲染正常）全过。
+
+## [IMGH-P4-0] ADR-213《图片健康双真源溶解（方案 C）》起草 + Accepted（supersede ADR-212）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 00:30
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8, a06695fa2c0aa033c — 方案 C 设计 CONDITIONAL-PASS) / codex-rescue (adversarial-review r1–r4：a1d0700349d19909a + threads 019eedf0/019eee13/019eee21)
+- **修改文件**：
+  - `docs/decisions.md` — 新增 **ADR-213**（D-213-1~9，方案 C dissolve）+ **ADR-212 转 Rejected/Superseded by ADR-213**（保留 patch 三轮论证作审计）+ **ADR-211 D-211-2/3 refined-by 标记**
+  - `docs/tasks.md` — IMGH-P4-0 gate 收口 → IMGH-P4-0M 实施卡
+  - `docs/task-queue.md` — SEQ-20260621-02 状态：ADR Accepted + P4-0M 进入实施
+- **新增依赖**：无
+- **数据库变更**：无（本卡为设计 gate；schema 实施在 P4-0M）
+- **注意事项**：调查 image-health 发现 problem-images「真破损」对已恢复封面系统性误报，根因＝双权威真源（`media_catalog.<kind>_status` vs `broken_image_events`）结构性漂移。**方案 C（dissolve）取代 ADR-212 patch**：健康判定不再读 events，收敛为 status + 新增 `<kind>_checked_at`（确定性判定时间）+ `<kind>_client_error_at`（浏览器自过期信号 7d）；events 降级纯遥测；读端单一 `problemFilterSqlV2`（含 stale-ok=unknown）counts/list 逐字共用。**Codex 4 轮对抗审核**（r1 3H+2M+1L / r2 2H+1M / r3 1H / r4 1H；findings 收敛，rounds 1–3 数据模型封板、round-4 属 rollout 时序）全吸收 → Draft v5 → **Accepted**。实施拆 **0M/A/B/C/S**，时序 `0M→A→A-SCAN门→C`。未含 IMGH-P3-5 parked 代码。
+
+## [IMGH-P4-0M] 方案C migration 121 — media_catalog +8 健康判定列 + client_error_at 回填（ADR-213，schema 硬前置）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 01:30
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8, a06695fa2c0aa033c — schema 设计已由 ADR-213 背书)
+- **修改文件**：
+  - `apps/api/src/db/migrations/121_image_health_dissolve.sql` — media_catalog 加 8 列（4×`<kind>_checked_at` + 4×`<kind>_client_error_at`，TIMESTAMPTZ nullable）+ `<kind>_client_error_at` 回填（当前 URL 守卫 `b.url=m2.<url_col>` + 7d 窗口）；checked_at 留 NULL
+  - `apps/api/src/db/queries/imageHealth.scan.ts` — `CLIENT_ERROR_WINDOW_DAYS=7` / `STALE_CHECK_DAYS=30` 常量（P4-C 读端谓词消费）
+  - `docs/architecture.md` — §5.11 +8 列 + ADR-213 dissolve 说明
+  - `scripts/verify-imgh-121.ts` — 真库回填演练核验（一次性/可复用 staging·prod）：checked_at 全 NULL + seeded 集恰=expected 集（misseed=0 ∧ missed=0）
+- **新增依赖**：无
+- **数据库变更**：**是**——`media_catalog` +8 列（migration 121，幂等 ADD COLUMN IF NOT EXISTS）；`broken_image_events` 零改动
+- **注意事项**：**真库回填演练 PASS**（poster seeded=1=expected / misseed=0 / missed=0 / checked_at 全 NULL；其余 kind expected=0 正确不 seed）——回填生效且 URL 守卫精确。**Codex stop-gate 修正**：verify 脚本初版只查「无误 seed」（misseed），空操作回填会假 PASS → 补「无漏 seed」（missed/expected）反向检查，PASS 须 seeded 集恰=expected 集。下游 **P4-A**（worker 确定性出口写 checked_at + `fetchImageDimensions` 判别式 + 部署后 A-SCAN 门）。staging/prod 应用 121 后复跑 verify 脚本。
+
+## [IMGH-P4-A] 方案C worker 单真源 — checked_at 写入 + fetchImageDimensions 判别式 + A-SCAN（ADR-213 D-213-5）〔补录·代码已于 `968d4efb` 提交〕
+- **完成时间**：2026-06-22（代码 commit `968d4efb`）
+- **记录时间**：2026-06-22 02:10（**补录**：前次 968d4efb 提交遗漏 changelog 条目，本条与 P4-B 同提交补齐）
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8, a06695fa2c0aa033c — worker 逻辑已由 ADR-213 D-213-5 背书)
+- **修改文件**（均在 968d4efb）：
+  - `apps/api/src/workers/imageHealthWorker.ts` — `fetchImageDimensions` 改判别式 `{width,height,failure?:'http_4xx'|'http_5xx'|'decode'|'transient'}`；`checkImageHealth` 确定性失败（URL 非法/HEAD·GET 404·5xx/decode）单次即 broken、瞬态（网络/超时/abort）不改 status 且不写 checked_at；删内存连败计数器 + 死代码 extractDomain
+  - `apps/api/src/db/queries/imageHealth.ts` — `updateCatalogImageStatus` 确定性出口（ok/low_quality/broken）写 `<kind>_checked_at=NOW()`、pending_review/missing 不写；新增 `listUncheckedImageUrls`（checked_at IS NULL 行，A-SCAN 数据源）
+  - `apps/api/src/services/ImageHealthService.ts` — `enqueueHealthScanForUnchecked`（A-SCAN 分页扫入队，dedup jobId）
+  - `scripts/run-imgh-ascan.ts` — A-SCAN 触发脚本（部署后一次性跑，落 checked_at 真值、排空初始 unknown 桶）
+  - `tests/unit/api/image-health-worker.test.ts` + `image-health-checked-at.test.ts` — 判别式/checked_at 条件写入/A-SCAN 入队单测
+- **新增依赖**：无
+- **数据库变更**：无（消费 0M 已加列；本卡为写入侧逻辑）
+- **注意事项**：消除 ADR-210 D-210-6 timeout 误报根因（瞬态不再置 broken）+ width===0 假阴性（GET/decode 确定性 broken）。**待部署期跑 A-SCAN**（`node --env-file=.env.local --import tsx scripts/run-imgh-ascan.ts`）落 checked_at 真值——**P4-C `unknown` 谓词硬前置门**（否则存量 ok 全 checked_at=NULL→unknown 泛滥，Codex round-4）。门禁：typecheck=0/lint=0/test:changed=181/verify:adr-contracts=0。未含 IMGH-P3-5 parked 代码。
+
+## [IMGH-P4-B] 方案C internal 端点 — beacon 写 `<kind>_client_error_at` 信号列（URL 同源守卫）+ events 双写遥测（ADR-213 D-213-6）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 02:10
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8, a06695fa2c0aa033c — 端点双写设计已由 ADR-213 D-213-6 背书)
+- **修改文件**：
+  - `apps/api/src/db/queries/imageHealth.ts` — 新增 `markCatalogClientError(db,{videoId,kind,url})`：`UPDATE media_catalog mc SET <kind>_client_error_at=NOW() FROM videos v WHERE v.id=$1 AND mc.id=v.catalog_id AND mc.<url_col>=$2`，URL 同源守卫 + signal/url 列名全白名单查表（防注入）+ 返回 rowCount；poster URL 列历史名 cover_url
+  - `apps/api/src/routes/internal/image-broken.ts` — 双写改写：信号列仅 4 受治理 kind（stills/thumbnail 跳过、仅 events，ADV-213-6）+ 保留 `upsertBrokenImageEvent` 遥测；两 UPDATE 各自 try、互不阻断、失败 `request.log.warn` 结构化降级（含 video_id/image_kind/write_target，禁空 catch）；events FK violation→静默 204（反枚举，契约不变）。端点 method/path/无鉴权/IP 限速/204/400 全不变，前台 report-broken-image.ts 零改动
+  - `tests/unit/api/image-broken-beacon.test.ts` — 路由双写（poster 同写信号列+events / stills·thumbnail 跳信号列 / 信号列失败 best-effort 204 / 遥测非 FK 失败 best-effort 204）
+  - `tests/unit/api/image-health-client-error.test.ts`（新建）— `markCatalogClientError` SQL（per-kind 信号列+URL 列正确·poster=cover_url / 参数化 / rowCount 归一化）
+- **新增依赖**：无
+- **数据库变更**：无（消费 0M migration 121 的 `<kind>_client_error_at` 列）
+- **注意事项**：信号列驱动 P4-C 健康读路径（自过期 7d 窗口）；events 降级纯遥测（趋势/域名/`brokenLast7Days`）。**双写漂移定性**（ADV-213-2）：仅遥测写失败时健康判定不受影响（信号列已写），`brokenLast7Days` 定性为遥测口径、非权威健康计数。门禁：typecheck=0/lint=0/test:changed=189/verify:endpoint-adr=0（契约不变·无新端点）/verify:adr-contracts=0。未含 IMGH-P3-5 parked 代码。
+
+## [IMGH-P4-S] 方案C 图片健康周期巡检 scheduler — stale-ok 行重入 health-check 自动消化 unknown（ADR-213 D-213-9①）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 02:20
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8, a06695fa2c0aa033c — D-213-9① 周期巡检设计已由 ADR-213 背书)
+- **修改文件**：
+  - `apps/api/src/db/queries/imageHealth.ts` — 新增 `listStaleOkImageUrls(db,staleDays,limit,offset)`：UNION ALL 4 kind，谓词 `<kind>_url 非空 AND <kind>_status='ok' AND COALESCE(<kind>_checked_at,'-infinity') < NOW()-make_interval(days=>$1) AND v.deleted_at IS NULL`，与 D-213-7 `unknown` 分支同源；staleDays 参数化（禁裸插值）
+  - `apps/api/src/services/ImageHealthService.ts` — 新增 `enqueueStaleHealthRecheck(queue,pageSize)`：分页扫 stale-ok 行入 health-check（dedup jobId `health-check-<catalogId>-<kind>`），阈值取单一常量 `STALE_CHECK_DAYS`（import 自 imageHealth.scan）
+  - `apps/api/src/server.ts` — scheduler 接线（仿 verify-scheduler：`setTimeout` 5min 首跑 + `setInterval` 24h），env gate `IMAGE_HEALTH_SCHEDULER_ENABLED`（默认关，dev 防误发 HEAD；prod 显式开）；启用/禁用各 `log.info`
+  - `tests/unit/api/image-health-worker.test.ts` — `enqueueStaleHealthRecheck` 服务测（stale 行入队 dedup jobId / 空集→enqueued=0 不入队）
+  - `tests/unit/api/image-health-stale-recheck.test.ts`（新建）— `listStaleOkImageUrls` 谓词 SQL（status='ok'∧checked_at 陈旧·COALESCE -infinity / staleDays·limit·offset 参数化 / 行映射）
+- **新增依赖**：无
+- **数据库变更**：无（消费 0M migration 121 的 `<kind>_checked_at` 列 + scan.ts `STALE_CHECK_DAYS=30` 常量）
+- **注意事项**：**A-SCAN ≠ P4-S**——A-SCAN（P4-A）是 C 前的一次性初始排空门（`checked_at IS NULL`），P4-S 是上线后周期维护（`checked_at` 陈旧）。**非阻塞根治收尾卡**：过渡正确性已由 P4-C `unknown` 面兜底，P4-S 上线（prod `IMAGE_HEALTH_SCHEDULER_ENABLED=true`）后健康板方宣称「零漏检/完备」。
+- **Codex stop-gate 修正（周期 jobId silent-skip）**：初版 `enqueueStaleHealthRecheck` 复用一次性扫描的**固定 jobId** `health-check-<catalogId>-<kind>` —— Bull 对已存在 jobId（含 `removeOnComplete:50` 保留的**已完成** job）静默忽略 add，致同一 (catalog,kind) 行复检一次后、后续周期重入被**永久静默跳过**，彻底丧失「周期」语义（stale-ok 根治失效）。**修复**：周期 jobId 追加本次调用时间戳周期戳 `-${cycleStamp}` → 单次调用内仍 dedup、跨周期不被旧 job 阻塞；一次性路径（A-SCAN/backfill/rescan）保持固定 jobId（语义本就一次性，不变）。新增回归测「连续两周期 jobId 不同」。
+- **门禁**：typecheck=0/lint=0/test:changed=127（修复改动集）·image-health 单测 32 全绿（worker 14/stale-recheck 3/client-error 4/beacon 11）/verify:endpoint-adr=0（无新端点·scheduler 非 route）/verify:adr-contracts=0。未含 IMGH-P3-5 parked 代码。
+
+## [IMGH-P4-C] 方案C 读端单真源 — problemFilterSqlV2（events 退出读路径）+ client_error/unknown DTO + 前端分色（ADR-213 D-213-7）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 03:00
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8, a06695fa2c0aa033c — 读端单谓词 + DTO 值域变更设计已由 ADR-213 背书)
+- **修改文件**：
+  - `apps/api/src/db/queries/imageHealth.scan.ts` — ① `PROBLEM_KIND_COLS` 加 `checkedAt`/`clientErrorAt` 列 ② `ProblemReason` 值域变更：`broken_event`→`client_error` + 新增 `unknown`（DTO 跨消费方）③ `problemFilterSql`→`problemFilterSqlV2(kind,includeStaleOk)`：`<url>非空 AND (status<>'ok' OR client_error_at∈7d窗口 [OR stale-ok])`——**events 退出 WHERE**（降级纯遥测）④ `getProblemImages` 重写（problem_reason CASE 含 client_error/unknown、ORDER 复用 base.problem_reason、LATERAL 仅留遥测展示不进 WHERE）⑤ `getProblemImageCounts` 逐字共用 `problemFilterSqlV2`（去 events 参数，total 不漂移）⑥ `staleOkEnabled()` flag helper
+  - `apps/server-next/src/lib/image-health/api.ts` + `_client/ProblemImageCard.tsx` — `ProblemReason` 类型同步 + `REASON_META` 分色（client_error=加载失败/danger，新增 unknown=未验证/warn）
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthProblemBoard.tsx` — 「真破损」子筛选 `broken_event`→`client_error`（仅此一行；parked IMGH-P3-5 改动经 git stash 隔离，未随本提交，pop 后仍未提交）
+  - 测试：新增 `image-health-problem-filter-v2.test.ts`（5：单真源谓词/events 退出/flag OFF·ON stale-ok 道/counts·list 逐字共用/CASE 含 client_error·unknown）+ 既有 4 测改名（ProblemImageCard/ImageHealthProblemBoard/admin-image-health-problem-images/集成 admin-image-health：broken_event→client_error + REASON_RANK + unknown 覆盖 + 移除「client_error 必带 eventType」失效断言）
+- **新增依赖**：无
+- **数据库变更**：无（消费 0M migration 121 的 `checked_at`/`client_error_at` 列）
+- **A-SCAN 部署门 = flag 门控（用户裁定）**：依赖 `checked_at` 的 **stale-ok→unknown** 道用 `IMAGE_HEALTH_STALE_OK_ENABLED`（默认 OFF）门控——A-SCAN 跑前存量 ok 行 checked_at 全 NULL，若开启会误判全部健康 ok 行 unknown 泛滥（ADR-213 Codex round-4 红线）。**flag OFF 即生效的核心修复**：events 退出读路径 → 7 张 `status='ok'` 误报封面**上线即消失**（无需重扫/resolve）；client_error 窗口道 + 分色。**flag ON（A-SCAN 排空后运维开启）**：stale-ok 行入板标 `unknown`（诚实未验证，非健康）。**counts/list 逐字共用 problemFilterSqlV2**（ADR-209 §17.3.2 total 不漂移）。
+- **门禁**：typecheck=0/lint=0/test:changed=235/verify:endpoint-adr=0（无新端点·读端改写不触契约）/verify:adr-contracts=0。**建议合并前补跑 `test:e2e:admin`**。未含 IMGH-P3-5 parked 代码（git stash 隔离 ImageHealthProblemBoard 视觉改动）。
+
+## [IMGH-P4-D213-10] 方案C 信号 URL 绑定修复 — URL 替换即清 client_error_at + checked_at（migration 122 触发器，Codex stop-gate）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 03:12
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（Codex stop-gate 对抗审核发现；修复按 D-213-10，触发器为既有 trg_media_catalog_updated_at 同构范式，非新架构决策）
+- **修改文件**：
+  - `apps/api/src/db/migrations/122_image_signals_clear_on_url_change.sql`（新建）— BEFORE UPDATE 触发器 `trg_media_catalog_clear_image_signals`：任一 `<kind>_url` 变更即 NULL 掉该 kind 的 `<kind>_client_error_at` + `<kind>_checked_at`（4 kind，`IS DISTINCT FROM` 处理增删图 NULL）+ DO-block 存在性验证
+  - `docs/decisions.md` — ADR-213 新增 **D-213-10**（refine D-213-3/6/7）：信号/checked_at 裸时间戳不绑 URL → URL 替换后须清；为何 DB 触发器（路径无关，扫孪生）、为何不靠 worker 服务端复检清（低保真覆盖高保真→假阴性）
+  - `docs/architecture.md` — §5.11 加触发器说明
+  - `tests/integration/api/image-health-url-change-trigger.test.ts`（新建）— 触发器行为集成测（cover_url 变更→poster 双信号清空 / 非 url 变更→保留；单连接事务 ROLLBACK 非破坏性）
+- **新增依赖**：无
+- **数据库变更**：**是**——migration 122 加触发器（幂等 CREATE OR REPLACE FUNCTION + DROP TRIGGER IF EXISTS + CREATE TRIGGER；无表/列改动）；同步 architecture.md §5.11
+- **问题（Codex stop-gate）**：`<kind>_client_error_at`/`<kind>_checked_at` 是裸时间戳、不记录对应 URL。写入侧有 URL 守卫，但信号写入后 URL 被替换（apply-candidate/手填/crawler）则旧信号残留 → 读端 `problemFilterSqlV2` 把**已替换的新图**继续判 client_error（≤7d 假阳性，同构 ADR-212 r1-HIGH-1）/ fresh-ok（masks 未验证新图）。「自过期 7d」只解时间衰减、不解 URL 替换。
+- **修复要点**：①触发器路径无关（覆盖所有 URL 写入路径，避免逐一挂钩漏网）②不靠 worker 复检清 client_error（服务端 HEAD/GET ok 但浏览器裂的防盗链/CORS 场景，清掉会重引假阴性）——信号只在 URL 变更时失效 ③孪生清 checked_at（同根因）④不干扰 worker（不改 url）/beacon（不改 url）的 NOW() 写入。
+- **门禁**：typecheck=0/lint=0/test:changed=58/verify:adr-contracts=0。触发器行为由 migration DO-block（存在性）+ 集成测 `image-health-url-change-trigger`（需 DB，随集成 suite/CI 跑）验证。部署 staging/prod 应用 122 后建议跑集成测确认。未含 IMGH-P3-5 parked 代码。
+
+## [IMGH-P4-D213-10·续] 方案C 信号 URL 绑定修复扫全孪生 — URL 替换一并重置 status + 渲染占位（migration 123，Codex stop-gate）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 10:10
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（Codex stop-gate「URL changes still leave stale status behind」；扩展 122 同名触发器函数，非新架构决策）
+- **修改文件**：
+  - `apps/api/src/db/migrations/123_image_signals_clear_status_on_url_change.sql`（新建）— `CREATE OR REPLACE` 122 的同名触发器函数，URL 变更时除两时间戳外**一并重置全 url 派生列**：`<kind>_status`（健康真源，**尊重显式写**：仅调用方未在同 UPDATE 改 status 才重置 `pending_review`/`missing`）+ `<kind>_blurhash`/`<kind>_primary_color`/`poster_width`/`poster_height`（渲染占位/尺寸缓存）。触发器（122 创建）绑定本函数名，替换即生效。
+  - `docs/decisions.md` ADR-213 D-213-10 + `docs/architecture.md` §5.11 — 扩展为「全 url 派生列」描述
+  - `tests/integration/api/image-health-url-change-trigger.test.ts` — 扩测：url 变更（未显式改 status）→ 时间戳/blurhash 清 + status 重置 pending_review；**url 变更 + 同 UPDATE 显式改 status → 尊重显式写（不覆盖）**
+- **新增依赖**：无
+- **数据库变更**：**是**——migration 123（幂等 CREATE OR REPLACE FUNCTION，无表/列/触发器结构改动）；同步 architecture.md §5.11
+- **问题（Codex stop-gate 续）**：122 只清了 `client_error_at`/`checked_at`，**未扫全 url 派生列**。`<kind>_status` 本身描述旧 URL——crawler/douban/tmdb/VideoService 改 url 均不重置 status（已核实）→ 旧 `ok` 掩盖未验证新图、旧 `broken` 误判新图。渲染占位（blurhash/primary_color/dimensions）旧图派生且 worker 仅拾 NULL 行再生 → 陈旧占位永久残留。
+- **修复要点**：①扫全 url 派生列（status + 渲染占位，补 122 之缺，ADR 教训：修命名问题须扫孪生）②status「尊重显式写」——不覆盖 apply-candidate/rescan 显式 pending_review；worker 写 verified status 不改 url 故永不触发本分支（不变式 `status='ok'`=worker 验证当前 url 不破）③渲染占位清 NULL → blurhash worker 对新图重生、尺寸下次健康检查重测。
+- **门禁**：typecheck=0/lint=0/test:changed=58/verify:adr-contracts=0。触发器行为由 migration DO-block + 集成测（需 DB）验证。部署应用 121+122+123 后建议跑集成测确认。未含 IMGH-P3-5 parked 代码。
+
+## [IMGH-P4-FIX-HEAD-TIMEOUT] worker HEAD 超时 300ms→env 可配（默认 5000ms），消 A-SCAN 大面积 timeout 瞬态
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 10:50
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（worker 超时调优，A-SCAN 真库诊断驱动，非架构决策）
+- **修改文件**：
+  - `apps/api/src/workers/imageHealthWorker.ts` — 抽 `resolveHeadTimeoutMs(raw)` 纯函数（`Number.isFinite && >0 ? n : 5000` 防御解析）+ 模块常量 `HEAD_TIMEOUT_MS = resolveHeadTimeoutMs(process.env.IMAGE_HEALTH_HEAD_TIMEOUT_MS)`；`headRequest` 用之替换硬编码 300。GET 超时（5000）不动。
+  - `tests/unit/api/image-health-worker.test.ts` — `resolveHeadTimeoutMs` 单测（未设/空/非数/0/负→5000 默认；合法正数透传）
+- **新增依赖**：无
+- **数据库变更**：无
+- **触发背景（A-SCAN 真库诊断）**：用户跑 A-SCAN 后报「未见后台处理」。诊断证实 worker **已正常处理全部 URL**（poster 4857 已检〔ok 2424/low_quality 2422/broken 11〕+ 1062 未检；加总=5919 无漏入队，排除分页漂移）；「未见」实为队列已 drained + removeOnComplete 仅留 50 条 + A-SCAN 系 fire-and-forget。**真问题**：近 2h `timeout` 事件 1105 ≈ 未检数——`headRequest` 硬编码 300ms 对外部 CDN HEAD 过激进 → 慢但正常图判瞬态（D-213-5）不写 checked_at → 永停未检（300ms 下重跑无效），且 P4-C flag 开后会污染 unknown 桶。原始反思 B3 早标「300ms 误报慢 CDN」。
+- **注意事项**：默认 5000ms（与 GET 一致）；env `IMAGE_HEALTH_HEAD_TIMEOUT_MS` 可覆盖（CI/dev 调小）。**改后需重跑 A-SCAN** 排空 timeout 行 → 复跑 `verify-imgh-121` → 再置 `IMAGE_HEALTH_STALE_OK_ENABLED=true`（否则 ~1137 慢图污染 unknown）。**未修**：low_quality 阈值（minWidth=300/2:3±10% 判半数 poster 低质，独立阈值判断，待用户定）。门禁：typecheck=0/lint=0/test:changed=74/verify:adr-contracts=0。未含 IMGH-P3-5 parked 代码。
+
+## [IMGH-P4-BOARD-UX] 问题板可用性：可操作项浮顶（low_quality 沉底）+ 未验证筛选 + 卡显分辨率
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 11:25
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（UI 排序/筛选/展示调优，A-SCAN 后实测驱动，非架构决策）
+- **修改文件**：
+  - **A** `apps/api/src/db/queries/imageHealth.scan.ts` — getProblemImages ORDER BY 重排序：`client_error=1/broken=2/unknown=3/pending_review=4/low_quality=5/other=6`（原 low_quality=3 把 broken/unknown 埋到末页）。`docs/decisions.md` D-213-7 排序记述同步。
+  - **B** `apps/server-next/src/app/admin/image-health/_client/ImageHealthProblemBoard.tsx` — reason 子筛选加「未验证(unknown)」（ReasonFilter + REASON_ITEMS；visibleRows 末支 `===reasonFilter` 已泛化）。**经 git stash 隔离 parked IMGH-P3-5 视觉改动**（本提交仅含 reason 筛选，视觉改动 pop 后续 parked）。
+  - **C** `apps/server-next/src/app/admin/image-health/_client/ProblemImageCard.tsx` — `<img onLoad>` 读 naturalWidth×naturalHeight → 右下角常显角标 `data-problem-dims` + 详情浮层「尺寸 W×H」（全 token；便于扫图判 low_quality 阈值；natural 尺寸 = worker 测量同源）。
+  - 测试：filter-v2（锁新排序 unknown=3/low_quality=5）+ ProblemImageCard.test（onLoad→分辨率显示/naturalWidth=0 不显）+ ImageHealthProblemBoard.test（未验证筛选仅 unknown 可见，within 限定避 Pill 文案撞名）+ 集成 admin-image-health（REASON_RANK 同步新序）。
+- **新增依赖**：无
+- **数据库变更**：无
+- **背景（A-SCAN 后实测）**：板 all 口径 poster reason 分布 = low_quality 2793（85%）/ pending 439 / broken 18 / unknown 17 / client_error 1。原排序 low_quality=3 把 broken/unknown 埋在第 ~70 页 + 无「未验证」筛选 → 可操作项不可见。**A 是 B 前提**（unknown 升优先级 3 → 落第 1 页 → 客户端筛选才命中）。
+- **注意事项**：A+C committed；B 经 stash 隔离（parked board 视觉改动仍未提交，待用户验收 IMGH-P3-5 一并 commit）。low_quality 阈值仍未动——C 上线后用分辨率角标观察再定（多数小图在未发布、published 口径仅 21）。门禁：typecheck=0/lint=0/test:changed=213/集成 admin-image-health=12/verify:adr-contracts=0。
+
+## [IMGH-P4-REASON-SSF] reason 子筛选改服务端，消「客户端过滤分页数据假空」（Codex stop-gate）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 11:45
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（读端过滤下沉，沿 ADR-211/213 既有谓词，非新架构）
+- **修改文件**：
+  - `apps/api/src/db/queries/imageHealth.scan.ts` — getProblemImages 加 `reasonFilter` 参（'all'/'broken'=client_error∪broken/'unknown'/'low_quality'/'pending_review'）→ 外层 `WHERE ($5::text[] IS NULL OR base.problem_reason = ANY($5))`；加 `COUNT(*) OVER()::int AS full_count` → 返回 `{rows,total}`（过滤后真总数，hasMore 准）。新增 `ProblemReasonFilter`/`ProblemImagesPage` 类型 + `REASON_FILTER_MAP`。
+  - `apps/api/src/db/queries/imageHealth.ts` — 重导出新类型。
+  - `apps/api/src/services/ImageHealthService.ts` — getProblemImages 透传 reasonFilter + 返回 `{rows,total}`。
+  - `apps/api/src/routes/admin/image-health.ts` — `/problem-images` 加 `reason` query（zod 枚举，默认 all）→ 传服务 → `{data: page.rows, total: page.total, counts}`（counts 仍全 reason 作 tab badge）。
+  - `apps/server-next/src/lib/image-health/api.ts` — `ProblemReasonFilter` 类型 + getProblemImages 传 reason query。
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthProblemBoard.tsx`（**stash 隔离 parked**）— reasonFilter 入 fetch + useEffect/handleLoadMore deps；**删客户端 visibleRows 过滤**、直接渲染 rows。
+  - 测试：filter-v2（reason WHERE/$5/COUNT OVER）+ 集成 admin-image-health（{rows,total} 解构 + total=counts 当 all + reason=broken 过滤）+ board test（点筛选触发带 reason 重取，服务端语义）+ route 单测 admin-image-health-problem-images（mock query 返回 {rows,total}、total=page.total、reason 透传）。
+- **新增依赖**：无
+- **数据库变更**：无
+- **问题（Codex stop-gate）**：reason 子筛选客户端 `rows.filter` 仅覆盖已加载页 → 任何沉在加载窗口外的 reason（A 排序后 low_quality 在第 ~60 页）点筛选即**假空**（其实有 2793 个，未加载到）。客户端过滤分页数据的固有缺陷，对 unknown/pending 早已存在，A 让 low_quality 显形。
+- **修复要点**：①reason 过滤下沉服务端 → 任何 reason 精确命中、不受排序/分页影响；②`COUNT(*) OVER()` 返回过滤后真总数 → hasMore 准（不再 over-fetch 空页）；③保留 A 排序（默认视图可操作项浮顶）+ B 未验证筛选（现服务端生效）+ C 分辨率显示。端点加 query 参不增端点（verify:endpoint-adr 绿）。
+- **门禁**：typecheck=0/lint=0/test:changed=232/集成 admin-image-health=13（真库 {rows,total}+reason 过滤）/verify:endpoint-adr=0/verify:adr-contracts=0。board 改动经 stash 隔离 parked IMGH-P3-5。
+
+## [IMGH-P4-LOADMORE-RACE] handleLoadMore 加 fetch 代次守卫，消「过期 load-more 污染已切换筛选」（Codex stop-gate）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 11:57
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（前端竞态守卫，非架构）
+- **修改文件**：
+  - `apps/server-next/src/app/admin/image-health/_client/ImageHealthProblemBoard.tsx` — 加 `fetchSeqRef = useRef(0)`；useEffect 每次重置 `++fetchSeqRef.current`（新代次，作废在途 load-more）+ `.then`/`.catch` 加 `seq !== fetchSeqRef.current` 守卫；handleLoadMore 捕获 `seq`，响应后 `if (seq !== fetchSeqRef.current) return`（上下文已切 → 丢弃，不 dedupeAppend 污染）。
+  - `tests/unit/components/server-next/admin/image-health/ImageHealthProblemBoard.test.tsx` — 竞态测：在途 load-more（reason=all 挂起）+ 切 reason=broken → 过期响应 resolve 后不污染（仍仅 broken）。
+- **新增依赖**：无
+- **数据库变更**：无
+- **问题（Codex stop-gate）**：REASON-SSF 后 reason 变更触发 useEffect 重取；但 handleLoadMore 无 cleanup/守卫 → load-more 在途时切 reason/kind/scope，旧响应回来仍 `setRows(dedupeAppend)`/setCounts/setTotal/setRequested → 旧筛选数据污染新视图（且 requested 错位）。useEffect 有 cancelled 守自身，handleLoadMore 无。
+- **修复要点**：单一 `fetchSeqRef` 代次计数——重置即 +1（useEffect），load-more 捕获并在响应后比对，不匹配即整体丢弃（数据 + requested 均不动）。保留 dedupeAppend（防同代次边界重复）。
+- **门禁**：typecheck=0/lint=0/test:changed=60/verify:adr-contracts=0。board 改动经手动 toggle 隔离 parked 不关抽屉（避 stash-pop 冲突，上次教训）。

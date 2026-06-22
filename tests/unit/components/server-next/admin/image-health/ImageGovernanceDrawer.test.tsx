@@ -148,3 +148,29 @@ describe('ImageGovernanceDrawer — 标记已解决流程', () => {
     expect((screen.getByTestId('governance-resolve') as HTMLButtonElement).disabled).toBe(true)
   })
 })
+
+describe('ImageGovernanceDrawer — focusKind 跨 kind 深链（ADR-211 D-211-3）', () => {
+  it('focusKind 省略 → 默认 poster（向后兼容 Tab B）：候选拉 coverUrl + 手填 update(poster)', async () => {
+    render(<ImageGovernanceDrawer open row={makeRow()} onClose={vi.fn()} onMutated={vi.fn()} />)
+    await waitFor(() => expect(listCandidatesMock).toHaveBeenCalledWith('c-1', 'coverUrl'))
+    expect(screen.getByText('替换封面 · 从外部源候选')).not.toBeNull()
+  })
+
+  it('focusKind=backdrop → 候选拉 backdropUrl + 标题「替换背景」+ 手填 update(backdrop)', async () => {
+    listCandidatesMock.mockResolvedValue([])
+    render(<ImageGovernanceDrawer open row={makeRow()} focusKind="backdrop" onClose={vi.fn()} onMutated={vi.fn()} />)
+    await waitFor(() => expect(listCandidatesMock).toHaveBeenCalledWith('c-1', 'backdropUrl'))
+    expect(screen.getByText('替换背景 · 从外部源候选')).not.toBeNull()
+    const input = screen.getByTestId('governance-manual-url').querySelector('input') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'https://new/bd.jpg' } })
+    fireEvent.click(screen.getByTestId('governance-manual-apply'))
+    await waitFor(() => expect(updateMock).toHaveBeenCalledWith('backdrop', 'https://new/bd.jpg'))
+  })
+
+  it('focusKind=banner_backdrop → 无跨源候选字段，候选区隐藏（仅手填，不调 listImageCandidates）', () => {
+    render(<ImageGovernanceDrawer open row={makeRow()} focusKind="banner_backdrop" onClose={vi.fn()} onMutated={vi.fn()} />)
+    expect(document.querySelector('[data-no-candidate]')).not.toBeNull()
+    expect(screen.queryByTestId('governance-candidate-picker')).toBeNull()
+    expect(listCandidatesMock).not.toHaveBeenCalled()
+  })
+})

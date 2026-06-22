@@ -10,12 +10,23 @@
 
 import { apiClient } from '@/lib/api-client'
 
+/**
+ * 单口径（已发布 / 全部）4 类图片 ok 计数 + 视频分母（对齐后端 ImageCoverageScope）。
+ * 覆盖率 = `<kind>Ok / videoCount`，由 KPI 卡片现算（不预存浮点）。
+ */
+export interface ImageCoverageScope {
+  readonly videoCount: number
+  readonly posterOk: number
+  readonly backdropOk: number
+  readonly logoOk: number
+  readonly bannerOk: number
+}
+
 export interface ImageHealthStats {
-  readonly totalVideos: number
-  readonly posterOkCount: number
-  readonly posterCoverage: number      // 0–1
-  readonly backdropOkCount: number
-  readonly backdropCoverage: number
+  /** 已发布视频范围（is_published = true） */
+  readonly published: ImageCoverageScope
+  /** 全部视频范围（含未发布） */
+  readonly all: ImageCoverageScope
   readonly brokenLast7Days: number
   // brokenTrend 字段对齐后端 getBrokenEventsTrend 实返（imageHealth.scan.ts:43 push({ date, count })）；
   // SQL 内部别名 AS day 不出现在返回值，全链无转换层（IMGH-P1-1 修正：原误标 day → date）
@@ -47,6 +58,67 @@ export interface MissingVideoRow {
   // ADR-209 D-209-4 BLOCK-4：跨源候选聚合（候选数列单查询取得，避 N+1/死列）
   readonly candidateCount: number
   readonly hasHighConfidenceCandidate: boolean
+}
+
+// ADR-211：问题图片可视化治理板数据源（对齐后端 imageHealth.scan.ts ProblemImageRow camelCase DTO）。
+// supersede ADR-210 破损样本区（problem-images 是 recent-broken-samples 超集：4 类 + 状态∪真坏事件口径）。
+export type ProblemImageKind = 'poster' | 'backdrop' | 'logo' | 'banner_backdrop'
+export type ProblemImageScope = 'published' | 'all'
+/**
+ * problemReason：UI 分色 + 后端默认排序优先级（client_error 在前，ADR-213 D-213-7）。
+ * 方案 C dissolve：`broken_event`→`client_error`（浏览器自过期信号）；新增 `unknown`（stale-ok 兜底面）。
+ * 与后端 imageHealth.scan.ts ProblemReason 值域逐字对齐。
+ */
+export type ProblemReason =
+  | 'client_error'
+  | 'broken'
+  | 'low_quality'
+  | 'pending_review'
+  | 'unknown'
+  | 'other'
+
+export interface ProblemImageRow {
+  readonly videoId: string
+  readonly catalogId: string
+  readonly title: string
+  readonly isPublished: boolean
+  readonly kind: ProblemImageKind
+  /** <kind>_url，后端口径已含 IS NOT NULL + btrim<>'' 守卫 → 恒非空非空白（无「无图卡」） */
+  readonly imageUrl: string
+  readonly status: string
+  readonly problemReason: ProblemReason
+  /** poster_source（仅 poster 有意义；secondary 恒 null → UI 隐藏空字段） */
+  readonly source: string | null
+  readonly eventType: string | null
+  readonly brokenDomain: string | null
+  readonly occurrenceCount: number
+  readonly lastSeenBrokenAt: string | null
+}
+
+/** 4 类问题图片计数（tab badge + 当前 kind 的 total），一次返回避 4 次请求（ADR-211 D-211-4）。 */
+export interface ProblemImageCounts {
+  readonly poster: number
+  readonly backdrop: number
+  readonly logo: number
+  readonly banner_backdrop: number
+}
+
+/** reason 子筛选（服务端化，IMGH-P4-REASON-SSF）：'all' 不过滤；'broken'=真破损（client_error∪broken）。 */
+export type ProblemReasonFilter = 'all' | 'broken' | 'unknown' | 'low_quality' | 'pending_review'
+
+export interface ListProblemImagesParams {
+  readonly kind?: ProblemImageKind
+  readonly scope?: ProblemImageScope
+  readonly offset?: number
+  readonly limit?: number
+  readonly reason?: ProblemReasonFilter
+}
+
+export interface ListProblemImagesResult {
+  readonly data: readonly ProblemImageRow[]
+  /** 当前 kind+scope+reason 过滤后命中总数（服务端 COUNT(*) OVER()）→ hasMore 准 */
+  readonly total: number
+  readonly counts: ProblemImageCounts
 }
 
 export interface ListMissingVideosParams {
@@ -206,6 +278,26 @@ export async function getTopBrokenDomains(limit = 20): Promise<readonly BrokenDo
     `/admin/image-health/broken-domains?limit=${limit}`,
   )
   return result.data
+}
+
+/**
+ * 问题图片可视化治理板数据源（ADR-211）：按 kind/scope 返回「有非空 URL 但可能失效」的图，
+ * 供运营看真实缩略图人眼分诊。返回 { data, total, counts }——counts 一次给 4 类 tab badge。
+ * supersede ADR-210 recent-broken-samples（problem-images 是其超集）。
+ */
+export async function getProblemImages(
+  params: ListProblemImagesParams = {},
+): Promise<ListProblemImagesResult> {
+  const qs = new URLSearchParams()
+  if (params.kind)            qs.set('kind', params.kind)
+  if (params.scope)           qs.set('scope', params.scope)
+  if (params.offset != null)  qs.set('offset', String(params.offset))
+  if (params.limit != null)   qs.set('limit', String(params.limit))
+  if (params.reason && params.reason !== 'all') qs.set('reason', params.reason)
+  const q = qs.toString()
+  return apiClient.get<ListProblemImagesResult>(
+    `/admin/image-health/problem-images${q ? `?${q}` : ''}`,
+  )
 }
 
 export async function listMissingVideos(

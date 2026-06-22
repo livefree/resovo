@@ -42,6 +42,7 @@ vi.mock('next/navigation', () => ({
 const getImageHealthStatsMock = vi.fn()
 const getTopBrokenDomainsMock = vi.fn()
 const listMissingVideosMock = vi.fn()
+const getProblemImagesMock = vi.fn()
 const triggerImageBackfillMock = vi.fn()
 const triggerImageRescanMock = vi.fn()
 const switchImageFallbackDomainMock = vi.fn()
@@ -52,6 +53,8 @@ vi.mock('../../../../../../apps/server-next/src/lib/image-health/api', () => ({
   getImageHealthStats: (...args: unknown[]) => getImageHealthStatsMock(...args),
   getTopBrokenDomains: (...args: unknown[]) => getTopBrokenDomainsMock(...args),
   listMissingVideos: (...args: unknown[]) => listMissingVideosMock(...args),
+  // ADR-211：问题图片板数据源（problem-board 自管理；ImageHealthProblemBoard 消费）
+  getProblemImages: (...args: unknown[]) => getProblemImagesMock(...args),
   triggerImageBackfill: (...args: unknown[]) => triggerImageBackfillMock(...args),
   triggerImageRescan: (...args: unknown[]) => triggerImageRescanMock(...args),
   switchImageFallbackDomain: (...args: unknown[]) => switchImageFallbackDomainMock(...args),
@@ -76,11 +79,9 @@ import { ImageHealthClient } from '../../../../../../apps/server-next/src/app/ad
 // ── fixtures ──────────────────────────────────────────────────────
 
 const STATS_FIXTURE = {
-  totalVideos: 12345,
-  posterOkCount: 11000,
-  posterCoverage: 0.891,
-  backdropOkCount: 9876,
-  backdropCoverage: 0.8,
+  // 双口径（已发布 / 全部）4 类图片 ok 数 + 视频分母
+  published: { videoCount: 47, posterOk: 40, backdropOk: 34, logoOk: 19, bannerOk: 12 },
+  all: { videoCount: 1200, posterOk: 1001, backdropOk: 840, logoOk: 456, bannerOk: 267 },
   brokenLast7Days: 42,
   // IMGH-P1-1 对齐后端实返字段 date（非 day）
   brokenTrend: [
@@ -157,6 +158,8 @@ beforeEach(() => {
   getImageHealthStatsMock.mockReset()
   getTopBrokenDomainsMock.mockReset()
   listMissingVideosMock.mockReset()
+  // 默认空问题图片（problem-board 自管理，不干扰 KPI/domains 断言）；正向用例单独覆写
+  getProblemImagesMock.mockReset().mockResolvedValue({ data: [], total: 0, counts: { poster: 0, backdrop: 0, logo: 0, banner_backdrop: 0 } })
   triggerImageBackfillMock.mockReset()
   triggerImageRescanMock.mockReset()
   switchImageFallbackDomainMock.mockReset()
@@ -180,16 +183,24 @@ describe('ImageHealthClient', () => {
     })
   })
 
-  it('2. KPI 加载成功：4 卡片 + 百分比格式（posterCoverage 0.891 → 89.1%）', async () => {
+  it('2. KPI 加载成功：图片正常视频卡（已发布 40/47 + 全部 1001/1200）+ 覆盖率卡 + 破损数', async () => {
     getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
     getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
     listMissingVideosMock.mockResolvedValueOnce(EMPTY_MISSING)
     render(<ImageHealthClient />)
     await waitFor(() => {
-      expect(screen.getByTestId('kpi-total-videos')).not.toBeNull()
-      expect(screen.getByText('89.1%')).not.toBeNull()  // poster coverage
-      expect(screen.getByText('80.0%')).not.toBeNull()  // backdrop coverage
-      expect(screen.getByText('42')).not.toBeNull()      // broken-last-7d
+      // 卡①：图片正常视频（健康=封面 ok）— 两口径分数
+      const healthy = screen.getByTestId('kpi-healthy-videos')
+      expect(healthy.textContent).toContain('40')
+      expect(healthy.textContent).toContain('47')
+      expect(healthy.textContent).toContain('1,001')
+      expect(healthy.textContent).toContain('1,200')
+      // 卡②：覆盖率（封面 已发布 40/47=85.1% / 全部 1001/1200=83.4%）
+      const coverage = screen.getByTestId('kpi-coverage')
+      expect(coverage.textContent).toContain('85.1%')
+      expect(coverage.textContent).toContain('83.4%')
+      // 卡③：近 7 日破损
+      expect(screen.getByTestId('kpi-broken-7d').textContent).toContain('42')
     })
   })
 
@@ -282,7 +293,7 @@ describe('ImageHealthClient', () => {
     })
   })
 
-  it('10. 初次加载并行调 3 端点 + 默认参数 page=1 limit=20', async () => {
+  it('10. 初次加载：概览 stats/domains + 治理 missing + 问题板 problem-images（默认 poster/published）', async () => {
     getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
     getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
     listMissingVideosMock.mockResolvedValueOnce(EMPTY_MISSING)
@@ -293,16 +304,33 @@ describe('ImageHealthClient', () => {
       expect(listMissingVideosMock).toHaveBeenCalledWith(
         expect.objectContaining({ page: 1, limit: 20 }),
       )
+      // ADR-211：问题图片板自管理数据源（默认 kind=poster / scope=published）
+      expect(getProblemImagesMock).toHaveBeenCalledWith(
+        expect.objectContaining({ kind: 'poster', scope: 'published' }),
+      )
     })
   })
 
-  it('11. 整体加载失败（3 端点全 reject）三类 ErrorState 不阻塞彼此', async () => {
+  it('10b. 概览 Tab：问题图片板渲染（ADR-211，取代破损样本区）', async () => {
+    getImageHealthStatsMock.mockResolvedValueOnce(STATS_FIXTURE)
+    getTopBrokenDomainsMock.mockResolvedValueOnce(EMPTY_DOMAINS)
+    listMissingVideosMock.mockResolvedValueOnce(EMPTY_MISSING)
+    render(<ImageHealthClient />)
+    await waitFor(() => {
+      expect(screen.getByTestId('image-health-problem-board')).not.toBeNull()
+    })
+    // 旧破损样本卡已退役
+    expect(screen.queryByTestId('image-health-broken-samples-card')).toBeNull()
+  })
+
+  it('11. 概览整体失败：stats/domains/problem-board 各自 ErrorState 不阻塞彼此', async () => {
     getImageHealthStatsMock.mockRejectedValueOnce(new Error('stats 500'))
     getTopBrokenDomainsMock.mockRejectedValueOnce(new Error('domains 500'))
     listMissingVideosMock.mockRejectedValueOnce(new Error('missing 500'))
+    getProblemImagesMock.mockReset().mockRejectedValueOnce(new Error('problem 500'))
     render(<ImageHealthClient />)
     await waitFor(() => {
-      // 三个独立 ErrorState（Promise.allSettled 不互相阻塞）
+      // 概览 Tab 三个独立 ErrorState（stats/domains/problem-board；Promise.allSettled + board 自管理）
       expect(screen.getAllByText(/加载失败|500/).length).toBeGreaterThanOrEqual(3)
     })
   })

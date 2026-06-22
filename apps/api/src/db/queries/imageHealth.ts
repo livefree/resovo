@@ -130,17 +130,81 @@ export async function updateCatalogImageStatus(
 ): Promise<void> {
   if (updates.length === 0) return
 
+  // ADR-213 D-213-2/5：确定性判定（ok/low_quality/broken）同步写 <kind>_checked_at；
+  // pending_review/missing 非「判定」（待复检/缺图）→ 不动 checked_at（避免 stale 被冒充已验证）。
+  // 列名 + checkedCol 均来自 allowedKinds 白名单常量（非请求输入），无注入。
+  const DETERMINISTIC_STATUSES = new Set<ImageStatus>(['ok', 'low_quality', 'broken'])
   const allowedKinds = ['poster', 'backdrop', 'logo', 'banner_backdrop'] as const
   for (const { catalogId, kind, status } of updates) {
     if (!allowedKinds.includes(kind as (typeof allowedKinds)[number])) {
       throw new Error(`Invalid image kind for status update: ${kind}`)
     }
     const col = `${kind}_status`
-    await db.query(
-      `UPDATE media_catalog SET ${col} = $1, updated_at = NOW() WHERE id = $2`,
-      [status, catalogId]
-    )
+    if (DETERMINISTIC_STATUSES.has(status)) {
+      const checkedCol = `${kind}_checked_at`
+      await db.query(
+        `UPDATE media_catalog SET ${col} = $1, ${checkedCol} = NOW(), updated_at = NOW() WHERE id = $2`,
+        [status, catalogId]
+      )
+    } else {
+      await db.query(
+        `UPDATE media_catalog SET ${col} = $1, updated_at = NOW() WHERE id = $2`,
+        [status, catalogId]
+      )
+    }
   }
+}
+
+// ── 写入：浏览器自过期信号列 <kind>_client_error_at（ADR-213 D-213-6）────────────
+
+export interface MarkClientErrorInput {
+  videoId: string
+  kind: 'poster' | 'backdrop' | 'logo' | 'banner_backdrop'
+  url: string
+}
+
+/**
+ * 4 受治理 kind 的「信号列 + 当前 URL 列」白名单映射。
+ * 列名全部查表得到（非请求拼接），杜绝 SQL 注入。
+ * poster 的 URL 列历史名为 `cover_url`（其余 kind = `<kind>_url`，参见 imageHealth.ts:342 注）。
+ */
+const CLIENT_ERROR_COLUMNS: Record<
+  MarkClientErrorInput['kind'],
+  { signal: string; url: string }
+> = {
+  poster: { signal: 'poster_client_error_at', url: 'cover_url' },
+  backdrop: { signal: 'backdrop_client_error_at', url: 'backdrop_url' },
+  logo: { signal: 'logo_client_error_at', url: 'logo_url' },
+  banner_backdrop: { signal: 'banner_backdrop_client_error_at', url: 'banner_backdrop_url' },
+}
+
+/**
+ * ADR-213 D-213-6：前台 beacon 上报图片加载失败 → 置 media_catalog.<kind>_client_error_at=NOW()
+ * （浏览器自过期信号，last-write-wins；读端 7 天窗口内判 client_error）。
+ *
+ * **URL 同源守卫**（`mc.<url_col> = $url`）：仅当上报 url = 该 catalog 当前 `<kind>_url` 才标记
+ * → 挡掉「过期页面 / 旧 URL 上报」污染（不匹配 → 影响 0 行、不报错）。
+ * **per-catalog fanout 是有意的**：健康态本就 per-catalog，URL 匹配当前 = 该 catalog 当前图在
+ * 用户端裂，标记同 catalog 全部 video 视图合理（对齐 ADR-174 N video:1 catalog）。
+ *
+ * 返回受影响行数（0 = video 不存在或 URL 不匹配，调用方据此判定是否命中）。
+ */
+export async function markCatalogClientError(
+  db: Pool | PoolClient,
+  input: MarkClientErrorInput
+): Promise<number> {
+  const cols = CLIENT_ERROR_COLUMNS[input.kind]
+  if (!cols) {
+    throw new Error(`Invalid image kind for client-error signal: ${input.kind}`)
+  }
+  const result = await db.query(
+    `UPDATE media_catalog mc
+        SET ${cols.signal} = NOW()
+       FROM videos v
+      WHERE v.id = $1 AND mc.id = v.catalog_id AND mc.${cols.url} = $2`,
+    [input.videoId, input.url]
+  )
+  return result.rowCount ?? 0
 }
 
 // ── 写入：更新 blurhash 与 primary color ─────────────────────────
@@ -177,29 +241,51 @@ export async function updateCatalogImageBlurhash(
 
 // ── 查询：后台监控统计 ────────────────────────────────────────────
 
+/**
+ * 单口径（已发布 / 全部）4 类图片 ok 计数 + 视频分母。
+ * 覆盖率由消费方按 `<kind>Ok / videoCount` 现算（不在后端预存浮点，避免双口径冗余字段）。
+ */
+export interface ImageCoverageScope {
+  videoCount: number   // 该范围视频数（分母）
+  posterOk: number     // poster_status = 'ok'
+  backdropOk: number   // backdrop_status = 'ok'
+  logoOk: number       // logo_status = 'ok'
+  bannerOk: number     // banner_backdrop_status = 'ok'
+}
+
 export interface ImageHealthStats {
-  totalVideos: number
-  posterOkCount: number
-  posterCoverage: number       // 0–1 浮点，posterOkCount / totalVideos
-  backdropOkCount: number
-  backdropCoverage: number
+  /** 已发布视频范围（is_published = true） */
+  published: ImageCoverageScope
+  /** 全部视频范围（deleted_at IS NULL，含未发布） */
+  all: ImageCoverageScope
+  /** 近 7 日新增未解决破损视频数（NavCountsService 顶层消费，勿移除/改名） */
   brokenLast7Days: number
 }
 
 export async function getImageHealthStats(db: Pool): Promise<ImageHealthStats> {
-  const [statsResult, brokenResult] = await Promise.all([
+  // 单次扫描同时算「全部」与「已发布」两口径 4 类 ok 数（FILTER 条件聚合，避两遍 JOIN）
+  const [scopeResult, brokenResult] = await Promise.all([
     db.query<{
-      total_videos: string
-      poster_ok: string
-      backdrop_ok: string
+      all_count: string;       pub_count: string
+      all_poster_ok: string;   pub_poster_ok: string
+      all_backdrop_ok: string; pub_backdrop_ok: string
+      all_logo_ok: string;     pub_logo_ok: string
+      all_banner_ok: string;   pub_banner_ok: string
     }>(
       `SELECT
-         COUNT(v.id)::int                                              AS total_videos,
-         COUNT(CASE WHEN mc.poster_status = 'ok' THEN 1 END)::int     AS poster_ok,
-         COUNT(CASE WHEN mc.backdrop_status = 'ok' THEN 1 END)::int   AS backdrop_ok
+         COUNT(v.id)::int                                                                 AS all_count,
+         COUNT(v.id) FILTER (WHERE v.is_published)::int                                   AS pub_count,
+         COUNT(*) FILTER (WHERE mc.poster_status = 'ok')::int                             AS all_poster_ok,
+         COUNT(*) FILTER (WHERE mc.poster_status = 'ok' AND v.is_published)::int          AS pub_poster_ok,
+         COUNT(*) FILTER (WHERE mc.backdrop_status = 'ok')::int                           AS all_backdrop_ok,
+         COUNT(*) FILTER (WHERE mc.backdrop_status = 'ok' AND v.is_published)::int        AS pub_backdrop_ok,
+         COUNT(*) FILTER (WHERE mc.logo_status = 'ok')::int                               AS all_logo_ok,
+         COUNT(*) FILTER (WHERE mc.logo_status = 'ok' AND v.is_published)::int            AS pub_logo_ok,
+         COUNT(*) FILTER (WHERE mc.banner_backdrop_status = 'ok')::int                    AS all_banner_ok,
+         COUNT(*) FILTER (WHERE mc.banner_backdrop_status = 'ok' AND v.is_published)::int AS pub_banner_ok
        FROM videos v
        JOIN media_catalog mc ON mc.id = v.catalog_id
-       WHERE v.deleted_at IS NULL AND v.is_published = true`
+       WHERE v.deleted_at IS NULL`
     ),
     db.query<{ broken_last_7d: string }>(
       `SELECT COUNT(DISTINCT video_id)::int AS broken_last_7d
@@ -209,17 +295,25 @@ export async function getImageHealthStats(db: Pool): Promise<ImageHealthStats> {
     ),
   ])
 
-  const total = parseInt(statsResult.rows[0]?.total_videos ?? '0')
-  const posterOk = parseInt(statsResult.rows[0]?.poster_ok ?? '0')
-  const backdropOk = parseInt(statsResult.rows[0]?.backdrop_ok ?? '0')
+  const r = scopeResult.rows[0]
+  const n = (v: string | undefined): number => parseInt(v ?? '0', 10)
 
   return {
-    totalVideos: total,
-    posterOkCount: posterOk,
-    posterCoverage: total > 0 ? posterOk / total : 0,
-    backdropOkCount: backdropOk,
-    backdropCoverage: total > 0 ? backdropOk / total : 0,
-    brokenLast7Days: parseInt(brokenResult.rows[0]?.broken_last_7d ?? '0'),
+    published: {
+      videoCount: n(r?.pub_count),
+      posterOk:   n(r?.pub_poster_ok),
+      backdropOk: n(r?.pub_backdrop_ok),
+      logoOk:     n(r?.pub_logo_ok),
+      bannerOk:   n(r?.pub_banner_ok),
+    },
+    all: {
+      videoCount: n(r?.all_count),
+      posterOk:   n(r?.all_poster_ok),
+      backdropOk: n(r?.all_backdrop_ok),
+      logoOk:     n(r?.all_logo_ok),
+      bannerOk:   n(r?.all_banner_ok),
+    },
+    brokenLast7Days: n(brokenResult.rows[0]?.broken_last_7d),
   }
 }
 
@@ -566,6 +660,106 @@ export async function listPendingImageUrls(
 }
 
 /**
+ * ADR-213 D-213-5 ③（A-SCAN）：读取 `<kind>_url` 非空但 `<kind>_checked_at IS NULL`（从未确定性判定）
+ * 的图片 URL，供「部署后一次性真实健康扫描」入队 health-check——worker 跑完给 checked_at 落真值、
+ * 排空 migration 121 后的初始 unknown 桶（C 硬前置门）。
+ * 与 listPendingImageUrls 同 UNION 结构，仅过滤谓词由 `status='pending_review'` 改为 `checked_at IS NULL`。
+ * 幂等：worker 落 checked_at 后该行不再命中 → 可安全分页/重跑。
+ */
+export async function listUncheckedImageUrls(
+  db: Pool,
+  limit = 500,
+  offset = 0,
+): Promise<PendingImageRow[]> {
+  const result = await db.query<{
+    catalog_id: string
+    video_id: string
+    kind: string
+    url: string
+  }>(
+    `SELECT mc.id AS catalog_id, v.id AS video_id, 'poster' AS kind, mc.cover_url AS url
+       FROM media_catalog mc JOIN videos v ON v.catalog_id = mc.id
+      WHERE mc.cover_url IS NOT NULL AND mc.poster_checked_at IS NULL AND v.deleted_at IS NULL
+     UNION ALL
+     SELECT mc.id, v.id, 'backdrop', mc.backdrop_url
+       FROM media_catalog mc JOIN videos v ON v.catalog_id = mc.id
+      WHERE mc.backdrop_url IS NOT NULL AND mc.backdrop_checked_at IS NULL AND v.deleted_at IS NULL
+     UNION ALL
+     SELECT mc.id, v.id, 'logo', mc.logo_url
+       FROM media_catalog mc JOIN videos v ON v.catalog_id = mc.id
+      WHERE mc.logo_url IS NOT NULL AND mc.logo_checked_at IS NULL AND v.deleted_at IS NULL
+     UNION ALL
+     SELECT mc.id, v.id, 'banner_backdrop', mc.banner_backdrop_url
+       FROM media_catalog mc JOIN videos v ON v.catalog_id = mc.id
+      WHERE mc.banner_backdrop_url IS NOT NULL AND mc.banner_backdrop_checked_at IS NULL AND v.deleted_at IS NULL
+     ORDER BY url
+     LIMIT $1 OFFSET $2`,
+    [limit, offset],
+  )
+  return result.rows.map(r => ({
+    catalogId: r.catalog_id,
+    videoId: r.video_id,
+    kind: r.kind as PendingImageRow['kind'],
+    url: r.url,
+  }))
+}
+
+/**
+ * ADR-213 D-213-9①（P4-S 周期巡检）：读取 `<kind>_status='ok'` 但 `<kind>_checked_at` 陈旧
+ * （早于 staleDays 或 NULL）的图片 URL，供周期巡检重入 health-check——worker 复检落新 checked_at
+ * （保持 ok 或翻 broken），自动消化 D-213-7 的 `unknown` 桶、根治 stale-ok 假阴性（ADV-213-4）。
+ * 谓词与 D-213-7 problemReason `unknown` 分支同源：`status='ok' ∧ COALESCE(checked_at,'-infinity') < NOW()-staleDays`。
+ * staleDays 经 `make_interval(days => $1)` 参数化（单一常量 STALE_CHECK_DAYS 由 service 传入，禁散落硬编码）。
+ * 幂等：worker 落新 checked_at 后该行不再命中 → 可安全分页/重跑。
+ */
+export async function listStaleOkImageUrls(
+  db: Pool,
+  staleDays: number,
+  limit = 500,
+  offset = 0,
+): Promise<PendingImageRow[]> {
+  const result = await db.query<{
+    catalog_id: string
+    video_id: string
+    kind: string
+    url: string
+  }>(
+    `SELECT mc.id AS catalog_id, v.id AS video_id, 'poster' AS kind, mc.cover_url AS url
+       FROM media_catalog mc JOIN videos v ON v.catalog_id = mc.id
+      WHERE mc.cover_url IS NOT NULL AND mc.poster_status = 'ok'
+        AND COALESCE(mc.poster_checked_at, '-infinity'::timestamptz) < NOW() - make_interval(days => $1)
+        AND v.deleted_at IS NULL
+     UNION ALL
+     SELECT mc.id, v.id, 'backdrop', mc.backdrop_url
+       FROM media_catalog mc JOIN videos v ON v.catalog_id = mc.id
+      WHERE mc.backdrop_url IS NOT NULL AND mc.backdrop_status = 'ok'
+        AND COALESCE(mc.backdrop_checked_at, '-infinity'::timestamptz) < NOW() - make_interval(days => $1)
+        AND v.deleted_at IS NULL
+     UNION ALL
+     SELECT mc.id, v.id, 'logo', mc.logo_url
+       FROM media_catalog mc JOIN videos v ON v.catalog_id = mc.id
+      WHERE mc.logo_url IS NOT NULL AND mc.logo_status = 'ok'
+        AND COALESCE(mc.logo_checked_at, '-infinity'::timestamptz) < NOW() - make_interval(days => $1)
+        AND v.deleted_at IS NULL
+     UNION ALL
+     SELECT mc.id, v.id, 'banner_backdrop', mc.banner_backdrop_url
+       FROM media_catalog mc JOIN videos v ON v.catalog_id = mc.id
+      WHERE mc.banner_backdrop_url IS NOT NULL AND mc.banner_backdrop_status = 'ok'
+        AND COALESCE(mc.banner_backdrop_checked_at, '-infinity'::timestamptz) < NOW() - make_interval(days => $1)
+        AND v.deleted_at IS NULL
+     ORDER BY url
+     LIMIT $2 OFFSET $3`,
+    [staleDays, limit, offset],
+  )
+  return result.rows.map(r => ({
+    catalogId: r.catalog_id,
+    videoId: r.video_id,
+    kind: r.kind as PendingImageRow['kind'],
+    url: r.url,
+  }))
+}
+
+/**
  * 读取 media_catalog 中 blurhash 为空但 URL 有效的图片，供 imageBlurhashWorker 消费。
  */
 export async function listMissingBlurhashUrls(
@@ -626,8 +820,13 @@ export async function listMissingBlurhashUrls(
   }))
 }
 
-// ── 重扫 / 趋势 / 切换域 / 事件解决（已迁至 imageHealth.scan.ts）────
-export type { BrokenTrendPoint, RescanScope, RescanPostersResult, SwitchFallbackDomainResult } from './imageHealth.scan'
+// ── 重扫 / 趋势 / 切换域 / 事件解决 / 破损样本（已迁至 imageHealth.scan.ts）────
+export type {
+  BrokenTrendPoint, RescanScope, RescanPostersResult, SwitchFallbackDomainResult,
+  // ADR-211：问题图片可视化治理板
+  ProblemImageKind, ProblemImageScope, ProblemReason, ProblemImageRow, ProblemImageCounts,
+  ProblemReasonFilter, ProblemImagesPage,
+} from './imageHealth.scan'
 export {
   getBrokenEventsTrend,
   rescanPosters,
@@ -636,4 +835,8 @@ export {
   // ADR-209 D-209-3：ids 精确重扫 scoped 闭环
   getCatalogIdsByVideoIds,
   rescanPostersByCatalogIds,
+  // ADR-211：problem-images 端点（4 类 + 状态∪真坏事件口径，复用 BROKEN_SAMPLE_EVENT_TYPES 白名单）
+  PROBLEM_IMAGE_KINDS,
+  getProblemImages,
+  getProblemImageCounts,
 } from './imageHealth.scan'

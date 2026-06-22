@@ -75,6 +75,17 @@ describe('DailyAnimeRow', () => {
     await waitFor(() => expect(screen.queryByTestId('daily-anime-row')).toBeNull())
   })
 
+  it('IMGH-P3-4D：封面走 SafeImage（coverUrl=null → FallbackCover role=img，无裸 img 裂图）', async () => {
+    mockGet.mockResolvedValue({
+      data: { weekday: 1, items: [mkItem({ bangumiSubjectId: '9', title: '无封面番', coverUrl: null })] },
+    })
+    const { container } = render(<DailyAnimeRow {...LABELS} />)
+    await waitFor(() => expect(container.querySelector('[data-daily-anime-card="9"]')).not.toBeNull())
+    const card = container.querySelector('[data-daily-anime-card="9"]')!
+    // src 空 → SafeImage 渲染 FallbackCover（role="img" 兜底），而非裸 <img src> 裂图
+    expect(card.querySelector('[role="img"]')).not.toBeNull()
+  })
+
   it('linked 无 slug → watch deeplink 仅 shortId', async () => {
     mockGet.mockResolvedValue({
       data: { weekday: 1, items: [mkItem({ bangumiSubjectId: '3', title: 'X', linkedVideo: { videoId: 'v', slug: null, shortId: 'zz99' } })] },

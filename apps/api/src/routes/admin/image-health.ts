@@ -5,6 +5,7 @@
  * GET  /admin/image-health/stats                  — 总览统计
  * GET  /admin/image-health/broken-domains         — TOP 破损域名
  * GET  /admin/image-health/missing-videos         — 缺图视频列表（分页）
+ * GET  /admin/image-health/problem-images         — 问题图片可视化治理板（4 类×scope，ADR-211）
  * POST /admin/image-health/backfill               — 手动触发存量 pending_review 回填（CHORE-09）
  * POST /admin/image-health/rescan                 — 重扫封面（ADR-135）
  * POST /admin/image-health/switch-fallback-domain — 批量切 fallback 域（ADR-135）
@@ -21,6 +22,7 @@ import {
   getBrokenEventsTrend,
   rescanPosters,
   switchFallbackDomain,
+  PROBLEM_IMAGE_KINDS,
 } from '@/api/db/queries/imageHealth'
 import type { MissingVideoSortField, SortDir, MissingVideosFilters } from '@/api/db/queries/imageHealth'
 import { getFieldProposalsByCatalogIdAndField, markFieldProposalApplied } from '@/api/db/queries/metadata-field-proposals'
@@ -34,6 +36,17 @@ import type { ImageKind } from '@/types'
 
 const BrokenDomainsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
+})
+
+// ADR-211：问题图片可视化治理板。kind enum 复用 PROBLEM_IMAGE_KINDS SSoT（默认 poster=必须项优先）；
+// scope published/all（默认 published）；offset/limit 加载更多（limit clamp 1-100 默认 48）。
+const ProblemImagesQuerySchema = z.object({
+  kind:   z.enum(PROBLEM_IMAGE_KINDS).default('poster'),
+  scope:  z.enum(['published', 'all']).default('published'),
+  offset: z.coerce.number().int().min(0).default(0),
+  limit:  z.coerce.number().int().min(1).max(100).default(48),
+  // reason 子筛选服务端化（IMGH-P4-REASON-SSF）：'all' 不过滤；其余精确命中（消客户端分页假空）
+  reason: z.enum(['all', 'broken', 'unknown', 'low_quality', 'pending_review']).default('all'),
 })
 
 // broken_image_events.event_type CHECK 8 值（048_image_pipeline.sql:67）
@@ -145,6 +158,26 @@ export async function adminImageHealthRoutes(fastify: FastifyInstance) {
     ])
 
     return reply.send({ data: rows, total })
+  })
+
+  // ── GET /admin/image-health/problem-images（ADR-211，supersede ADR-210）────
+  // 问题图片可视化治理板数据源：按 kind/scope 返回「有非空 URL 但可能失效」的图（口径 D-211-2）
+  // + 4 类计数（tab badge）。total=counts[kind]（省一次 count 查询）。只读、无审计，对齐同域读端点。
+  fastify.get('/admin/image-health/problem-images', { preHandler: auth }, async (request, reply) => {
+    const parsed = ProblemImagesQuerySchema.safeParse(request.query)
+    if (!parsed.success) {
+      return reply.code(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.errors[0]?.message ?? 'Invalid query', status: 400 },
+      })
+    }
+    const { kind, scope, offset, limit, reason } = parsed.data
+    const service = new ImageHealthService(db)
+    const [page, counts] = await Promise.all([
+      service.getProblemImages(kind, scope, offset, limit, reason),
+      service.getProblemImageCounts(scope),
+    ])
+    // total = 过滤后真总数（page.total，含 reason 过滤）→ hasMore 准；counts 仍全 reason 作 tab badge
+    return reply.send({ data: page.rows, total: page.total, counts })
   })
 
   // ── GET /admin/image-health/candidates（ADR-208 D-208-2）──────────

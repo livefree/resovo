@@ -18,6 +18,8 @@ import {
   getTopBrokenDomains,
   listMissingPosterVideos,
   getBrokenEventsTrend,
+  getProblemImages,
+  getProblemImageCounts,
 } from '../../../apps/api/src/db/queries/imageHealth'
 
 let db: Pool
@@ -31,27 +33,80 @@ afterAll(async () => {
 })
 
 describe('getImageHealthStats SQL 集成', () => {
-  it('JOIN media_catalog 计算 poster / backdrop 覆盖率跑通', async () => {
+  it('JOIN media_catalog 计算双口径（已发布/全部）4 类图片 ok 数跑通', async () => {
     const stats = await getImageHealthStats(db)
-    expect(stats).toHaveProperty('totalVideos')
-    expect(stats).toHaveProperty('posterOkCount')
-    expect(stats).toHaveProperty('posterCoverage')
-    expect(stats).toHaveProperty('backdropOkCount')
-    expect(stats).toHaveProperty('backdropCoverage')
+    expect(stats).toHaveProperty('published')
+    expect(stats).toHaveProperty('all')
     expect(stats).toHaveProperty('brokenLast7Days')
-    expect(stats.totalVideos).toBeGreaterThanOrEqual(0)
-    expect(stats.posterCoverage).toBeGreaterThanOrEqual(0)
-    expect(stats.posterCoverage).toBeLessThanOrEqual(1)
-    expect(stats.backdropCoverage).toBeGreaterThanOrEqual(0)
-    expect(stats.backdropCoverage).toBeLessThanOrEqual(1)
+    // 两口径各字段非负 + ok ≤ videoCount（不可能正常图片多于视频数）
+    for (const scope of [stats.published, stats.all]) {
+      expect(scope.videoCount).toBeGreaterThanOrEqual(0)
+      for (const ok of [scope.posterOk, scope.backdropOk, scope.logoOk, scope.bannerOk]) {
+        expect(ok).toBeGreaterThanOrEqual(0)
+        expect(ok).toBeLessThanOrEqual(scope.videoCount)
+      }
+    }
+    // 已发布是全部的子集
+    expect(stats.published.videoCount).toBeLessThanOrEqual(stats.all.videoCount)
+    expect(stats.brokenLast7Days).toBeGreaterThanOrEqual(0)
   })
 
-  it('totalVideos = 0 时覆盖率退化为 0（不除零）', async () => {
+  it('videoCount = 0 时各 ok 计数为 0（空库不报错、消费方按 ok/count 现算覆盖率不除零）', async () => {
     const stats = await getImageHealthStats(db)
-    if (stats.totalVideos === 0) {
-      expect(stats.posterCoverage).toBe(0)
-      expect(stats.backdropCoverage).toBe(0)
+    for (const scope of [stats.published, stats.all]) {
+      if (scope.videoCount === 0) {
+        expect(scope.posterOk).toBe(0)
+        expect(scope.backdropOk).toBe(0)
+        expect(scope.logoOk).toBe(0)
+        expect(scope.bannerOk).toBe(0)
+      }
     }
+  })
+})
+
+describe('getProblemImages / getProblemImageCounts SQL 集成（ADR-211 / 4A arch-reviewer 风险 3）', () => {
+  const REASON_RANK: Record<string, number> = {
+    client_error: 1, broken: 2, unknown: 3, pending_review: 4, low_quality: 5, other: 6,
+  }
+
+  it('getProblemImageCounts 返回 4 类非负计数', async () => {
+    const counts = await getProblemImageCounts(db, 'published')
+    for (const k of ['poster', 'backdrop', 'logo', 'banner_backdrop'] as const) {
+      expect(typeof counts[k]).toBe('number')
+      expect(counts[k]).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  it('getProblemImages(poster,published) 跑通：url 非空守卫 + problemReason 合法 + 优先级非递减排序', async () => {
+    const { rows } = await getProblemImages(db, 'poster', 'published', 0, 48)
+    expect(rows).toBeInstanceOf(Array)
+    expect(rows.length).toBeLessThanOrEqual(48)
+    let prevRank = 0
+    for (const r of rows) {
+      // D-211-2 url-guard：imageUrl 恒非空非空白
+      expect(typeof r.imageUrl).toBe('string')
+      expect(r.imageUrl.trim().length).toBeGreaterThan(0)
+      // problemReason ∈ 合法集
+      expect(REASON_RANK[r.problemReason]).toBeDefined()
+      // Codex H-2 默认排序：reason 优先级非递减（client_error 在前）
+      expect(REASON_RANK[r.problemReason]).toBeGreaterThanOrEqual(prevRank)
+      prevRank = REASON_RANK[r.problemReason]
+      // ADR-213 D-213-7：client_error 由 client_error_at 信号列驱动（非 events）→ eventType 不再必带，
+      // 不断言其非空（LATERAL 仅作纯遥测展示，可能无匹配未解决事件）。
+    }
+  })
+
+  it('total=counts[kind] 一致：limit 超量时 page 行数 === total === 当前 kind 计数（reason=all）', async () => {
+    const counts = await getProblemImageCounts(db, 'published')
+    const { rows, total } = await getProblemImages(db, 'poster', 'published', 0, 100000)
+    expect(rows.length).toBe(Math.min(100000, counts.poster))
+    expect(total).toBe(counts.poster) // COUNT(*) OVER() 全 reason = counts[kind]（IMGH-P4-REASON-SSF）
+  })
+
+  it('reason 服务端过滤（IMGH-P4-REASON-SSF）：reason=broken → 仅 client_error/broken；total 为过滤后数', async () => {
+    const { rows, total } = await getProblemImages(db, 'poster', 'all', 0, 100000, 'broken')
+    expect(rows.every((r) => r.problemReason === 'client_error' || r.problemReason === 'broken')).toBe(true)
+    expect(total).toBe(rows.length) // limit 超量 → total === 返回行数
   })
 })
 

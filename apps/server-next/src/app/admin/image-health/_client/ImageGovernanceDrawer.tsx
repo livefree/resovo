@@ -33,6 +33,7 @@ import {
   applyImageCandidate,
   resolveImageEvents,
   type ImageCandidate,
+  type ImageCandidateField,
   type MissingVideoRow,
 } from '@/lib/image-health/api'
 
@@ -84,6 +85,9 @@ const BROKEN_DETAIL_STYLE: CSSProperties = {
   padding: '8px', background: 'var(--bg-surface-sunken)', borderRadius: 'var(--radius-sm)',
 }
 const MANUAL_ROW_STYLE: CSSProperties = { display: 'flex', gap: '8px', alignItems: 'center' }
+const NO_CANDIDATE_STYLE: CSSProperties = {
+  margin: 0, fontSize: 'var(--font-size-xs)', color: 'var(--fg-muted)',
+}
 const FOOTER_STYLE: CSSProperties = {
   display: 'flex', justifyContent: 'space-between', gap: '8px',
   paddingTop: '8px', borderTop: '1px solid var(--border-subtle)',
@@ -100,15 +104,29 @@ const STATUS_PILL: Record<ImageStatus, 'ok' | 'warn' | 'danger' | 'info'> = {
   ok: 'ok', broken: 'danger', missing: 'danger', pending_review: 'warn', low_quality: 'info',
 }
 
+// focusKind → 跨源候选字段（metadata_field_proposals 仅 cover/backdrop/logo 三图字段；
+// banner_backdrop 无候选字段 → 候选区隐藏、仅手填 URL，ADR-211 D-211-3）
+const KIND_TO_CANDIDATE_FIELD: Partial<Record<VideoImageKind, ImageCandidateField>> = {
+  poster: 'coverUrl',
+  backdrop: 'backdropUrl',
+  logo: 'logoUrl',
+}
+
+const KIND_LABEL: Record<VideoImageKind, string> = {
+  poster: '封面', backdrop: '背景', logo: '台标', banner_backdrop: 'Banner',
+}
+
 export interface ImageGovernanceDrawerProps {
   readonly open: boolean
   readonly row: MissingVideoRow | null
   readonly onClose: () => void
   /** apply/resolve/手填 成功后回调（父级行 flash + refresh）。 */
   readonly onMutated: (videoId: string) => void
+  /** 治理聚焦的图片类型（ADR-211 D-211-3 问题板深链；默认 poster，向后兼容 Tab B 治理表）。 */
+  readonly focusKind?: VideoImageKind
 }
 
-export function ImageGovernanceDrawer({ open, row, onClose, onMutated }: ImageGovernanceDrawerProps) {
+export function ImageGovernanceDrawer({ open, row, onClose, onMutated, focusKind = 'poster' }: ImageGovernanceDrawerProps) {
   return (
     <Drawer
       open={open && row != null}
@@ -118,7 +136,15 @@ export function ImageGovernanceDrawer({ open, row, onClose, onMutated }: ImageGo
       title={row ? `图片治理 · ${row.title}` : ''}
       data-testid="image-governance-drawer"
     >
-      {row && <GovernanceBody key={row.videoId} row={row} onClose={onClose} onMutated={onMutated} />}
+      {row && (
+        <GovernanceBody
+          key={`${row.videoId}::${focusKind}`}
+          row={row}
+          focusKind={focusKind}
+          onClose={onClose}
+          onMutated={onMutated}
+        />
+      )}
     </Drawer>
   )
 }
@@ -127,15 +153,20 @@ export function ImageGovernanceDrawer({ open, row, onClose, onMutated }: ImageGo
 
 function GovernanceBody({
   row,
+  focusKind,
   onClose,
   onMutated,
 }: {
   readonly row: MissingVideoRow
+  readonly focusKind: VideoImageKind
   readonly onClose: () => void
   readonly onMutated: (videoId: string) => void
 }) {
   const toast = useToast()
   const [imagesState, imagesActions] = useVideoImages(row.videoId)
+  // focusKind 驱动候选字段 / 替换目标 / 文案（默认 poster；banner_backdrop 无候选字段）
+  const candidateField = KIND_TO_CANDIDATE_FIELD[focusKind]
+  const kindLabel = KIND_LABEL[focusKind]
 
   const [candidates, setCandidates] = useState<readonly ImageCandidate[]>([])
   const [candidatesLoading, setCandidatesLoading] = useState(true)
@@ -147,13 +178,19 @@ function GovernanceBody({
 
   // 候选拉取（聚焦 coverUrl）
   const loadCandidates = useCallback(() => {
+    // banner_backdrop 无候选字段 → 跳过拉取（仅手填 URL）
+    if (!candidateField) {
+      setCandidates([])
+      setCandidatesLoading(false)
+      return
+    }
     setCandidatesLoading(true)
     setCandidatesError(null)
-    listImageCandidates(row.catalogId, 'coverUrl')
+    listImageCandidates(row.catalogId, candidateField)
       .then((list) => setCandidates(list))
       .catch((e: unknown) => setCandidatesError(e instanceof Error ? e.message : '候选加载失败'))
       .finally(() => setCandidatesLoading(false))
-  }, [row.catalogId])
+  }, [row.catalogId, candidateField])
   useEffect(() => { loadCandidates() }, [loadCandidates])
 
   // §C：候选键 → 原始候选（取回 sourceRef 构造 apply）
@@ -187,38 +224,38 @@ function GovernanceBody({
 
   // ③ 应用候选（§C：从 map 取回 source/sourceRef）
   const handleApplyConfirm = useCallback(async (_payload: ImageCompareConfirmPayload) => {
-    if (!selectedCandidate) return
+    if (!selectedCandidate || !candidateField) return
     setPending(true)
     try {
       await applyImageCandidate({
         catalogId: row.catalogId,
         videoId: row.videoId,
-        field: 'coverUrl',
+        field: candidateField,
         source: selectedCandidate.source,
         sourceRef: selectedCandidate.sourceRef,
       })
-      finishMutation('已应用候选补图', '封面已置 pending_review，巡检入队中')
+      finishMutation('已应用候选补图', `${kindLabel}已置 pending_review，巡检入队中`)
     } catch (err) {
       fail('应用候选失败', err)
     } finally {
       setPending(false)
     }
-  }, [selectedCandidate, row.catalogId, row.videoId, finishMutation, fail])
+  }, [selectedCandidate, candidateField, kindLabel, row.catalogId, row.videoId, finishMutation, fail])
 
-  // ③ 手填 URL → PUT images
+  // ③ 手填 URL → PUT images（按 focusKind）
   const handleManualApply = useCallback(async () => {
     const url = manualUrl.trim()
     if (!url) return
     setPending(true)
     try {
-      await imagesActions.update('poster', url)
-      finishMutation('封面已替换', '手填 URL 已写入，置 pending_review')
+      await imagesActions.update(focusKind, url)
+      finishMutation(`${kindLabel}已替换`, '手填 URL 已写入，置 pending_review')
     } catch (err) {
       fail('手填替换失败', err)
     } finally {
       setPending(false)
     }
-  }, [manualUrl, imagesActions, finishMutation, fail])
+  }, [manualUrl, focusKind, kindLabel, imagesActions, finishMutation, fail])
 
   // ④ 标记已解决（resolve 展示中的单个事件）
   const handleResolve = useCallback(async () => {
@@ -277,34 +314,42 @@ function GovernanceBody({
         </div>
       </section>
 
-      {/* ③ 替换封面 */}
+      {/* ③ 替换图片 · 从外部源候选（按 focusKind；banner_backdrop 无候选 → 仅手填）*/}
       <section>
-        <p style={SECTION_TITLE_STYLE}>替换封面 · 从外部源候选</p>
-        <ImageCandidatePicker
-          candidates={options}
-          selectedKey={selectedKey}
-          onSelect={(o) => setSelectedKey(o.key)}
-          loading={candidatesLoading}
-          error={candidatesError ? { message: candidatesError, onRetry: loadCandidates } : undefined}
-          emptyTitle="暂无跨源候选"
-          emptyDescription="该作品当前无外部源补图候选；可手填 URL"
-          testId="governance-candidate-picker"
-        />
-        {selectedCandidate && (
-          <ImageCompare
-            open
-            current={{ url: row.posterUrl, status: toAdminImageStatus(row.posterStatus), label: '当前' }}
-            candidate={{ url: selectedCandidate.url, status: 'pending_review', label: '候选' }}
-            onConfirm={(p) => void handleApplyConfirm(p)}
-            onCancel={() => setSelectedKey(null)}
-            testId="governance-image-compare"
-          />
+        <p style={SECTION_TITLE_STYLE}>替换{kindLabel} · 从外部源候选</p>
+        {candidateField ? (
+          <>
+            <ImageCandidatePicker
+              candidates={options}
+              selectedKey={selectedKey}
+              onSelect={(o) => setSelectedKey(o.key)}
+              loading={candidatesLoading}
+              error={candidatesError ? { message: candidatesError, onRetry: loadCandidates } : undefined}
+              emptyTitle="暂无跨源候选"
+              emptyDescription="该作品当前无外部源补图候选；可手填 URL"
+              testId="governance-candidate-picker"
+            />
+            {selectedCandidate && (
+              <ImageCompare
+                open
+                current={{ url: row.posterUrl, status: toAdminImageStatus(row.posterStatus), label: '当前' }}
+                candidate={{ url: selectedCandidate.url, status: 'pending_review', label: '候选' }}
+                onConfirm={(p) => void handleApplyConfirm(p)}
+                onCancel={() => setSelectedKey(null)}
+                testId="governance-image-compare"
+              />
+            )}
+          </>
+        ) : (
+          <p style={NO_CANDIDATE_STYLE} data-no-candidate>
+            该类型无跨源候选，请在下方手填 URL
+          </p>
         )}
       </section>
 
       {/* ③ 手填 URL */}
       <section>
-        <p style={SECTION_TITLE_STYLE}>或手填封面 URL</p>
+        <p style={SECTION_TITLE_STYLE}>或手填{kindLabel} URL</p>
         <div style={MANUAL_ROW_STYLE}>
           <AdminInput
             value={manualUrl}
