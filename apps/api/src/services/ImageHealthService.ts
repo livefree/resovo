@@ -93,6 +93,11 @@ export class ImageHealthService {
     queue: ImageHealthQueue,
     pageSize = 500,
   ): Promise<{ enqueued: number }> {
+    // 周期巡检 jobId 必须按「巡检周期」唯一，**不能复用一次性扫描的固定 jobId**：Bull 对已存在的
+    // jobId（含 removeOnComplete:50 保留的已完成 job）会静默忽略 add → 同一 (catalog,kind) 行复检过一次后，
+    // 其保留的已完成 job 会让后续周期的重入被**永久静默跳过**，彻底丧失「周期」语义（Codex stop-gate）。
+    // 以本次调用时间戳为周期戳：单次调用内（分页/数据漂移致同行重现）仍 dedup，跨周期 jobId 不同、不被旧 job 阻塞。
+    const cycleStamp = Date.now()
     let offset = 0
     let total = 0
     for (;;) {
@@ -103,7 +108,7 @@ export class ImageHealthService {
           queue.add(
             'health-check',
             { type: 'health-check', ...row },
-            { jobId: `health-check-${row.catalogId}-${row.kind}`, removeOnComplete: 50 },
+            { jobId: `health-check-${row.catalogId}-${row.kind}-${cycleStamp}`, removeOnComplete: 50 },
           ),
         ),
       )

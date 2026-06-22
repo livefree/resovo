@@ -2368,4 +2368,6 @@
   - `tests/unit/api/image-health-stale-recheck.test.ts`（新建）— `listStaleOkImageUrls` 谓词 SQL（status='ok'∧checked_at 陈旧·COALESCE -infinity / staleDays·limit·offset 参数化 / 行映射）
 - **新增依赖**：无
 - **数据库变更**：无（消费 0M migration 121 的 `<kind>_checked_at` 列 + scan.ts `STALE_CHECK_DAYS=30` 常量）
-- **注意事项**：**A-SCAN ≠ P4-S**——A-SCAN（P4-A）是 C 前的一次性初始排空门（`checked_at IS NULL`），P4-S 是上线后周期维护（`checked_at` 陈旧）。**非阻塞根治收尾卡**：过渡正确性已由 P4-C `unknown` 面兜底，P4-S 上线（prod `IMAGE_HEALTH_SCHEDULER_ENABLED=true`）后健康板方宣称「零漏检/完备」。门禁：typecheck=0/lint=0/test:changed=194/verify:endpoint-adr=0（无新端点·scheduler 非 route）/verify:adr-contracts=0。未含 IMGH-P3-5 parked 代码。
+- **注意事项**：**A-SCAN ≠ P4-S**——A-SCAN（P4-A）是 C 前的一次性初始排空门（`checked_at IS NULL`），P4-S 是上线后周期维护（`checked_at` 陈旧）。**非阻塞根治收尾卡**：过渡正确性已由 P4-C `unknown` 面兜底，P4-S 上线（prod `IMAGE_HEALTH_SCHEDULER_ENABLED=true`）后健康板方宣称「零漏检/完备」。
+- **Codex stop-gate 修正（周期 jobId silent-skip）**：初版 `enqueueStaleHealthRecheck` 复用一次性扫描的**固定 jobId** `health-check-<catalogId>-<kind>` —— Bull 对已存在 jobId（含 `removeOnComplete:50` 保留的**已完成** job）静默忽略 add，致同一 (catalog,kind) 行复检一次后、后续周期重入被**永久静默跳过**，彻底丧失「周期」语义（stale-ok 根治失效）。**修复**：周期 jobId 追加本次调用时间戳周期戳 `-${cycleStamp}` → 单次调用内仍 dedup、跨周期不被旧 job 阻塞；一次性路径（A-SCAN/backfill/rescan）保持固定 jobId（语义本就一次性，不变）。新增回归测「连续两周期 jobId 不同」。
+- **门禁**：typecheck=0/lint=0/test:changed=127（修复改动集）·image-health 单测 32 全绿（worker 14/stale-recheck 3/client-error 4/beacon 11）/verify:endpoint-adr=0（无新端点·scheduler 非 route）/verify:adr-contracts=0。未含 IMGH-P3-5 parked 代码。

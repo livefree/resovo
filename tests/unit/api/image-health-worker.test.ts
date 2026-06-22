@@ -265,8 +265,30 @@ describe('ImageHealthService — named job 入队', () => {
     expect(mockAdd).toHaveBeenCalledWith(
       'health-check',
       expect.objectContaining({ type: 'health-check', catalogId: 'cat-s', kind: 'backdrop' }),
-      expect.objectContaining({ jobId: 'health-check-cat-s-backdrop' }),
+      // 周期巡检 jobId 带周期戳（非固定）—— 防 Bull 保留已完成 job 静默跳过后续周期
+      expect.objectContaining({ jobId: expect.stringMatching(/^health-check-cat-s-backdrop-\d+$/) }),
     )
+  })
+
+  it('enqueueStaleHealthRecheck 连续两周期 jobId 不同（不被上轮保留的已完成 job 静默跳过·Codex stop-gate）', async () => {
+    const mod = await import('@/api/db/queries/imageHealth')
+    ;(mod.listStaleOkImageUrls as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([{ catalogId: 'cat-x', videoId: 'v', kind: 'poster', url: 'u' }])
+      .mockResolvedValueOnce([{ catalogId: 'cat-x', videoId: 'v', kind: 'poster', url: 'u' }])
+    const dateSpy = vi.spyOn(Date, 'now').mockReturnValueOnce(1111).mockReturnValueOnce(2222)
+
+    const { ImageHealthService } = await import('@/api/services/ImageHealthService')
+    const svc = new ImageHealthService({} as import('pg').Pool)
+    const q = { add: mockAdd } as unknown as import('@/api/workers/imageHealthWorker').ImageHealthQueue
+    await svc.enqueueStaleHealthRecheck(q) // 周期 1
+    await svc.enqueueStaleHealthRecheck(q) // 周期 2
+
+    const jobId1 = (mockAdd.mock.calls[0][2] as { jobId: string }).jobId
+    const jobId2 = (mockAdd.mock.calls[1][2] as { jobId: string }).jobId
+    expect(jobId1).toBe('health-check-cat-x-poster-1111')
+    expect(jobId2).toBe('health-check-cat-x-poster-2222')
+    expect(jobId1).not.toBe(jobId2) // 同行跨周期 jobId 必须不同 → 旧 job 不阻塞新周期
+    dateSpy.mockRestore()
   })
 
   it('enqueueStaleHealthRecheck 无 stale-ok 行（空集）→ enqueued=0、不入队', async () => {
