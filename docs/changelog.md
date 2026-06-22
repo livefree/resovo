@@ -2311,3 +2311,17 @@
 - **新增依赖**：无
 - **数据库变更**：无（本卡为设计 gate；schema 实施在 P4-0M）
 - **注意事项**：调查 image-health 发现 problem-images「真破损」对已恢复封面系统性误报，根因＝双权威真源（`media_catalog.<kind>_status` vs `broken_image_events`）结构性漂移。**方案 C（dissolve）取代 ADR-212 patch**：健康判定不再读 events，收敛为 status + 新增 `<kind>_checked_at`（确定性判定时间）+ `<kind>_client_error_at`（浏览器自过期信号 7d）；events 降级纯遥测；读端单一 `problemFilterSqlV2`（含 stale-ok=unknown）counts/list 逐字共用。**Codex 4 轮对抗审核**（r1 3H+2M+1L / r2 2H+1M / r3 1H / r4 1H；findings 收敛，rounds 1–3 数据模型封板、round-4 属 rollout 时序）全吸收 → Draft v5 → **Accepted**。实施拆 **0M/A/B/C/S**，时序 `0M→A→A-SCAN门→C`。未含 IMGH-P3-5 parked 代码。
+
+## [IMGH-P4-0M] 方案C migration 121 — media_catalog +8 健康判定列 + client_error_at 回填（ADR-213，schema 硬前置）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 01:30
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8, a06695fa2c0aa033c — schema 设计已由 ADR-213 背书)
+- **修改文件**：
+  - `apps/api/src/db/migrations/121_image_health_dissolve.sql` — media_catalog 加 8 列（4×`<kind>_checked_at` + 4×`<kind>_client_error_at`，TIMESTAMPTZ nullable）+ `<kind>_client_error_at` 回填（当前 URL 守卫 `b.url=m2.<url_col>` + 7d 窗口）；checked_at 留 NULL
+  - `apps/api/src/db/queries/imageHealth.scan.ts` — `CLIENT_ERROR_WINDOW_DAYS=7` / `STALE_CHECK_DAYS=30` 常量（P4-C 读端谓词消费）
+  - `docs/architecture.md` — §5.11 +8 列 + ADR-213 dissolve 说明
+  - `scripts/verify-imgh-121.ts` — 真库回填演练核验（一次性/可复用 staging·prod）：checked_at 全 NULL + seeded 集恰=expected 集（misseed=0 ∧ missed=0）
+- **新增依赖**：无
+- **数据库变更**：**是**——`media_catalog` +8 列（migration 121，幂等 ADD COLUMN IF NOT EXISTS）；`broken_image_events` 零改动
+- **注意事项**：**真库回填演练 PASS**（poster seeded=1=expected / misseed=0 / missed=0 / checked_at 全 NULL；其余 kind expected=0 正确不 seed）——回填生效且 URL 守卫精确。**Codex stop-gate 修正**：verify 脚本初版只查「无误 seed」（misseed），空操作回填会假 PASS → 补「无漏 seed」（missed/expected）反向检查，PASS 须 seeded 集恰=expected 集。下游 **P4-A**（worker 确定性出口写 checked_at + `fetchImageDimensions` 判别式 + 部署后 A-SCAN 门）。staging/prod 应用 121 后复跑 verify 脚本。

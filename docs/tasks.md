@@ -6,21 +6,19 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-### 🔄 IMGH-P4-0M — 方案C migration：media_catalog +8 列 + client_error_at 回填 + architecture.md 同步（ADR-213，SEQ-20260621-02）
+### 🔄 IMGH-P4-A — 方案C worker：确定性出口写 checked_at + fetchImageDimensions 判别式 + A-SCAN 门（ADR-213，SEQ-20260621-02）
 
-- **状态**：🔄 进行中（schema 硬前置，时序 `0M→A→A-SCAN门→C` 首卡）｜ **创建/开始**：2026-06-22 ｜ **执行模型**：claude-opus-4-8（主循环）｜**子代理**：无（schema 设计已由 ADR-213 `arch-reviewer` (claude-opus-4-8, a06695fa2c0aa033c) 背书；commit 带 Subagents trailer 引用之）
-- **依据**：ADR-213 **Accepted**（D-213-2/3/8）。方案 C 实施第一卡 = 加列 + client_error_at 回填，**不动 worker/读端/端点**（A/B/C）。
-- **范围（≤4 项，schema 单层）**：
-  - ① 新 migration `121_image_health_dissolve.sql`：`media_catalog` 加 8 列 `ADD COLUMN IF NOT EXISTS`——4×`<kind>_checked_at` + 4×`<kind>_client_error_at`（均 `TIMESTAMPTZ` nullable，无 CHECK/索引）。
-  - ② `<kind>_client_error_at` 回填：仅当未解决 `client_load_error` 的 **`b.url=m2.<url_col>`（当前 URL 守卫）** 且 `last_seen_at>=NOW()-7d` 才 seed（D-213-8④）；**`checked_at` 不回填、留 NULL**（D-213-8③，→ 读端 COALESCE 判 unknown）。
-  - ③ `CLIENT_ERROR_WINDOW_DAYS=7` + `STALE_CHECK_DAYS=30` 常量落 `imageHealth.scan.ts`（单一真源，禁散落硬编码）。
-  - ④ **同步 `docs/architecture.md` §5.11**（media_catalog 表定义 +8 列）。
-- **不做**：checked_at 扫描（A-SCAN 在 P4-A 后）；`broken_image_events` 零改动；worker 判别式/读端谓词/internal 端点（属 A/B/C）。
-- **涉及文件**：`apps/api/src/db/migrations/121_image_health_dissolve.sql`（新）、`apps/api/src/db/queries/imageHealth.scan.ts`（常量）、`docs/architecture.md`（§5.11）。
-- **测试口径（诚实再放置）**：migration 一次性回填的 URL 守卫**由真库演练直接验**（一次性 SQL，post-migration 难用 seeding 测真实执行）；URL 守卫**可复用逻辑**的自动化回归落 **P4-B**（beacon 写同款 `mc.<url>=$url`，route/query 层 seeding 更自然）——避免脆弱的一次性 SQL 测。
-- **门禁**：🚨 **architecture.md §5.11 同步（BLOCKER 级）** + **真库回填演练（需 DB 访问，用户跑）** + typecheck/lint/test:changed + commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer（schema 已 ADR 背书）。
-- **备注**：上游 IMGH-P4-0（ADR-213 草案 gate）已收口——ADR-213 **Accepted**，见 changelog [IMGH-P4-0]。时序 `0M→A→A-SCAN门→C`：0M schema 硬前置，A/B 可并行，C 依赖 A-SCAN，S 非阻塞收尾。
-- **进展（2026-06-22）**：migration 121（+8 列 + client_error_at 回填带 URL 守卫，checked_at 留 NULL）+ scan.ts 常量（CLIENT_ERROR_WINDOW_DAYS=7/STALE_CHECK_DAYS=30）+ architecture.md §5.11（+8 列 + ADR-213 dissolve 说明）已落；**typecheck=0 / lint=0**。**待**：真库回填演练（用户跑：迁移 + 验回填 counts/URL 守卫）→ 演练通过即 0M 收口、起 P4-A。
+- **状态**：🔄 进行中（worker 单真源，时序 `0M→A→A-SCAN门→C` 第 2 卡）｜ **创建/开始**：2026-06-22 ｜ **执行模型**：claude-opus-4-8（主循环）｜**子代理**：无（实施按 ADR-213 D-213-5；worker 逻辑非新架构决策）
+- **依据**：ADR-213 **Accepted**（D-213-5）。0M 已收口（migration 121 + 常量落地，真库演练 PASS，见 changelog [IMGH-P4-0M]）。
+- **范围（worker 单层）**：
+  - ① `updateCatalogImageStatus`（`imageHealth.ts:127-144`）**确定性出口**（ok/low_quality/broken）同步写 `<kind>_checked_at=NOW()`；**瞬态出口不写**（checked_at = 最近确定性判定，非探测尝试，R2-HIGH-2）。
+  - ② `fetchImageDimensions`（`imageHealthWorker.ts:170-188`）改返判别式 `{width,height,failure?:'http_4xx'|'http_5xx'|'decode'|'transient'}`；`checkImageHealth` 映射：URL 语法非法/HEAD 404/HEAD 5xx/GET 404/GET 5xx/sharp decode → **broken**；width>0 尺寸·比例不合 → **low_quality**；全过 → **ok**；**瞬态（网络/超时/abort/DNS/TLS）→ 不改 status 且不写 checked_at**（D-213-5/9，消 timeout 误报）。
+  - ③ **A-SCAN（部署后一次性，C 硬前置门）**：把所有 `<kind>_url` 非空行入 health-check 队列（**不限 `pending_review`**）→ worker 落 checked_at 真值、排空初始 unknown 桶。经 ImageHealthService 暴露 / 一次性脚本触发。
+  - events 仍 emit 作遥测、与健康判定解耦（不变）。
+- **不做**：读端谓词（C）/ internal 信号列（B）/ 周期 scheduler（S）。
+- **涉及文件**：`apps/api/src/workers/imageHealthWorker.ts`（判别式 + 映射）、`apps/api/src/db/queries/imageHealth.ts`（updateCatalogImageStatus 加 checked_at）、`apps/api/src/services/ImageHealthService.ts`（A-SCAN 入队）+ 可能 `imageHealth.ts` 新查询（列 ok 行供 A-SCAN）、`tests/unit/api/image-health-*.test.ts`。
+- **门禁**：typecheck/lint/test:changed + 单测（404/5xx/decode→broken · 尺寸小→low_quality · **瞬态→status 不变且 checked_at 不推进** · 确定性出口刷 checked_at · A-SCAN 入队 ok 行）+ `verify:adr-contracts`。**关键路径**：worker 图片健康巡检 status 写入，改后回归。
+- **备注**：A 部署后跑 A-SCAN 再起 C（C 硬依赖扫描完成）；B 可与 A 并行。Subagents trailer 引 ADR-213 arch-reviewer（设计背书）。
 
 ---
 
