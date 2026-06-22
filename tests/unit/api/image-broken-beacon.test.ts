@@ -9,9 +9,11 @@ import Fastify from 'fastify'
 // ── Mocks ──────────────────────────────────────────────────────────
 
 const mockUpsertBrokenImageEvent = vi.fn().mockResolvedValue({ id: 'evt-1', occurrenceCount: 1 })
+const mockMarkCatalogClientError = vi.fn().mockResolvedValue(1)
 
 vi.mock('@/api/db/queries/imageHealth', () => ({
   upsertBrokenImageEvent: (...args: unknown[]) => mockUpsertBrokenImageEvent(...args),
+  markCatalogClientError: (...args: unknown[]) => mockMarkCatalogClientError(...args),
 }))
 
 vi.mock('@/api/lib/postgres', () => ({
@@ -115,5 +117,70 @@ describe('POST /v1/internal/image-broken', () => {
       payload: { ...VALID_BODY, video_id: 'not-a-uuid' },
     })
     expect(res.statusCode).toBe(400)
+  })
+})
+
+// ── ADR-213 D-213-6：双写信号列（client_error_at）+ events 遥测 ───────
+describe('POST /v1/internal/image-broken — 信号列双写（ADR-213 D-213-6）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('受治理 kind（poster）→ 同写信号列 + events，204', async () => {
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/internal/image-broken',
+      payload: VALID_BODY,
+    })
+    expect(res.statusCode).toBe(204)
+    expect(mockMarkCatalogClientError).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        videoId: VALID_BODY.video_id,
+        kind: 'poster',
+        url: VALID_BODY.url,
+      })
+    )
+    expect(mockUpsertBrokenImageEvent).toHaveBeenCalledTimes(1)
+  })
+
+  it('stills / thumbnail → 跳信号列、仅 events（ADV-213-6）', async () => {
+    for (const image_kind of ['stills', 'thumbnail'] as const) {
+      vi.clearAllMocks()
+      const app = await buildApp()
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/internal/image-broken',
+        payload: { ...VALID_BODY, image_kind },
+      })
+      expect(res.statusCode).toBe(204)
+      expect(mockMarkCatalogClientError).not.toHaveBeenCalled()
+      expect(mockUpsertBrokenImageEvent).toHaveBeenCalledTimes(1)
+    }
+  })
+
+  it('信号列写入失败 → best-effort 降级，遥测仍写、仍 204（互不阻断）', async () => {
+    mockMarkCatalogClientError.mockRejectedValueOnce(new Error('db down'))
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/internal/image-broken',
+      payload: VALID_BODY,
+    })
+    expect(res.statusCode).toBe(204)
+    expect(mockUpsertBrokenImageEvent).toHaveBeenCalledTimes(1) // 信号列失败不阻断遥测
+  })
+
+  it('遥测写非 FK 错误 → best-effort 降级，仍 204（不抛 500）', async () => {
+    mockUpsertBrokenImageEvent.mockRejectedValueOnce(new Error('telemetry write failed'))
+    const app = await buildApp()
+    const res = await app.inject({
+      method: 'POST',
+      url: '/v1/internal/image-broken',
+      payload: VALID_BODY,
+    })
+    expect(res.statusCode).toBe(204)
+    expect(mockMarkCatalogClientError).toHaveBeenCalledTimes(1) // 信号列已先写
   })
 })

@@ -155,6 +155,58 @@ export async function updateCatalogImageStatus(
   }
 }
 
+// ── 写入：浏览器自过期信号列 <kind>_client_error_at（ADR-213 D-213-6）────────────
+
+export interface MarkClientErrorInput {
+  videoId: string
+  kind: 'poster' | 'backdrop' | 'logo' | 'banner_backdrop'
+  url: string
+}
+
+/**
+ * 4 受治理 kind 的「信号列 + 当前 URL 列」白名单映射。
+ * 列名全部查表得到（非请求拼接），杜绝 SQL 注入。
+ * poster 的 URL 列历史名为 `cover_url`（其余 kind = `<kind>_url`，参见 imageHealth.ts:342 注）。
+ */
+const CLIENT_ERROR_COLUMNS: Record<
+  MarkClientErrorInput['kind'],
+  { signal: string; url: string }
+> = {
+  poster: { signal: 'poster_client_error_at', url: 'cover_url' },
+  backdrop: { signal: 'backdrop_client_error_at', url: 'backdrop_url' },
+  logo: { signal: 'logo_client_error_at', url: 'logo_url' },
+  banner_backdrop: { signal: 'banner_backdrop_client_error_at', url: 'banner_backdrop_url' },
+}
+
+/**
+ * ADR-213 D-213-6：前台 beacon 上报图片加载失败 → 置 media_catalog.<kind>_client_error_at=NOW()
+ * （浏览器自过期信号，last-write-wins；读端 7 天窗口内判 client_error）。
+ *
+ * **URL 同源守卫**（`mc.<url_col> = $url`）：仅当上报 url = 该 catalog 当前 `<kind>_url` 才标记
+ * → 挡掉「过期页面 / 旧 URL 上报」污染（不匹配 → 影响 0 行、不报错）。
+ * **per-catalog fanout 是有意的**：健康态本就 per-catalog，URL 匹配当前 = 该 catalog 当前图在
+ * 用户端裂，标记同 catalog 全部 video 视图合理（对齐 ADR-174 N video:1 catalog）。
+ *
+ * 返回受影响行数（0 = video 不存在或 URL 不匹配，调用方据此判定是否命中）。
+ */
+export async function markCatalogClientError(
+  db: Pool | PoolClient,
+  input: MarkClientErrorInput
+): Promise<number> {
+  const cols = CLIENT_ERROR_COLUMNS[input.kind]
+  if (!cols) {
+    throw new Error(`Invalid image kind for client-error signal: ${input.kind}`)
+  }
+  const result = await db.query(
+    `UPDATE media_catalog mc
+        SET ${cols.signal} = NOW()
+       FROM videos v
+      WHERE v.id = $1 AND mc.id = v.catalog_id AND mc.${cols.url} = $2`,
+    [input.videoId, input.url]
+  )
+  return result.rowCount ?? 0
+}
+
 // ── 写入：更新 blurhash 与 primary color ─────────────────────────
 
 export interface UpdateImageBlurhashInput {

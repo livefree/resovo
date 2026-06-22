@@ -6,9 +6,9 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-### 🔄 IMGH-P4-A — 方案C worker：确定性出口写 checked_at + fetchImageDimensions 判别式 + A-SCAN 门（ADR-213，SEQ-20260621-02）
+### ⏸️ IMGH-P4-A — 方案C worker：确定性出口写 checked_at + fetchImageDimensions 判别式 + A-SCAN 门（ADR-213，SEQ-20260621-02）
 
-- **状态**：🔄 进行中（worker 单真源，时序 `0M→A→A-SCAN门→C` 第 2 卡）｜ **创建/开始**：2026-06-22 ｜ **执行模型**：claude-opus-4-8（主循环）｜**子代理**：无（实施按 ADR-213 D-213-5；worker 逻辑非新架构决策）
+- **状态**：⏸️ **代码已交付**（commit `968d4efb`，门禁全绿）·**待部署期跑 A-SCAN**（`scripts/run-imgh-ascan.ts` 落 `checked_at` 真值、排空初始 unknown 桶 → C 硬前置门）——A-SCAN 属运维步、非编码工作台占用，**不占单 🔄 槽**｜ **创建/开始**：2026-06-22 ｜ **执行模型**：claude-opus-4-8（主循环）｜**子代理**：无（实施按 ADR-213 D-213-5；worker 逻辑非新架构决策）
 - **依据**：ADR-213 **Accepted**（D-213-5）。0M 已收口（migration 121 + 常量落地，真库演练 PASS，见 changelog [IMGH-P4-0M]）。
 - **范围（worker 单层）**：
   - ① `updateCatalogImageStatus`（`imageHealth.ts:127-144`）**确定性出口**（ok/low_quality/broken）同步写 `<kind>_checked_at=NOW()`；**瞬态出口不写**（checked_at = 最近确定性判定，非探测尝试，R2-HIGH-2）。

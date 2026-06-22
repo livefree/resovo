@@ -2325,3 +2325,32 @@
 - **新增依赖**：无
 - **数据库变更**：**是**——`media_catalog` +8 列（migration 121，幂等 ADD COLUMN IF NOT EXISTS）；`broken_image_events` 零改动
 - **注意事项**：**真库回填演练 PASS**（poster seeded=1=expected / misseed=0 / missed=0 / checked_at 全 NULL；其余 kind expected=0 正确不 seed）——回填生效且 URL 守卫精确。**Codex stop-gate 修正**：verify 脚本初版只查「无误 seed」（misseed），空操作回填会假 PASS → 补「无漏 seed」（missed/expected）反向检查，PASS 须 seeded 集恰=expected 集。下游 **P4-A**（worker 确定性出口写 checked_at + `fetchImageDimensions` 判别式 + 部署后 A-SCAN 门）。staging/prod 应用 121 后复跑 verify 脚本。
+
+## [IMGH-P4-A] 方案C worker 单真源 — checked_at 写入 + fetchImageDimensions 判别式 + A-SCAN（ADR-213 D-213-5）〔补录·代码已于 `968d4efb` 提交〕
+- **完成时间**：2026-06-22（代码 commit `968d4efb`）
+- **记录时间**：2026-06-22 02:10（**补录**：前次 968d4efb 提交遗漏 changelog 条目，本条与 P4-B 同提交补齐）
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8, a06695fa2c0aa033c — worker 逻辑已由 ADR-213 D-213-5 背书)
+- **修改文件**（均在 968d4efb）：
+  - `apps/api/src/workers/imageHealthWorker.ts` — `fetchImageDimensions` 改判别式 `{width,height,failure?:'http_4xx'|'http_5xx'|'decode'|'transient'}`；`checkImageHealth` 确定性失败（URL 非法/HEAD·GET 404·5xx/decode）单次即 broken、瞬态（网络/超时/abort）不改 status 且不写 checked_at；删内存连败计数器 + 死代码 extractDomain
+  - `apps/api/src/db/queries/imageHealth.ts` — `updateCatalogImageStatus` 确定性出口（ok/low_quality/broken）写 `<kind>_checked_at=NOW()`、pending_review/missing 不写；新增 `listUncheckedImageUrls`（checked_at IS NULL 行，A-SCAN 数据源）
+  - `apps/api/src/services/ImageHealthService.ts` — `enqueueHealthScanForUnchecked`（A-SCAN 分页扫入队，dedup jobId）
+  - `scripts/run-imgh-ascan.ts` — A-SCAN 触发脚本（部署后一次性跑，落 checked_at 真值、排空初始 unknown 桶）
+  - `tests/unit/api/image-health-worker.test.ts` + `image-health-checked-at.test.ts` — 判别式/checked_at 条件写入/A-SCAN 入队单测
+- **新增依赖**：无
+- **数据库变更**：无（消费 0M 已加列；本卡为写入侧逻辑）
+- **注意事项**：消除 ADR-210 D-210-6 timeout 误报根因（瞬态不再置 broken）+ width===0 假阴性（GET/decode 确定性 broken）。**待部署期跑 A-SCAN**（`node --env-file=.env.local --import tsx scripts/run-imgh-ascan.ts`）落 checked_at 真值——**P4-C `unknown` 谓词硬前置门**（否则存量 ok 全 checked_at=NULL→unknown 泛滥，Codex round-4）。门禁：typecheck=0/lint=0/test:changed=181/verify:adr-contracts=0。未含 IMGH-P3-5 parked 代码。
+
+## [IMGH-P4-B] 方案C internal 端点 — beacon 写 `<kind>_client_error_at` 信号列（URL 同源守卫）+ events 双写遥测（ADR-213 D-213-6）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 02:10
+- **执行模型**：claude-opus-4-8
+- **子代理**：arch-reviewer (claude-opus-4-8, a06695fa2c0aa033c — 端点双写设计已由 ADR-213 D-213-6 背书)
+- **修改文件**：
+  - `apps/api/src/db/queries/imageHealth.ts` — 新增 `markCatalogClientError(db,{videoId,kind,url})`：`UPDATE media_catalog mc SET <kind>_client_error_at=NOW() FROM videos v WHERE v.id=$1 AND mc.id=v.catalog_id AND mc.<url_col>=$2`，URL 同源守卫 + signal/url 列名全白名单查表（防注入）+ 返回 rowCount；poster URL 列历史名 cover_url
+  - `apps/api/src/routes/internal/image-broken.ts` — 双写改写：信号列仅 4 受治理 kind（stills/thumbnail 跳过、仅 events，ADV-213-6）+ 保留 `upsertBrokenImageEvent` 遥测；两 UPDATE 各自 try、互不阻断、失败 `request.log.warn` 结构化降级（含 video_id/image_kind/write_target，禁空 catch）；events FK violation→静默 204（反枚举，契约不变）。端点 method/path/无鉴权/IP 限速/204/400 全不变，前台 report-broken-image.ts 零改动
+  - `tests/unit/api/image-broken-beacon.test.ts` — 路由双写（poster 同写信号列+events / stills·thumbnail 跳信号列 / 信号列失败 best-effort 204 / 遥测非 FK 失败 best-effort 204）
+  - `tests/unit/api/image-health-client-error.test.ts`（新建）— `markCatalogClientError` SQL（per-kind 信号列+URL 列正确·poster=cover_url / 参数化 / rowCount 归一化）
+- **新增依赖**：无
+- **数据库变更**：无（消费 0M migration 121 的 `<kind>_client_error_at` 列）
+- **注意事项**：信号列驱动 P4-C 健康读路径（自过期 7d 窗口）；events 降级纯遥测（趋势/域名/`brokenLast7Days`）。**双写漂移定性**（ADV-213-2）：仅遥测写失败时健康判定不受影响（信号列已写），`brokenLast7Days` 定性为遥测口径、非权威健康计数。门禁：typecheck=0/lint=0/test:changed=189/verify:endpoint-adr=0（契约不变·无新端点）/verify:adr-contracts=0。未含 IMGH-P3-5 parked 代码。
