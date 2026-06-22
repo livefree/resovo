@@ -2478,3 +2478,24 @@
 - **问题（Codex stop-gate）**：REASON-SSF 后 reason 变更触发 useEffect 重取；但 handleLoadMore 无 cleanup/守卫 → load-more 在途时切 reason/kind/scope，旧响应回来仍 `setRows(dedupeAppend)`/setCounts/setTotal/setRequested → 旧筛选数据污染新视图（且 requested 错位）。useEffect 有 cancelled 守自身，handleLoadMore 无。
 - **修复要点**：单一 `fetchSeqRef` 代次计数——重置即 +1（useEffect），load-more 捕获并在响应后比对，不匹配即整体丢弃（数据 + requested 均不动）。保留 dedupeAppend（防同代次边界重复）。
 - **门禁**：typecheck=0/lint=0/test:changed=60/verify:adr-contracts=0。board 改动经手动 toggle 隔离 parked 不关抽屉（避 stash-pop 冲突，上次教训）。
+
+## [CARD-SIZING-A] 前台视频卡片尺寸碎片化治理·死代码/死配置清理（SEQ-20260622-01）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 16:30
+- **执行模型**：claude-opus-4-8（主循环；纯死代码收敛，零架构决策）
+- **子代理**：无
+- **来源**：调查报告 `docs/designs/client-video-card-sizing-audit_20260622.md`（问题清单 4/5/6 项）。用户裁定中力度治理「清理 + 规范统一」，本卡 = 清理半（零视觉变化）。规范统一移 CARD-SIZING-B（口径已冻结，commit `e0cd28fc`）。
+- **修改文件**（清理正body `cd78e527` + 补完 `d68dbbc8`；VideoCardWide 删除随 `b75e7a00`）：
+  - `apps/web-next/src/components/video/VideoCardWide.tsx` — 删（`@deprecated` 全仓零引用）。
+  - `apps/web-next/src/components/video/Shelf.tsx` — 删 `landscape-row` template（type union 值 + `LandscapeTrack` 函数 + render 分支，零调用方）+ 头部注释 landscape 行。
+  - `apps/web-next/src/components/video/VideoGrid.tsx` — 删死 `variant` prop（`VideoGridProps` + `VideoGridSkeleton` + 解构默认值，函数体零使用）；scroll 模式 `cardWidth` 硬编码 `'160px'` → `var(--shelf-card-w-portrait)`（消 token 漂移）。
+  - `apps/web-next/src/components/detail/RelatedVideos.tsx` — 移除 `variant="portrait"` 传值（`RelatedVideos` 自身 `variant="sidebar"|"grid"` 是另一 prop，不动）。
+  - `packages/design-tokens/src/semantic/layout.ts` — 删 `shelf-card-w-landscape: 300px` 死 token（**真源**）。
+  - `packages/design-tokens/src/css/tokens.css` — `build-css.ts` 重新生成（删 landscape 1 行）。
+  - `apps/web-next/src/app/globals.css` — 同步删 `--shelf-card-w-landscape` 镜像行。
+  - `apps/web-next/src/components/search/SearchEmptyState.tsx` — 移除残留 `variant="portrait"` 传值（`portrait` 为原默认值，零行为变化）。
+- **新增依赖**：无
+- **数据库变更**：无
+- **补完（Codex stop-gate 续）**：原 commit `cd78e527` 两处漏网，`d68dbbc8` 补齐——①landscape 死 token 真源在 `design-tokens/src/semantic/layout.ts`（调查报告 §3 仅盘点 `globals.css`，漏 design-tokens 真源链 → `build-css` 生成 `tokens.css` → 手工镜像 globals.css；只删 globals.css 脆，重生成会回灌），删真源 + 重新生成 + 同步三处（`dist/` gitignore 随 build 重生）；②`SearchEmptyState.tsx:32` 残留 `variant="portrait"`（早于 A 引入，致原 commit 声称 typecheck 8/8 实际不成立）。
+- **门禁**：typecheck=0 / lint=0 / test:changed=142（含 `design-tokens/alias-coverage` 23 测，确认删 token 未破坏别名覆盖校验）。**零视觉变化**（landscape-row/variant/scroll/landscape token 均零消费，静态可证）。
+- **注意事项**：① `VideoGrid` `layout="scroll"` 路径仍零消费方（本卡仅 token 化未删整段，follow-up 登记 task-queue）。② CARD-SIZING-B（gap/列数/标题归一，口径已冻结于 task-queue）实施前须过 arch-reviewer token 结构方案 PASS。③ 调查报告 §3「token 层」盘点不完整（漏 design-tokens 真源），后续若据此再治理需以 `packages/design-tokens/src/semantic/` 为真源。
