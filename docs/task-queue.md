@@ -2977,15 +2977,20 @@
 
 ## SEQ-20260622-01 — 前台视频卡片尺寸碎片化治理（清理 + 规范统一，中力度）🔄
 
-- **状态**：🔄 进行中（CARD-SIZING-A 清理已起卡 tasks.md）｜ **创建时间**：2026-06-22
+- **状态**：🔄 进行中（**CARD-SIZING-A ✅ 已交付** `cd78e527`+`d68dbbc8`〔补完 landscape token 真源 design-tokens + SearchEmptyState variant 残留〕；**B 口径已冻结**〔见下〕，待实施〔需 Opus arch-reviewer token 方案 PASS〕）｜ **创建时间**：2026-06-22
 - **来源**：调查报告 `docs/designs/client-video-card-sizing-audit_20260622.md`（前台卡片尺寸三层分离结构 + 7 条碎片化问题清单）。用户裁定**中力度**治理：清理死代码/死配置 + 规范统一（gap token / 响应式列数 / 标题字号）；**不含**高风险的定宽机制重构与 VideoCard/BrowseCard 组件合并。
 - **依赖**：无 BLOCKER；调查报告已落盘。
 - **原子化判据**：中力度合计 8 项（清理 5 + 规范统一 3）> 5 → 拆 **A/B 子卡**；A（纯死代码收敛、零视觉、无需 Opus）与 B（token 结构设计、轻微视觉对齐、强制 Opus arch-reviewer）性质不同 → 强制拆。A→B 串行（A 先清掉 landscape token，B 处理 gap token 更干净）。
 
 | 卡 | 内容 | 范围项 | 建议模型 | 依赖 | 门禁 |
 |---|---|---|---|---|---|
-| **CARD-SIZING-A**（清理） | 删 `VideoCardWide`（零引用）/ 删 `--shelf-card-w-landscape` token + 注释 / 删 `ShelfRow` `landscape-row` template + `LandscapeTrack`（零调用）/ 删 `VideoGrid` 死 `variant` prop（含 `RelatedVideos` 传值）/ 修 `VideoGrid` scroll `cardWidth` 160px→`--shelf-card-w-portrait`。**零视觉变化**（全为零消费死路径）。 | 5 | sonnet（主循环本会话 opus） | 无 | typecheck/lint/test:changed + 视觉零变化回归 |
+| **CARD-SIZING-A**（清理）✅ | 删 `VideoCardWide`（零引用）/ 删 `--shelf-card-w-landscape` token + 注释 / 删 `ShelfRow` `landscape-row` template + `LandscapeTrack`（零调用）/ 删 `VideoGrid` 死 `variant` prop（含 `RelatedVideos` 传值）/ 修 `VideoGrid` scroll `cardWidth` 160px→`--shelf-card-w-portrait`。**零视觉变化**（全为零消费死路径）。**补完**：landscape token 真源在 `design-tokens/src/semantic/layout.ts`（调查报告 §3 漏盘，仅记 globals.css）+ `SearchEmptyState.tsx` variant 残留。 | 5 | sonnet（主循环本会话 opus） | 无 | ✅ typecheck=0/lint=0/test:changed=142 |
 | **CARD-SIZING-B**（规范统一） | 统一 gap token（收敛 `--shelf-gap` 16 / `--browse-grid-gap` 20 / VideoGrid `gap-4 lg:gap-6` 三值）+ 统一响应式列数断点体系（search 2/3/5 与 related 3/4/6 与 browse 固定 5 归一）+ VideoCard/BrowseCard 标题字号/截断归一（14·clamp-1 vs 13·clamp-2）。**轻微视觉对齐**。 | 3 | **opus** | CARD-SIZING-A | **arch-reviewer (claude-opus-*) token 方案 PASS**（CLAUDE.md 强制升 Opus 第 5 条：Token 层字段结构与引用规则）+ typecheck/lint/test:changed + 逐页视觉回归（首页/搜索/详情/分类） |
 
-- **范围红线**：颜色 N/A（仅尺寸/间距 token，前台 `globals.css` 体系）；不新增 admin route；不动定宽机制重构与组件合并（高力度，本序列不含）；B 的 token 结构与断点体系为裁决点，**必须先过 arch-reviewer**。
+- **B 口径冻结（2026-06-22，用户裁定）**——B 实施的固化输入，arch-reviewer 只裁 token 结构/命名/引用，不再翻案以下取值：
+  - **① gap → 网格统一 16px 固定**：新增 `--grid-gap = 16px` 供 BrowseGrid（20→16）/ VideoGrid（去 `gap-4 lg:gap-6` 响应式 → 固定 16）/ 详情相关共用；shelf 横向轨道保留 `--shelf-gap = 16px`（语义不同：轨道 vs 网格）。VideoGrid scroll 内联 `gap:'16px'` 一并 token 化。**消除 20px 与 16→24 两处漂移。**
+  - **② 列数 → 全站单一 2/3/5**：`grid-cols-2 sm:grid-cols-3 lg:grid-cols-5` 统一到 search（不变）/ browse（固定5→2/3/5，修移动端拥挤）/ related（3/4/6→2/3/5，详情相关卡变大）。
+  - **③ 标题 → 统一 13px / line-clamp-2 / lineHeight 1.4 / weight 500**：VideoCard（14·clamp-1 → 13·clamp-2）对齐 BrowseCard（不变）。年份副标题维持 12px。
+  - **视觉影响**（轻微对齐，逐页回归覆盖）：分类页 gap 收窄 + 移动端列数改善；搜索/详情大屏 gap 24→16；详情相关卡放大（6→5 列）；首页主力 VideoCard 标题单行→双行（卡高微增）。
+- **范围红线**：颜色 N/A（仅尺寸/间距 token，前台 `globals.css` 体系）；不新增 admin route；不动定宽机制重构与组件合并（高力度，本序列不含）；B 的 token 结构与断点体系为裁决点，**必须先过 arch-reviewer**（取值已冻结，仅裁结构）。
 - **Follow-up 登记**：① `VideoGrid` `layout="scroll"` 路径零消费方（含 `scrollContainerStyle` + cardWidth），A 卡仅 token 化未删；建议后续小卡评估整段删除（API 收窄需确认）。② 高力度选项（定宽机制 5→1 共享 CardGrid + VideoCard/BrowseCard 合并）未采纳，如需另起序列。
