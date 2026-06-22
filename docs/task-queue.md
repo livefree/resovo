@@ -2924,3 +2924,51 @@
 - **原子化判据**：1A 后端单模块（query/service/route 同域 + ADR）范围 5 项未超线；1B 前端单层消费 4 项；跨层但按前后端拆 2 卡，符合 workflow-rules 原子化四问。**4A/4B/4C 同理按后端/前端/核查三层拆**（ADR-211 §9）。
 - **范围红线**：新 route 先 ADR 后实施（`verify:endpoint-adr` 必过）；只读端点对齐既有 stats/broken-domains 范式（无审计）；颜色零硬编码；后端 Route→Service→DB 分层；不改 admin-ui 公开 Props（纯 server-next 消费 + 新后端只读端点）。
 - **IMGH-P3-2 补登记说明**：用户在 P3-1A/1B 代码完成（待 commit）后于会话内**直接指令**「按上次草案落地图片健康 KPI 卡片」并明确两卡口径；当时**未先写卡即执行代码** → 违反 CLAUDE.md「❌ 未写任务卡片就开始执行代码 / 修改文件范围以外文件」，Codex stop-gate 标记 "KPI work implemented outside the active task scope"。本行为补登记。P3-1A/1B 与 P3-2 均**代码完成 + 门禁通过、未提交**，在 `imageHealth.ts`/`api.ts`/`ImageHealthClient.tsx`/`ImageHealthClient.test.tsx` 等文件交织 → commit 时一并提交或按 hunk 拆两条逻辑 commit（待用户定夺）。单轨「仅 1 个 🔄」临时双活，因二者均待提交、commit 后同时收口。
+
+---
+
+## SEQ-20260621-01 — 图片治理抽屉四图替换增强 + 精修（缩略图聚焦切换 / 双预览 / 不关抽屉）🔄
+
+- **状态**：🔄 进行中（1/1 — IMGH-P3-5）
+- **创建时间**：2026-06-21｜**最后更新**：2026-06-21
+- **来源**：用户「图片治理抽屉仅支持封面 URL 替换，缺失其他三种图片的替换」+「Thumb/已选中样式重复需区分」+「图片矩阵很丑要更精致 / 替换图加预览 / 改后能看到改后预览，减少出错」。
+- **现状诊断**：`ImageGovernanceDrawer` 底层已按 `focusKind` 支持四类替换，但 `focusKind` 是只读 prop → Tab B 缺省 poster + 抽屉内矩阵仅预览不可切换；`ImageCompare` 当前图恒取 `row.posterUrl`（聚焦非封面时错）；矩阵全部强制 2/3 比例致横图变形；手填 URL 无预览；apply/手填成功即 `onClose()` 看不到结果。
+- **依赖**：SEQ-20260619-02（治理抽屉）✅ + ADR-211 ✅；无 BLOCKER。
+
+### 任务列表
+
+1. **IMGH-P3-5** — 治理抽屉四图替换闭环 + 选中态分层 + 矩阵精致化 + 替换区双预览 + 成功后留存（状态：🔄 进行中）
+   - 创建时间：2026-06-21 ｜ 实际开始：2026-06-21
+   - 建议模型：sonnet（server-next 模块编排层 UI，无新共享组件 API 契约）；本会话实际主循环 claude-opus-4-8
+   - 范围（A 基础 + B 精修，纯 UI 编排层，未跨 schema/api 层 → 不拆子卡）：
+     - **A①** `focusKind` 只读 prop → 抽屉内部 state（初值=传入），矩阵 cell 点击切换聚焦（重置 selectedKey/manualUrl）。
+     - **A②** cell 聚焦态填充式（accent 底+反白），与候选卡 `ImageCandidatePicker` 描边 ring 分层，解「样式重复」。
+     - **A③** 修 `ImageCompare` 当前图按 `focusKind` 取 `images?.[focusKind]`（poster 回退 row）。
+     - **B①** 矩阵精致化：抽 `ImageMatrixCell` 子组件，按 kind 正确宽高比（poster 2/3 / backdrop·banner 16/9 / logo contain），hover 浮现预览按钮（去 emoji），选中态 accent 边+柔底+小圆点，柔和 fallback。
+     - **B②** 替换区双预览：改前**小窗**（手填 URL 实时小图 + onError 提示；候选沿用 ImageCandidatePicker/ImageCompare）→ 确认 → 改；改后**大图**（替换区顶部当前图大预览，成功 reload 刷新为新图）。
+     - **B③** 成功后不关抽屉：`finishMutation` 去 `onClose()` → `imagesActions.reload()` + toast + onMutated；支撑连续治理四类。父级**问题板** `handleMutated` 去 `setDrawerOpen(false)`（Tab B 本就不关）。
+   - 文件范围：`ImageGovernanceDrawer.tsx`（主改）+ 新建 `ImageMatrixCell.tsx` + `ImageHealthProblemBoard.tsx`（handleMutated）+ `ImageGovernanceDrawer.test.tsx`（测试）。
+   - 颜色零硬编码（design-tokens accent/state）；不改 admin-ui 共享契约 → 不触发强制 Opus 门禁。
+
+---
+
+## SEQ-20260621-02 — 破损图片事件生命周期与状态收敛（problem-images「真破损」误报根治）🔄
+
+- **状态**：🔄 进行中（**方向转向 dissolve**：ADR-212 patch 路线〔event_class 分行 + migration 049，经 3 轮 Codex + 2 轮 arch-reviewer〕**复杂且脆弱** → 用户批准 **方案 C（dissolve）** → spawn **arch-reviewer (claude-opus-4-8, a06695fa2c0aa033c)** 独立设计 **CONDITIONAL-PASS**〔正确性 #1 + 边界复用 #2 显著优于 patch；7 修订全吸收〕→ **ADR-213 落盘** `docs/decisions.md`〔D-213-1~9，决策真源〕+ **ADR-212 转 Rejected/Superseded by ADR-213**〔保留 D-212-9 吸收 + patch 论证审计〕；**Codex 对抗审核 round-1 (a1d0700349d19909a) needs-attention → 3 HIGH+2 MEDIUM+1 LOW 全吸收**〔URL 同源守卫 / stale-ok 升 P4-S 前置 + 可观测面 / 信号列仅 4 kind / 双写 warn / recall 取舍 / total 回归测〕→ **Draft v2** → **Codex re-review round-2 needs-attention：2 HIGH+1 MEDIUM**〔均 round-1 修正的传播/一致性缺口：回填缺 URL 守卫 / 瞬态刷 checked_at 拆 stale 网 / stale-ok 未并入单一谓词〕**全吸收** → **Draft v3** → **Codex re-review round-3：1 HIGH（同类传播缺口第 3 次，6→3→1 收敛）全吸收**〔checked_at 回填改「不用通用 updated_at、留 NULL→unknown + 一次性真实扫描排空」〕→ **Draft v4** → **Codex re-review round-4：1 HIGH = rollout 时序缺口**〔一次性扫描放 0M 早于写 checked_at 的 A〕**全吸收**：时序改 `0M→A→A-SCAN门→C`、C 硬依赖扫描完成 → **Draft v5**（数据模型 rounds 1–3 已封板未重开，问题下沉到实施编排层）；待 **Codex re-review**〔验证 round-4 闭环，用户触发〕→ Accepted 后拆 0M/A/B/C/S）
+- **创建时间**：2026-06-21｜**最后更新**：2026-06-21
+- **来源**：用户核查问题板「真破损」桶——7 张内部 `poster_status='ok'` 正常显示的封面（翘楚 / 名侦探柯南 / 危险关系 / 大唐迷雾 第一季 / 无垢的证人 / 冰湖重生 / 信仰奴隶：复印使者）却被归类「真破损」，要求查证理由 + 评估根治方案是否使「图片状态逻辑链完备」。
+- **背景/根因（诊断已落实，code 引用确凿）**：系统存在**两套真源且结构上会漂移**——`media_catalog.<kind>_status`（当前态，**per-catalog**）与 `broken_image_events`（事件流，**per-video**，`resolved_at` 仅人工「标记已解决」`resolveBrokenImageEvents` 单一入口写）。problem-images 的 `problem_reason` CASE（`imageHealth.scan.ts:173-179`）让 `broken_event` 分支**无条件压过当前 status**：只要存在一条未解决的白名单事件（`event_type∈{client_load_error,empty_src,fetch_404,fetch_5xx,decode_fail}`），哪怕封面已恢复、`poster_status` 已翻 `ok`，仍被打成「真破损」。**核心缺口**：worker 复检 HEAD-ok 写 `ok`（`imageHealthWorker.ts:165` → `updateCatalogImageStatus` 仅 `UPDATE <kind>_status`，`imageHealth.ts:127-144`）时**从不联动 resolve 旧事件**；apply-candidate（`ImageHealthService.ts:79` 写 pending_review）/ rescan 同样不碰事件 → 误报系统性累积。
+- **根治方向（最终裁定 = 方案 C / dissolve，取代 ADR-212 patch）**：ADR-212 走 patch（让 status 与 events 两套真源对齐），经 3 轮 Codex 同根反复证明复杂且脆弱（任一对齐机制漏判即留假阳性）。**方案 C 改为溶解双真源**：健康判定**不再读 events**，收敛为两列真源——`<kind>_status`（server 当前态）+ `<kind>_client_error_at`（browser 自过期信号，7 天窗口）；events 降级纯遥测。则 ADR-212 全部对齐机制（event_class/写端 resolve/url_hash/migration 049）**整类不需要**，且 **7 张误报上线即消失、零运维**。决策固化在 ADR-213 D-213-1~9（决策真源）。**arch-reviewer 关键发现**：worker 无周期巡检 scheduler（先存缺口，登记 follow-up）、media_catalog 无 checked_at 列（新增）。
+- **依赖**：SEQ-20260619-02（image-health P2）✅ + ADR-211 ✅；无 BLOCKER。
+
+| 卡 | 内容 | 范围项 | 建议模型 | 依赖 | 门禁 |
+|---|---|---|---|---|---|
+| **IMGH-P4-0**（ADR-213 草案 gate） | **起 ADR-213《图片健康双真源溶解（方案 C）》**：固化 D-213-1~9——dissolve 双真源、`<kind>_checked_at`×4 + `<kind>_client_error_at`×4 schema、events 退出健康读路径、worker 单真源 + 吸收 D-212-9 判别式、beacon 信号列双写、读端单一 `problemFilterSqlV2` + problemReason DTO 变更、存量零运维收敛、周期巡检缺口。落 `docs/decisions.md` ADR-213 + ADR-212 转 Superseded；产出下游 0M/A/B/C 蓝图。**不写实现代码**。 | 9（D-213 决策） | **opus** | 无 | ✅ Opus `arch-reviewer` (a06695fa2c0aa033c) CONDITIONAL-PASS + **待 Codex 对抗性审核（ADR 非代码产物，落盘后定稿前）** + Subagents trailer |
+| **IMGH-P4-0M**（实施·migration + 回填·**硬前置**，D-213-2/3 schema） | **🚨 schema（方案 C）**：`media_catalog` 加 8 列 `ADD COLUMN IF NOT EXISTS`——4×`<kind>_checked_at` + 4×`<kind>_client_error_at`（均 TIMESTAMPTZ nullable，无 CHECK/索引）+ `CLIENT_ERROR_WINDOW_DAYS=7` 常量（scan.ts）+ `STALE_CHECK_DAYS`（建议 30）常量 + 回填（**checked_at 不回填、留 NULL→unknown**〔R3-HIGH〕；client_error_at 从 events 窗口内 client_load_error，**带 `b.url=m2.<url_col>` 当前 URL 守卫**，R2-HIGH-1）+ **同步 `docs/architecture.md` §5.11**（**不含 checked_at 扫描**——依赖 A 的 worker，移至 A-SCAN 门，R4-HIGH）。**broken_image_events 零改动**。 | ≤4 | **opus** | IMGH-P4-0 Accepted | ADR-213 Accepted + **architecture.md §5.11 同步（BLOCKER）** + 真库回填演练 + **测「旧 URL 不 populate client_error_at」+「updated_at 近期但 checked_at NULL 的 ok 仍入 unknown」** + `Subagents: arch-reviewer` trailer |
+| **IMGH-P4-A**（实施·worker，D-213-5） | **worker 单真源**：① `updateCatalogImageStatus` **确定性出口**（ok/low_quality/broken）写 `<kind>_checked_at=NOW()`、**瞬态出口不推进 checked_at**（R2-HIGH-2）② `fetchImageDimensions` 改判别式（吸收 D-212-9：HTTP 404/5xx/decode→broken / 网络·超时·abort→**不改 status、不刷 checked_at**）③ 连败裁定=瞬态不改 status、仅确定性失败置 broken；events 仍 emit 作遥测但与健康判定解耦。④ **部署后跑 A-SCAN**：一次性把所有 `<kind>_url` 非空行入 health-check → worker 落 checked_at 真值、排空初始 unknown 桶（**C 硬前置门**，R4-HIGH）。 | ≤3 | sonnet | IMGH-P4-0M（checked_at 列） | ADR-213 Accepted + 单测（404/5xx/decode→broken·尺寸小→low_quality·**瞬态→status 不变且 checked_at 不推进** / 确定性出口刷 checked_at / **A-SCAN 后 ok checked_at 落真值**）+ `verify:adr-contracts` |
+| **IMGH-P4-B**（实施·internal 端点，D-213-6） | **beacon 信号列**：`/internal/image-broken` 端点对外契约不变；内部改写——① `UPDATE media_catalog mc SET <kind>_client_error_at=NOW() FROM videos v WHERE v.id=$video_id AND mc.id=v.catalog_id AND mc.<url_col>=$url`（**URL 同源守卫 + 仅 4 受治理 kind**，ADV-213-1/6；stills/thumbnail 跳信号列）② **保留 `upsertBrokenImageEvent` 双写**作遥测；两 UPDATE 各自 try 互不阻断、失败 **结构化 warn**（best-effort，禁空 catch）。 | ≤3 | sonnet | IMGH-P4-0M（client_error_at 列） | ADR-213 Accepted + 集成测（URL 匹配→写 per-catalog / URL 不匹配→0 行 / stills·thumbnail 跳信号列仅 events / FK 静默 204 不变）+ `verify:endpoint-adr`（契约不变不触红线） |
+| **IMGH-P4-C**（实施·读端 + DTO，D-213-7） | **读端单真源**：抽 `problemFilterSqlV2(kind)`=`<url> 非空 AND (status<>'ok' OR client_error_at 窗口 **OR (status='ok' AND checked_at 早于 STALE_CHECK_DAYS)**)`——**stale-ok 作第三道并入同一谓词**（R2-MEDIUM）；**counts/list 逐字共用、禁内联独立谓词**（total 不漂移）；getProblemImages 移除 events 进 WHERE（仅留纯遥测 LATERAL 供展示）；problemReason CASE 加 `broken_event`→`client_error` + **`unknown`**（`ProblemReason` DTO 值域变更）+ 前端分色同步（`ImageMatrixCell.tsx`/`ImageHealthProblemBoard.tsx`）。 | ≤4 | **opus** | IMGH-P4-0M + A + **A-SCAN 完成**（否则 ok 全 NULL→unknown 泛滥，R4-HIGH） | ADR-213 Accepted + **A-SCAN 完成门** + 查询单测（status<>ok 入板 / client_error 窗口内入板·超窗出板 / **fresh-ok 排除 vs stale-ok 入板为 unknown**）+ **大 limit 下 list 长度==counts[kind] 每 kind/scope 回归测** + 前端分色测 + `test:e2e:admin` |
+| **IMGH-P4-S**（stale-ok 收尾·周期巡检，D-213-9①） | **周期巡检 scheduler**：仿 server.ts:295 verify-scheduler setInterval，定期把 `checked_at` 超阈值的 ok/缺检行重入 health-check 队列 → 自动消化 unknown、根治 stale-ok 假阴性（ADV-213-4）。**非阻塞根治收尾卡**（不阻塞 0M/A/B/C 合并；过渡正确性由 P4-C `unknown` 面兜底，上线后板方可宣称「完备」）。 | ≤3 | sonnet | IMGH-P4-0M + P4-A | ADR-213 Accepted + 单测（stale 行被重扫入队 / checked_at 刷新 / 非 stale 不重复入队） |
+
+- **原子化判据**：ADR gate 卡（D-213-1~9 决策）独立先行；方案 C 实施拆**五卡 0M/A/B/C/S**——0M（media_catalog +8 列 + 回填，**全链硬前置**，D-213-2/3）/ A（worker 单真源 + D-212-9 判别式，D-213-5）/ B（internal 信号列双写 + URL 守卫，D-213-6）/ C（读端单一谓词 + DTO + stale-ok 面，D-213-7/9②）/ **S（周期巡检 scheduler，stale-ok 根治收尾卡·非阻塞，D-213-9①）**。跨 schema/worker/internal/读端多层 → 强制拆（符合 workflow-rules 原子化四问 + CLAUDE.md「schema 跨 3 层须拆」）。**0M 含 schema 变更（media_catalog +8 列）→ migration + 同步 architecture.md §5.11**。**时序 `0M→A→A-SCAN门→C`**（C 硬依赖 A-SCAN 完成，Codex round-4 HIGH：扫描须在 A 写 checked_at 之后跑）；B 依赖 0M、与 A 并行；S 依赖 0M+A（非阻塞，A-SCAN≠S：前者一次性初始排空、后者周期维护）。
+- **范围红线**：ADR 先行（方案 C dissolve 方向 + D-213-2/3 schema 形态 + D-213-7 DTO 值域变更为裁决点，**已过 arch-reviewer CONDITIONAL-PASS**，待 Codex 对抗审核）；`media_catalog` schema 改动需 ADR 背书；**🚨 schema 变更必须同步 `architecture.md` §5.11**（0M 卡 BLOCKER 级）；颜色 N/A（后端，C 卡前端分色用 design-tokens）；不新增 admin route（复用既有 worker/internal/查询，`verify:endpoint-adr` 不触发）；0M 真库回填演练；**worker 周期巡检缺口（D-213-9）登记独立 follow-up 卡，不阻塞 P4**。

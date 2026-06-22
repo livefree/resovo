@@ -23551,3 +23551,245 @@ ADR-208（命名空间 + admin-only）/ ADR-210（D-210-6 BROKEN_SAMPLE_EVENT_TY
 - **LOW**：L-1（N 具化 ~5 万）/ L-2（secondary source 空字段 UI 隐藏，并入 D-211-3）/ L-3（板标题避免暗示含 stills，设计 §1/§4 措辞）/ L-4（前台零裂图保证归 4C，与板签收解耦）。
 
 **状态结论**：arch-reviewer CONDITIONAL-PASS（全吸收）+ Codex NO-BLOCK（4 HIGH 全吸收、MEDIUM/LOW 登记）→ **ADR-211 转 Accepted**。实现拆 IMGH-P3-4A/4B/4C。
+
+---
+
+## ADR-212：破损图片事件生命周期与状态收敛 — problem-images「真破损」对已恢复图的系统性误报根治（refine ADR-211 D-211-2）（SEQ-20260621-02 / IMGH-P4-0）
+
+**状态**：**Rejected（Draft，从未 Accepted）— Superseded by ADR-213（方案 C）**。本 ADR 走 **patch 路线（让 status 与 events 两套真源对齐）**：event_class 分行 + 写端 resolve 联动 + 读端 URL 同源·browser 窗口 + migration 049 换唯一约束。经 **3 轮 Codex 同根反复 + 2 轮 arch-reviewer** 后，arch-reviewer (claude-opus-4-8, agentId a06695fa2c0aa033c) 改判：**溶解双真源（ADR-213 方案 C）优于对齐**——健康判定不再读 events，则本 ADR 全部对齐机制（event_class/re-open/url_hash/migration 049）**整类不需要**。**吸收转移**：D-212-9 worker `fetchImageDimensions` 判别式（HTTP/decode→broken，瞬态→不破损）被 ADR-213 §3.2 完整吸收；其余 patch 机制整体废弃。**以下历史分析全部保留作决策审计**（尤其「为何 patch 路线行不通」的三轮论证 = ADR-213 选 dissolve 的反证基础）。原 Draft v4 记录如下 —— （arch-reviewer round-1 (agentId ab6f77498087aab55) 根因 PASS+4 精化 + **round-2 (agentId ad7eedc3859a734ba) 裁决方案 A（event_class 分行）**；**Codex 对抗性审核三轮 needs-attention → 共 6 HIGH + 1 MEDIUM 已吸收**：r1 (019eeb7a) 读端 URL 同源 / resolve 仅正向证据点；r2 (019eebde) event_type 去重 / width===0 emit；**r3 (019eebee) resolved 行吞同桶新失败 / 提升销毁浏览器证据 / 瞬态塞无窗口 → 证伪零-migration「提升」、转 event_class 分行**。三轮 Codex + 两轮 arch-reviewer 摘要见文末）。**待**：① Codex re-review（回填去重 / re-open 时序 / 读端 class 谓词两处一致性，用户触发）② migration 真库演练 → 双验放行后转 Accepted。**实现**：SEQ-20260621-02 重构为 **IMGH-P4-0M（migration 049 + 回填，硬前置）/ P4-A（写端不变量 D-212-8/9）/ P4-B（写端 resolve D-212-2/3）/ P4-C（读端 D-212-5/6）**。**关系**：refine ADR-211 D-211-2——读端改 event_class 分支 + URL 同源 + browser 窗口 + 写端联动 resolve + 事件分行（非 supersede；ADR-211 端点契约框架不变）。**🚨 含 schema 变更**（broken_image_events 加 event_class 列 + 换唯一约束）→ 0M 卡须同步 architecture.md。
+
+**背景/问题（实地核验，arch-reviewer 复核 PASS）**：problem-images「真破损」桶对**已恢复**封面系统性误报——7 张 `poster_status='ok'`、治理抽屉内部正常显示「ok」的封面（翘楚 / 名侦探柯南 / 危险关系 / 大唐迷雾 第一季 / 无垢的证人 / 冰湖重生 / 信仰奴隶：复印使者）被归类「真破损」。根因＝系统有**两套真源且结构性漂移**：① `media_catalog.<kind>_status`（当前态，**per-catalog**）② `broken_image_events`（事件流，**per-video**，`resolved_at` 仅人工 `resolveImageEvents`〔scan.ts:369-383〕单一入口写）。problem-images `problem_reason` CASE（scan.ts:173-179）让 `event_type IS NOT NULL THEN 'broken_event'` 分支**无条件压过当前 status**；而 worker 复检 HEAD-ok 写 `ok`（imageHealthWorker.ts:165）/ `low_quality`（:160）/ apply-candidate 写 `pending_review`（ImageHealthService）/ rescan 均**不联动 resolve 旧事件**（`updateCatalogImageStatus` imageHealth.ts:127-144 仅 UPDATE status 列）→ 未解决白名单事件永久残留 → 已恢复图被判真破损。
+
+**假阳性充分条件（arch-reviewer 修正「唯一路径」表述）**：`status='ok'` 行进「真破损」的**唯一充分条件 = 残留一条未解决白名单事件**（`event_type ∈ BROKEN_SAMPLE_EVENT_TYPES`〔scan.ts:53-55〕`AND resolved_at IS NULL`）。其产生有**两个来源**：
+- **来源 A（bug，可写端根治）**：worker 复检恢复（HEAD-ok）不联动 resolve → 服务端类事件（fetch_404/fetch_5xx/empty_src/decode_fail）残留。
+- **来源 B（合法，不可写端清）**：前台浏览器真实渲染失败持续上报 `client_load_error`（`/internal/image-broken`）——即便写端 resolve 了旧事件，下一个失败 beacon 又 upsert 新未解决事件。**这是设计意图（真实用户端裂图必须可见），不是 bug。** 故 D3 不能用「HEAD-ok 一律清 client_load_error」根治（会制造 resolve/上报抖动，比永久残留更糟）。
+
+> low_quality / pending_review 行若残留旧白名单事件，会被 CASE 显示成 broken_event（**reason 错配**，分色/排序错），但它们本就 `status≠ok` 应在板内，非「假阳性入板」；D-212-2 写端清残留后错配自然消除。
+
+### 决策
+
+- **D-212-1（问题定性 = 事件生命周期建模缺口 / Codex 三轮 + arch-reviewer round-2 后定型）**：根治非「单点补丁」，根因是 `broken_image_events` **单行模型无法表达三类异构生命周期**（详见 D-212-8）。修复 = **事件按 class 分行（D-212-8 migration）+ 三道收敛机制各治一类残留**：
+  - **写端即时 resolve（D-212-2/3）**：server 类行在 status 取得正向证据时清当前 URL 事件（治**来源 A**：当前 URL 恢复）。
+  - **读端 URL 同源守卫（D-212-5 ①）**：只计匹配 catalog 当前 URL 的事件（治**替换 URL 残留**：旧 URL 的 server 行写端 hash 不匹配清不掉，读端按 URL 排除）。
+  - **读端 browser 类时序窗口（D-212-5 ②）**：对永不可写端 resolve 的 `client_load_error` 超窗衰减（治**来源 B**：当前 URL 持续上报又停）。
+  - 三道机制各治一类残留，**缺一即留假阳性**；其正确性**依赖 D-212-8 的 class 分行 + D-212-9 的 event_type 正确分类**两个写端不变量（否则单行坍缩使读端分层漏判/误判，3 轮 Codex 反复证明）。**class 分行 + 三机制 + 两不变量** 叠加方为「逻辑链完备」。
+  - **演进史（透明记录）**：v1 双机制 → v2/v3 三机制 + 零-migration「event_type 提升」写端不变量 → **v4 因 3 轮 Codex 同根反复，arch-reviewer round-2 裁决转 event_class 分行（引入 migration 049），废弃提升机制**。零-migration 约束解除依据 = CLAUDE.md 价值排序「正确性 #1 > 改动收敛 #5」+ 绝对禁止项「最小改动作为首要依据绕过架构约束」。
+
+- **D-212-2（写端·触发点 = 正向「可取回+可解码」证据 + 按事件类分别 resolve / D1，arch-reviewer 精化 + Codex HIGH-2 修订）**：resolve 触发点**不是 HEAD-ok 单独**——HEAD 200 仅证「URL 可达」，不证「body 可取回/可解码」（poster/backdrop 在 HEAD-ok 后还会 GET+sharp，GET 失败时 `fetchImageDimensions` 返回 `0×0` → worker 写 low_quality）。若在 HEAD-ok 提前清服务端类事件，则「HEAD 200 但 body 取回失败」的图会把真 `fetch_5xx` 误清、掉出真破损路径（Codex HIGH-2）。故 resolve 落点 = **拿到正向「可取回+可解码」证据时**，按事件类与 kind 分别裁决（禁一刀切清白名单全集）：
+  - **服务端可达性类 `{fetch_404, fetch_5xx, empty_src}`**：
+    - **有尺寸约束 kind（poster/backdrop，worker GET+sharp）**：推迟到 `fetchImageDimensions` 返回 `width>0`（GET+sharp 成功 = body 已取回解码）才 resolve。
+    - **无尺寸约束 kind（logo/banner_backdrop，worker 不 GET）**：HEAD 200 即 resolve（无更强信号可用；**弱保证**，文档化——HEAD≠body，对可选 kind 可接受）。
+  - **`decode_fail`**：仅在 sharp 产出有效尺寸（`width>0`）才 resolve（仅有尺寸约束 kind 跑 sharp）。
+  - **`width===0` 出口绝不 resolve**：worker 当前对 `width<minWidth`（含 `width===0`）写 `low_quality`/`dimension_too_small`（:158-160），但 `width===0` 语义是「body 取不到/解不开」=真破损，**须保留破损信号**，不得清任何服务端/decode 事件。
+  - **`client_load_error`**：**永不**自动 resolve（归 D-212-4）。
+  - **覆盖出口修正（替代旧表述「覆盖 ok+low_quality 两出口」）**：resolve 仅发生在 **`width>0` 的两类出口**——`ok`（:165，width>0 且比例合格）+ `aspect_mismatch`（width>0 但比例不符，**body 已成功取回**）；**不**在 `width===0` 出口（已由 D-212-9 改 emit server 类 broken）。
+  - **A 模型简化**：resolve 只清 `event_class='server'` 行（D-212-3），browser 行由 class 隔离天然不被碰——「禁把 client_load_error 加进 resolve 白名单」的护栏（D-212-4）在 A 下由 class 边界**结构保证**，无需依赖白名单参数正确性。
+
+- **D-212-3（写端·作用域 = catalog ∩ url_hash / D2，arch-reviewer 加 url_hash 守卫）**：resolve 作用域 = **同 catalog 反查其下全部 video（status per-catalog，worker job 单 video 但 status 影响整 catalog）∩ 同 `url_hash_prefix`（= 本次复检 URL 的 hash）∩ 可 resolve 白名单**。语义＝「我复检的这个 URL 恢复了 → 只清这个 URL 的旧事件」。`url_hash_prefix` 列已存在（imageHealth.ts upsert 写入），加守卫零成本：既覆盖「多 video 共享同 URL」主场景（hash 相同），又避免「catalog 换新 URL 后连带误清某 video 仍在渲染的旧 URL 事件」（ADR-174 redirect 边界假阴性）。SQL（A 模型下按 `event_class='server'` 限定，**天然排除 browser/transient**，无需 event_type 白名单；**不含 bucket** → 一次清掉该 URL 全部历史桶的 server 行，arch-reviewer 残留-3）：`UPDATE broken_image_events SET resolved_at=NOW(), resolution_note='auto: recheck recovered' WHERE video_id IN (SELECT id FROM videos WHERE catalog_id=$1 AND deleted_at IS NULL) AND image_kind=$kind AND resolved_at IS NULL AND url_hash_prefix=$hash AND event_class='server'`。**绝不碰 browser 行**（client_load_error 永不写端 resolve，D-212-4，A 下由 class 隔离自动保证）；`decode_fail` 属 server 类、仅在 sharp width>0 出口调用（D-212-2 落点已保证）。
+
+- **D-212-4（语义裁决·client_load_error 不写端清 / D3，核心护栏）**：HEAD-ok **不** resolve `client_load_error`——**HEAD-ok ≠ 浏览器可渲染**（防盗链 Referer / CORS / `crossorigin` / 图片格式协商 / 证书链对 Node fetch 与浏览器差异）。client_load_error 是最强「图坏了」证据（真实用户端渲染失败），用服务端弱证据否定它 = 静默掩盖真裂图。**否决「带浏览器头 GET 复核」**（Node 端无法 100% 复现浏览器渲染管线，引入「自认修好但浏览器仍裂」假阴性 + worker 复杂度/外呼）。**收敛机制**：靠 D-212-5 读端时序衰减（超窗未再上报 = 用户端已不裂，自然出板）+ 保留 `resolve-event` 人工逃生口。**实施护栏（写进 ADR 防越界）**：D-212-2 实施者**禁止**把 `client_load_error` 加进 resolve 白名单（否则刚 resolve 下个 beacon 又拉回 → resolve/上报抖动）。
+
+- **D-212-5（读端·URL 同源守卫 + 时序衰减兜底 = A' 零 migration / D4，arch-reviewer 从 A 降级 + Codex HIGH-1 修订）**：读端谓词三层守卫，缺一不可：
+  - **① URL 同源守卫（新增，Codex HIGH-1 核心修订）**：事件须匹配 catalog **当前** URL（`b.url = mc.<urlcol>`）才计入当前行。**为何必须**：D-212-3 写端按 `url_hash_prefix` 同源 resolve（防假阴性），但「替换 URL」场景下旧 URL 的服务端类事件 hash≠新 URL → 写端不清、又因服务端类**无时间窗口** → 读端永久计数 → **已成功替换的当前图仍判 broken_event**（正是 ADR-212 要消的假阳性，写端守卫单独反而制造它）。URL 同源守卫使读端只认「当前 URL 的事件」，旧 URL 事件被排除。
+  - **② event_class 分层（A 模型：按 `event_class` 列，取代 event_type 白名单列表匹配）**（在 URL 同源 ∩ `resolved_at IS NULL` 基础上）：
+    - **`event_class='server'`**：无时间窗口——「同源 ∩ 未 resolve」即真未恢复（同源旧 URL 残留已被 ① 排除；同源当前 URL 的恢复由写端 D-212-2 即时 resolve server 行）。
+    - **`event_class='browser'`**：加 `last_seen_at >= NOW() - INTERVAL 'N days'`（N=7，对齐既有 `brokenLast7Days` 口径 imageHealth.ts:229），**超窗自然衰减出板**（写端永不清，靠窗口收敛；不丢窗口内真实信号）。
+    - **`event_class='transient'`**：**永不计入真破损**（结构化表达 ADR-210 D-210-6「刻意排除 timeout/dimension/aspect」）。
+  - **③ `resolved_at IS NULL`**（既有，A 下 per-class 独立 resolved_at）。
+  - **三道配合的完备性**：① 排除「替换 URL 的旧 server 行」（round-1 HIGH-1）；写端 D-212-2 即时清「当前 URL 恢复」的 server 行（来源 A）；② browser 行窗口衰减「当前 URL 持续上报又停」（来源 B）。**A 下 server/browser 分行 → 写端 resolve 与 browser 窗口互不干扰**（root cause 溶解，round-3 HIGH-2 消失）。① URL 同源守卫与 class 分行**正交**（A 不替代它——替换 URL 的旧 server 行 hash 不同、写端清不掉，仍需读端 URL 排除）。
+  - **否决（历史，v4 已转 A）**：A'「event_type 提升 + 零 migration」经 3 轮 Codex 同根反复证明单行模型结构不足（提升与独立 resolve 数学互斥）→ arch-reviewer round-2 裁决转 event_class 分行（D-212-8）。读端「加 `<kind>_status_checked_at` 列」「CASE 屏蔽 status=ok」「不做」三方案在更早轮次已否决（理由见演进史）。
+
+- **D-212-6（读端·谓词单一真源化 / total 不漂移硬约束，承 ADR-209 §17.3.2 + A 模型 event_class 谓词）**：`getProblemImages`（LATERAL 子查询 scan.ts:156-163）与 `getProblemImageCounts`（经 `problemFilterSql` EXISTS，:232-235）当前**语义等价但两处文本**。A 模型谓词**必须同时改两处**否则 counts(total) 与列表行数漂移（ADR-209 D-209-1 §17.3.2 红线）。**强制**收敛为**单一函数** `brokenEventPredicateSql(currentUrlExpr, browserWindowDays)`（CLAUDE.md 价值排序 2「同一逻辑提取」应有沉淀）；真破损谓词按 class 分支：
+    ```
+    (b.event_class='server'  AND b.url=${currentUrlExpr} AND b.resolved_at IS NULL)
+    OR
+    (b.event_class='browser' AND b.url=${currentUrlExpr} AND b.resolved_at IS NULL
+       AND b.last_seen_at >= NOW() - INTERVAL '${browserWindowDays} days')
+    -- transient 永不计入
+    ```
+  - **LATERAL 子查询（scan.ts:156-163）当前 `video_id + image_kind + resolved_at + event_type=ANY(白名单)` → 改 `+ url=mc.<urlcol> + 按 event_class 分支`**；EXISTS 路径同注入（同一函数生成），保证两路等价、total 不漂移。
+  - **不改** `problemReason` CASE（:173-192）——reason 错配由写端 D-212-2/3 清 server 残留 + 读端 ① URL 同源排除旧事件 + A 分行后自然消失，读端 CASE 维持原样。
+
+- **D-212-8（写端不变量·event_class 分行 = 去重键加判别维度 / D8 ⟵ Codex 三轮 + arch-reviewer round-2 模型转向；废弃零-migration「event_type 提升」）**：**根因深化（arch-reviewer round-2）**——单行模型把「桶内取最强信号」（提升）与「按类独立 resolve / 独立窗口」（D-212-2/5）两个**数学上互斥**的需求压进同一行：提升=多类坍缩成一个，独立 resolve/窗口=多类必须并存各自演化。单行下提升方向无论 server>browser 还是 browser>server **都丢一类证据**（Codex round-3 HIGH-2 活证据）。3 轮 Codex 同根反复（round-2 event_type 被吞 / round-3-1 resolved 行吞同桶新失败 / round-3-2 提升销毁浏览器证据）均此结构缺陷的不同塌缩边界。
+  - **决策（引入 migration 049，arch-reviewer 选方案 A）**：`broken_image_events` 加 **`event_class` 判别列** `∈ {server, browser, transient}`，**唯一键 4 列 → 5 列**：`(video_id, image_kind, url_hash_prefix, bucket_start, event_class)`。三类各占**独立行、独立 resolved_at、独立生命周期**——server：写端可 resolve / 无窗口；browser：永不写端 resolve / 7 天窗口；transient：非白名单 / 不入真破损。**「提升」机制整条废弃**（跨类不再坍缩 → round-3-2 + round-2 凭空消失，非加防御）。
+  - **event_class 派生（纯函数 `deriveEventClass(eventType)`，单一真源；event_type 仍为唯一输入、class 为派生防漂移）**：`{fetch_404,fetch_5xx,empty_src,decode_fail}→server`｜`{client_load_error}→browser`｜`{timeout,dimension_too_small,aspect_mismatch}→transient`（structurally 表达 ADR-210 D-210-6「刻意排除」）。
+  - **migration 049 顺序（真库演练，回填去重）**：加列(nullable) → 回填 `event_class`（按派生 CASE）→ `SET NOT NULL` + CHECK → 建新 5 列唯一索引 → drop 旧 4 列索引。**回填不产生重复键**（旧 4 元组每组≤1 行，加列后仍唯一）；接受「历史坍缩行 event_class 固定为其当前 event_type 派生类」的信息损失（存量靠 D-212-7 一次性重扫产出正确分行事件收敛）。
+  - **ON CONFLICT re-open（finding round-3-1，A 下仍需、但 per-class 干净）**：`DO UPDATE SET occurrence_count+1, last_seen_at=EXCLUDED, event_type=<class 内提升>, resolved_at=CASE WHEN existing.resolved_at IS NOT NULL THEN NULL ELSE existing END, resolution_note=同`。**新失败到达 = 推翻「已解决」→ re-open**；不重置 `first_seen_at`。re-open 只在**同 class** 内（class 边界天然隔离误伤——写端 resolve server 行后同桶 browser 失败不会误 re-open 该 server 行，A 优于单行 B 的体现）。
+  - **class 内 event_type 仅 server 行保留提升**（纯展示 `problemReason`/`brokenDomain` 用途，不影响破损判定；建议 `decode_fail>fetch_5xx>fetch_404>empty_src`）；browser 仅一型无需；transient last-write-wins。
+  - **`BROKEN_SAMPLE_EVENT_TYPES` 白名单不删**：转为「event_class 派生反向映射」（server∪browser 集合）真源，供 worker 分类 + 测试断言复用；**读端谓词改用 `event_class` 列**（索引友好、语义自解释）。
+  - **🚨 BLOCKER 级前置**：migration = schema 变更 → **必须同步 `docs/architecture.md`**（CLAUDE.md 绝对禁止项）；0M 卡 commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
+
+- **D-212-9（写端·width===0 = body 取回/解码失败映射 server 类 event_type — 强制前置 / Codex round-2 HIGH-2 + round-3 MEDIUM）**：首次观测 HEAD 200 而 GET/sharp 返 `0×0`（imageHealthWorker.ts `fetchImageDimensions` 当前把 HTTP 非 ok / fetch 抛 / sharp 抛 / 尺寸 undefined 全折叠 0×0）→ worker 记 `dimension_too_small`（transient）→ 不算 broken，**但语义是「body 取不到/解不开」= 真破损** → 假阴性。
+  - **修订（零代码 migration，仅 worker 分类逻辑）**：`fetchImageDimensions` 改返**判别式结果**，按失败性质精确映射 event_type（再由 D-212-8 `deriveEventClass` 定 class）：
+    - **HTTP 404 → `fetch_404`（server）｜HTTP 5xx → `fetch_5xx`（server）｜sharp 解码抛 → `decode_fail`（server）**：写 `status='broken'`，该出口**不** auto-resolve（D-212-2）。
+    - **网络/超时/abort/DNS/TLS 抖动（worker 侧瞬态，浏览器仍可渲染）→ `timeout`（transient）**（Codex round-3 MEDIUM：禁把瞬态塞 server 无窗口类、重造 ADR-210 timeout 噪声假阳性；如需「跨重试确认」可后续升级，当前归 transient 保守）。
+    - **取回成功且能解码、仅尺寸小/比例偏 → `dimension_too_small`/`aspect_mismatch`（transient）→ low_quality**（不变）。
+  - 使「definitive HTTP/decode 失败的首次观测」即 surface 为 server 类 broken；瞬态网络失败不污染真破损。**与 D-212-8 叠加**（D-212-9 定 event_type 正确分类，D-212-8 定 class 分行）——arch-reviewer 明示二者不互相替代。
+
+- **D-212-7（实施拆分 + 存量回填 / arch-reviewer round-2 后重构为 0M/A/B/C 四卡）**：
+  - **IMGH-P4-0M（migration + 回填·硬前置，D-212-8 schema）**：migration 049（加 `event_class` 列 → 回填派生 → NOT NULL+CHECK → 建 5 列唯一索引 → drop 旧 4 列索引）+ `deriveEventClass` 纯函数 + 单测（3 类 + 8 event_type 映射）+ **同步 `docs/architecture.md`**（🚨 BLOCKER 级）。建议模型 **opus**（schema 跨 4 消费方；本裁决已满足强制 Opus 前置，commit 带 `Subagents` trailer）。**真库演练回填+换约束顺序**。
+  - **IMGH-P4-A（写端不变量，D-212-8/9）**：① `upsertBrokenImageEvent` 改 5 列 ON CONFLICT + class 内 event_type 提升（仅 server）+ re-open（resolved_at/note 置 NULL）② `fetchImageDimensions` 判别式 + width===0 按性质 emit server 类（HTTP 404/5xx/decode）或 transient（网络/超时）+ 写 broken（D-212-9）。**删除跨类提升（原零-migration D-212-8 作废）**。
+  - **IMGH-P4-B（写端 resolve，D-212-2/3）**：新增 `resolveRecoveredImageEvents(db, {catalogId, kind, urlHash})`（scan.ts，WHERE `event_class='server'`、**不含 bucket、不含 client_load_error**）+ worker **正向证据点**调用（经 ImageHealthService，不 worker 直调）。
+  - **IMGH-P4-C（读端，D-212-5/6）**：抽 `brokenEventPredicateSql(currentUrlExpr, browserWindowDays)` 单一真源 → **event_class 分支 + URL 同源守卫 + browser 窗口**；LATERAL 与 EXISTS 两处逐字同注入。
+  - **依赖关系**：**0M → A → B/C**（0M schema 全链硬前置；A 后 B/C 物理可并行）。
+  - **存量回填**：0M+A+B 上线后，已存量 7 误报（均当前 URL 未变、worker 历史误报残留）靠**一次性重扫**（既有 rescan/ids 端点）让 worker 复检产出正确分行事件 + 在正向证据点 resolve server 行收敛——**非自动，需运维触发一次**。
+
+### 关联 ADR
+
+ADR-211（refine D-211-2「EXISTS 未解决事件」口径——读端改 event_class 分支 + URL 同源 + browser 窗口 + 写端联动 resolve；ADR-211 端点契约/url 守卫/problemReason 框架不变；**ADR-211 状态行 `refined by ADR-212` 标记待本 ADR 转 Accepted 时补**，仿 ADR-211→210 superseded 范式）/ ADR-210（D-210-6 `BROKEN_SAMPLE_EVENT_TYPES` 白名单 → A 模型转为 `event_class` 派生反向映射；「刻意排除 timeout/dimension/aspect」由 `transient` 类结构化表达，对齐增强）/ ADR-209（§17.3.2 total 不漂移 = D-212-6 硬约束）/ ADR-046（048 broken_image_events schema：`event_type`/`resolved_at`/`last_seen_at`/`url_hash_prefix` 既有；**A 模型新增 `event_class` 列 + 换唯一约束 = migration 049**）/ ADR-174（catalog redirect 致 N video:1 catalog = D-212-3 作用域 + url_hash 守卫动因）/ ADR-135（image_health 只读无审计；写端 resolve 属 worker 自动化非 admin 动作）。
+
+### 端点契约（verify:endpoint-adr）
+
+**无新增/修改 admin route**（P4-A/B/C 均改既有 worker/query，不新增 `fastify.{get,post,...}`，不触 verify:endpoint-adr 红线）。
+
+### BLOCKER / 前置
+
+**🚨 一个硬 BLOCKER（A 模型引入）**：migration 049 = schema 变更 → **必须同步 `docs/architecture.md` broken_image_events 表定义**（CLAUDE.md 绝对禁止项「schema 变更不同步 architecture.md」），0M 卡内同 commit。其余软护栏：① **migration 049 回填+换约束顺序**（加列 nullable → 回填 → NOT NULL+CHECK → 建新 5 列索引 → drop 旧）须**真库演练**，顺序错则 SET NOT NULL 失败；② client_load_error 不可写端 resolve（D-212-4，A 下由 `event_class='browser'` 隔离**结构保证**）；③ D-212-3 写端 resolve 限 `event_class='server' ∩ url_hash ∩ 不含 bucket`；D-212-2 resolve 仅在正向证据点（`width>0`，Codex r1-HIGH-2）；④ **D-212-5 读端 URL 同源守卫**（`b.url=mc.<urlcol>`，与 class 分行正交，仍必需，Codex r1-HIGH-1）；⑤ D-212-6 LATERAL 与 EXISTS 两处 event_class 谓词逐字同注入（total 不漂移红线）；⑥ D-212-9 worker 分类正确（HTTP/decode→server / 瞬态网络→transient，Codex r3-MEDIUM）；⑦ **0M schema 跨 4 消费方 → CLAUDE.md 强制 Opus（本 arch-reviewer 裁决已满足）+ commit 带 `Subagents` trailer**；⑧ **定稿前须 Codex re-review（聚焦回填去重/re-open 时序/读端两处一致性）+ migration 真库演练双验**。
+
+### arch-reviewer 裁定摘要 2026-06-21（claude-opus-4-8 / agentId ab6f77498087aab55）
+
+**根因 PASS + 「需修改」（4 决策方向正确，需 4 处精化，已全吸收）。** 事实逐条核验为真：worker 全程无 resolved_at 引用；`resolveImageEvents`（**真名，prompt 误作 resolveBrokenImageEvents，已更正**）是唯一写 resolved_at 入口；apply-candidate/rescan 全写 pending_review 不 resolve；`videos.catalog_id` N:1（migration 028 普通索引非 UNIQUE）；`media_catalog` 无 checked_at 列（migration 048 仅枚举 status）；CASE broken_event 无条件压过 status。精化吸收：
+- **挑战「唯一路径」→ 已吸收**：补来源 B（client_load_error 持续上报合法路径），定性「假阳性唯一充分条件 = 残留未解决白名单事件，两来源」（D-212-1）。
+- **D1 精化 → 已吸收**：落点「HEAD-ok 确认后、sharp 分支前」非 clearFailure 内；**按事件类分别 resolve**（服务端类即清 / decode_fail 待 GET 成功 / client_load_error 永不清）（D-212-2）。
+- **D2 精化 → 已吸收**：加 `url_hash_prefix` 守卫，作用域 = catalog ∩ url_hash ∩ 可 resolve 白名单（D-212-3）。
+- **D3 精化 → 已吸收**：「保留人工」不足以收敛 → 补 D-212-5 时序衰减；否决「带浏览器头 GET 复核」（D-212-4）。
+- **D4 降级 → 已吸收**：A（新列）→ **A'（last_seen_at 时序窗口，零 migration）**，否决 A/B/不做（D-212-5）。
+- **读端一致性硬约束 → 已吸收**：谓词单一真源化 `brokenEventPredicateSql`，getProblemImages/Counts 共用，不改 problemReason CASE（D-212-6）。
+- **蓝图 → 已吸收**：A/B 零 migration 物理可并行逻辑 A→B + 存量一次性重扫回填（D-212-7）。
+
+### Codex 对抗性审核摘要 2026-06-21（codex-rescue / thread 019eeb7a-e3c4-7642-a8e7-66ccd9495254）
+
+**needs-attention（2 HIGH，均成立、已吸收修订）。** 「No-ship」定性：ADR 草案 v1 在「替换 URL 后」仍留核心假阳性 + 一处写端 resolve 过早会连带清掉真 GET 失败。
+- **HIGH-1（读端谓词未绑当前 URL → 替换后旧事件永久假阳性）→ 已吸收**：v1 写端 D-212-3 按 `url_hash_prefix` 同源 resolve（防假阴性），但读端 D-212-5/6 仅按 kind/事件类/resolved_at/client 窗口过滤，**未按 URL**。失败路径＝换新有效 URL 后旧 URL 服务端类事件 hash 不匹配、写端不清，又因服务端类**无时间窗口** → 读端永久计数 → 已替换成功的当前图仍判 broken_event（正是 ADR 要消的假阳性）。**修订**：D-212-5 ① 加读端 URL 同源守卫（`b.url = mc.<urlcol>`）；D-212-6 `brokenEventPredicateSql` 签名加 `currentUrlExpr`，LATERAL 与 EXISTS 两处同注入；D-212-1 收敛模型升为「写端 resolve + 读端 URL 同源 + 读端 client 窗口」三机制配合。
+- **HIGH-2（HEAD-ok 提前 resolve 会把真 GET 失败掩盖为 low_quality）→ 已吸收**：v1 D-212-2 在 HEAD 200、GET/sharp 之前即清 `{fetch_404,fetch_5xx,empty_src}`。但 poster/backdrop 随后 GET，若 GET 失败 `fetchImageDimensions` 返 `0×0` → worker 写 low_quality（非 fetch/decode 事件）→ 真 body 取回失败被掩盖、旧 fetch_5xx 被误清掉出真破损路径（HEAD≠body 的弱信任边界）。**修订**：D-212-2 resolve 落点改为**正向「可取回+可解码」证据**——poster/backdrop 推迟到 `width>0`（ok + aspect_mismatch 出口）、logo/banner（无 GET）HEAD-ok；**`width===0` 出口绝不 resolve**；登记「width===0 应 emit 真 fetch/decode 事件」为 P4-A 可选子项。
+- **Next steps（Codex）**：修订后 re-review 读/写谓词一致性 → 见 round-2。
+
+### Codex 对抗性审核摘要 round-2 2026-06-21（codex-rescue / thread 019eebde-9338-7650-add4-8f68d3c7ade0）
+
+**needs-attention（2 新 HIGH，均成立、已吸收）。** 确认 v2 文本闭合了 r1 两处命名修订，但「三机制完备」claim 仍依赖两个现有代码不保证的写端不变量：
+- **r2-HIGH-1（event_type 去重吞掉真破损信号）→ 已吸收（D-212-8）**：`broken_image_events` 去重键不含 event_type，ON CONFLICT 仅 bump occurrence/last_seen、不更新 event_type（imageHealth.ts:96-98）。同 URL 同桶内非白名单（timeout/dimension）先落 → 后到白名单（fetch_404/client_load_error/decode_fail）被吞 → 读端按 event_type 分层假阴性。**修订**：ON CONFLICT 按严重度提升 event_type（服务端白名单 > 浏览器白名单 > 非白名单），零 migration；列为 P4-B/C 强制前置。
+- **r2-HIGH-2（width===0 首次观测仍假阴性）→ 已吸收（D-212-9）**：r1-HIGH-2 仅防「误清旧事件」，但首次观测 HEAD-ok 而 GET/sharp 返 0×0 → 记 dimension_too_small（非白名单）→ 不算 broken_event，无旧事件可保留时假阴性。**修订**：原 D-212-2「width===0 应 emit 真 fetch/decode 事件」可选项**提升为强制 D-212-9**——`fetchImageDimensions` 判别 body 取回/解码失败 → emit `fetch_5xx`/`decode_fail` + 写 broken（仍不 auto-resolve）；零 migration。
+- **Next steps（Codex）**：把 event_type 去重语义 + width===0 真破损 emit 作为强制验收条件；**round-2 的「event_type 提升」修订经 round-3 证伪、转 event_class 分行**（见下）。
+
+### Codex 对抗性审核摘要 round-3 2026-06-21（codex-rescue / thread 019eebee-38ca-7a60-a233-55b7f6f55055）
+
+**needs-attention（2 HIGH + 1 MEDIUM，均成立）→ 触发模型转向（v3 零-migration「event_type 提升」证伪 → v4 event_class 分行）。** Codex 戳穿「单 event_type 行 + 提升」仍有结构洞：
+- **r3-HIGH-1（resolved 行吞同桶新失败）**：写端 resolve 后 resolved_at 置位，同 URL 同桶后到新失败 ON CONFLICT 命中该行仅 bump、**不重置 resolved_at** → 藏在 `resolved_at IS NOT NULL` 后 = 假阴性。**吸收**：D-212-8 ON CONFLICT **re-open**（resolved_at/note 置 NULL），per-class 隔离误伤。
+- **r3-HIGH-2（服务端>浏览器提升销毁浏览器证据）**：同桶 client_load_error+fetch_5xx 提升成 fetch_5xx → 写端 resolve 服务端类 → 浏览器证据销毁、永拿不到 7 天窗口，与 D-212-4 冲突。**根因（arch-reviewer round-2 深化）**：单行下「提升取最强」与「按类独立 resolve/窗口」**数学互斥**，提升方向无论朝哪都丢一类证据。**吸收**：**废弃提升机制**，D-212-8 转 **event_class 分行**（server/browser/transient 各独立行独立 resolved_at），HIGH-2 + r2-HIGH-1 凭空消失。
+- **r3-MEDIUM（width===0 把瞬态 GET 失败塞无窗口 broken）**：D-212-9 让所有 HTTP 非 ok + fetch 网络失败都 emit server 类 → worker 侧瞬态网络/超时/abort 被塞无窗口类、重造 ADR-210 timeout 噪声假阳性。**吸收**：D-212-9 细分——HTTP 404/5xx + decode→server；**网络/超时/abort/DNS/TLS→transient**（不入真破损）。
+- **Next steps（Codex）**：定稿前再 re-review（回填去重 / re-open 与写端 resolve 时序 / 读端 class 谓词两处一致性 / D-212-9 瞬态不被 server 吞）。
+
+### arch-reviewer 裁定摘要 round-2 2026-06-21（claude-opus-4-8 / agentId ad7eedc3859a734ba）
+
+**「需修改 → 选方案 A（event_class 分行 + migration 049）」。** 根因深化：单行模型把「桶内取最强」与「按类独立 resolve/窗口」两个**数学互斥**需求压进同一行 → 提升方向无论朝哪都丢证据 → 3 轮 Codex 同根反复。**裁决**：零-migration 约束**解除**（CLAUDE.md 正确性 #1 > 改动收敛 #5；绝对禁止「最小改动绕过架构约束」）；选 A——A 让一整个 HIGH（r3-HIGH-2 + r2 提升）凭空消失而非加防御。精确规约全吸收：event_class 派生映射 / migration 049 五步顺序 + 回填去重 / class 内仅 server 行保留 event_type 提升（纯展示）/ ON CONFLICT re-open 语义 / 读端改 event_class 列谓词 / **D-212-5 URL 同源守卫与 class 分行正交、全保留** / D-212-9 保留为前置。残留 3 LOW（transient 漏报靠 D-212-9 / catalog redirect url_hash 兜底 / 跨桶 resolve 不含 bucket）均 A/B 共有或已覆盖。拆 4 卡（0M/A/B/C），0M 含 architecture.md 同步 BLOCKER。定稿前须 Codex re-review + 真库演练。
+
+---
+
+## ADR-213：图片健康双真源溶解（方案 C）— 健康判定单真源化 + 浏览器自过期信号 + 遥测降级只读（supersede ADR-212 / refine ADR-211 D-211-2）（SEQ-20260621-02 / IMGH-P4-0）
+
+**状态**：**Draft v5 — Codex round-1~4 needs-attention 全吸收**（arch-reviewer (claude-opus-4-8, a06695fa2c0aa033c) CONDITIONAL-PASS〔4 补正 + 7 放行条件〕→ **Codex round-1 (a1d0700349d19909a)：3 HIGH+2 MEDIUM+1 LOW** 吸收〔URL 守卫 / stale-ok / 4 kind / 双写 warn / recall / total〕→ **round-2 (019eedf0)：2 HIGH+1 MEDIUM = round-1 修正的传播/一致性缺口**〔回填 URL 守卫 / 瞬态刷 checked_at / stale-ok 并入单一谓词〕→ **round-3 (019eee13)：1 HIGH**〔checked_at 回填用通用 `updated_at` 违反收紧语义 → 改不回填、留 NULL→unknown〕→ **round-4 (019eee21)：1 HIGH = 时序缺口**〔一次性扫描放 0M 早于写 checked_at 的 P4-A → 改 `0M→A→A-SCAN门→C`，C 硬依赖扫描完成〕，均吸收。摘要见文末。**数据模型层 rounds 1–3 已稳定不再重开；round-4 属 rollout 时序层**）。**待**：Codex re-review（验证 round-4 闭环，用户触发）→ 放行后转 Accepted。**实现**：转 Accepted 后拆 **IMGH-P4-0M（migration + 回填，硬前置，opus）/ P4-A（worker，sonnet）/ P4-B（internal 端点，sonnet）/ P4-C（读端 + DTO，opus）**。**关系**：**supersede ADR-212**（dissolve 取代 patch，二者互斥）+ **refine ADR-211 D-211-2**（读端判定口径 events EXISTS → 信号列窗口；ADR-211 端点契约/响应框架不变）。**🚨 含 schema 变更**（media_catalog +8 列）→ 0M 卡须同步 architecture.md §5.11。
+
+**背景/问题**：承 ADR-212 §背景——problem-images「真破损」桶对已恢复封面系统性误报（7 张 `poster_status='ok'` 被判真破损）。ADR-212 三轮 Codex 同根反复证明：根因是**两套权威真源结构性漂移**（`media_catalog.<kind>_status` 当前态/per-catalog vs `broken_image_events` 事件流/per-video，且无「状态=事件投影」reducer），而「让两源对齐」（event_class 分行 + 写端 resolve 联动 + 读端 URL 同源/窗口）是给漂移打补丁、复杂度高且脆弱（任一机制漏判即留假阳性）。**方案 C 改为溶解双真源**：健康判定只认当前态 + 一个浏览器自过期信号，**根本不读 events 判命中** → ADR-212 全部对齐机制整类消失。
+
+**事实核验（arch-reviewer 独立复核，附 file:line）**：① worker 全程无 `resolved_at` 引用、`resolveImageEvents`〔scan.ts:369-383〕是唯一写入口 ✓；② `media_catalog` **无任何 checked_at/client_error_at 列**（048 仅枚举 status）→ 新列均真·新增 ✓；③ **worker 无 cron/repeat/setInterval 周期巡检**（`registerImageHealthWorker` imageHealthWorker.ts:192-203 仅注册 processor；巡检全靠手动/事件触发）→ 这是先存缺口，是方案 C 最大弱点（D-213-9）✓；④ 前台 `reportBrokenImage` 硬编码 `reason:'client_load_error'`（report-broken-image.ts:27），**实际从不发 `empty_src`**（端点保留值）✓；⑤ 两处 problem-images 谓词语义等价但文本分立（getProblemImages LATERAL vs getProblemImageCounts EXISTS）✓；⑥ 连败置 broken 仅 HEAD 失败路径（:140-148），URL 语法非法/确定性失败立即 broken ✓。
+
+### 决策
+
+- **D-213-1（问题定性 = 溶解优于对齐）**：健康判定真源收敛为 **`<kind>_status`（server 当前态）+ `<kind>_client_error_at`（browser 自过期信号）两列**；`broken_image_events` **退出健康读路径**、降级为纯遥测（趋势/域名/`brokenLast7Days`）。两读入正交（当前态 vs 自过期信号），**不存在跨源覆盖悖论**——这使 ADR-212 的 event_class/re-open/url_hash 守卫/migration 049 全部不需要。价值排序依据：正确性 #1（结构性消除假阳性）> 改动收敛 #5。
+
+- **D-213-2（schema·健康巡检时间戳 `<kind>_checked_at` ×4）**：`media_catalog` 加 `poster_checked_at / backdrop_checked_at / logo_checked_at / banner_backdrop_checked_at TIMESTAMPTZ`（nullable，无 DEFAULT；NULL=「从未巡检」）。**checked_at 语义 = 最近一次「确定性健康判定」时间**（ok/low_quality/broken 出口才写；**瞬态探测出口不写**，D-213-5）——**非「最近探测尝试」**：否则瞬态失败刷新 checked_at 会让 stale-ok 假性「新鲜」、压制 D-213-7 的 unknown 暴露（Codex round-2 HIGH）。天然 per-当前-URL（worker 查的就是当前 `<kind>_url` 列），无需独立 url_hash 守卫（相对 ADR-212 D-212-3/5 的根本简化）。不加 CHECK/索引（staleness 是低频 admin 读，~5600 catalog 全表扫毫秒级）。stale 阈值 `STALE_CHECK_DAYS`（建议 30）= D-213-7 单一常量。
+
+- **D-213-3（schema·浏览器自过期信号 `<kind>_client_error_at` ×4）**：加 `<kind>_client_error_at TIMESTAMPTZ`（nullable）。**形态裁定 = 时间戳 last-write-wins，不用计数列**——时间戳 + 读端 `NOW()-INTERVAL 'N days'` 判窗即「自过期」（超窗自动失效，无需写端清理/定时清零）；计数列需「何时清零」语义会退回 resolve 联动困境（ADR-212 病灶）。窗口 **N=7**，单一常量 `CLIENT_ERROR_WINDOW_DAYS=7`（落 imageHealth.scan.ts，与 `brokenLast7Days`〔imageHealth.ts:229〕口径对齐，禁散落硬编码）。写入语义：beacon 到达直接置 `NOW()`（单调最新），不累加。**列范围 = 仅 4 受治理 kind**（poster/backdrop/logo/banner_backdrop = `PROBLEM_IMAGE_KINDS`，ADV-213-6）；`stills`（JSONB 数组）/`thumbnail`（video_episode_images）**不在 problem-images 板范围、无 `<kind>_status` 列** → **不加信号列、仅遥测**（events 仍可记，但不进健康判定/读路径）。
+
+- **D-213-4（broken_image_events schema 零改动 + 退出健康读路径）**：events 表**不加 event_class、不换唯一键、不加列**（相对 ADR-212 migration 049 的最大收敛，省整个 schema 迁移 + 回填去重风险）。读路径退出：getProblemImages/getProblemImageCounts 不再 JOIN/EXISTS events 判命中。**遥测消费方保留**（继续读 events，口径不变）：`brokenLast7Days`（NavCountsService 契约）/ `getBrokenEventsTrend` / `getTopBrokenDomains` / missing-videos LATERAL（治理表辅助展示列，非判定）/ `resolveImageEvents`（人工逃生口）。
+  - **recall 取舍（ADV-213-5，诚实记录）**：events 退出健康读路径意味着方案 C **放弃**「status='ok' 但同当前 URL 仍有未解决 server 事件」这一 ADR-212 patch 可暴露的召回。但在方案 C 写端语义下，`status='ok'` = worker 最近一次复检通过（D-213-5 确定性失败即写 broken），该「残留 server 事件」本就是 ADR-212 三轮要消的假阳性主体——**不召回是正确，非缺陷**。真正的残差风险 = **stale ok**（worker 未近期复检 + 图已坏 + 浏览器无上报），由 D-213-9 周期巡检（P4-S）+ stale-ok 可观测面补偿，而非靠保留 events 读路径。
+
+- **D-213-5（worker 改写·status+checked_at 单真源 + 吸收 D-212-9 判别式 + 连败裁定）**：
+  - `updateCatalogImageStatus`（imageHealth.ts:127-144）在**确定性出口**（ok/low_quality/broken）同步写 `<kind>_checked_at=NOW()`（列名来自 `allowedKinds` 白名单常量，非请求输入）；**瞬态出口不写 checked_at**（见连败裁定）。
+  - **吸收 ADR-212 D-212-9**：`fetchImageDimensions`（imageHealthWorker.ts:170-188）改返判别式 `{width,height,failure?:'http_4xx'|'http_5xx'|'decode'|'transient'}`；映射：URL 语法非法/HEAD 404/HEAD 5xx/GET 404/GET 5xx/sharp decode → **broken**（确定性）；width>0 但尺寸·比例不合 → **low_quality**（不变）；全通过 → **ok**。
+  - **连败裁定 = 瞬态不改 status 且不推进 checked_at，仅确定性失败置 broken**：因 worker 无周期调度（事实核验③），「连续 3 次」语义模糊、落库计数是伪确定性。瞬态网络/超时/abort/DNS/TLS → **不改 status、且不推进 `checked_at`**（保留上次值——`checked_at` = 最近确定性判定，非探测尝试；**若瞬态也刷 checked_at，stale-ok 会被假性「续命」、D-213-7 的 unknown 永不触发**，Codex round-2 HIGH）；仅 404/5xx/语法非法/decode 等确定性失败单次即置 broken。这同时消除 ADR-210 D-210-6 的 timeout 误报根因。
+  - worker **仍 emit broken_image_events 作遥测**（写入逻辑不动），但与健康判定**完全解耦**（events 不被任何健康读路径消费）。
+
+- **D-213-6（前台 browser 通道·端点契约不变 + 内部改写信号列 + events 双写）**：`/internal/image-broken` 的 method/path/无鉴权/IP 限速/204 语义**完全不变**（前台 report-broken-image.ts 零改动）。变的是端点**内部写入**——同一请求内：① 写信号列（**仅当 `image_kind ∈ {poster,backdrop,logo,banner_backdrop}`**；stills/thumbnail 跳过信号列、仅 events，ADV-213-6）+ **URL 同源守卫**（ADV-213-1）：`UPDATE media_catalog mc SET <kind>_client_error_at=NOW() FROM videos v WHERE v.id=$video_id AND mc.id=v.catalog_id AND mc.<url_col>=$url`。**URL 守卫作用**：仅当 beacon 上报 URL = catalog 当前 `<kind>_url` 才标记 → 挡掉「过期页面/旧 URL 上报」污染（不匹配则影响 0 行、静默）。**per-catalog fanout 是有意的**：健康态本就 per-catalog，URL 匹配当前 = 该 catalog 当前图在用户端裂，标记同 catalog 全部 video 视图合理（对齐 ADR-174 N:1）。② **保留 `upsertBrokenImageEvent` 双写**作遥测（趋势/域名/`brokenLast7Days` 仍需 client_load_error 流）。**双写非冗余真源**：信号列=「当前是否在窗口内报错」（自过期，驱动健康读路径）/ events=「历史报错记录」（immutable，驱动遥测），职责正交。两 UPDATE 各自 try、互不阻断，失败须**结构化 warn 日志**（含 `video_id`/`kind`/which-write，best-effort，**禁空 catch**）。**双写漂移定性（ADV-213-2）**：仅遥测写失败时健康判定不受影响（信号列已写），但 `brokenLast7Days`（events 派生，imageHealth.ts:226）与问题板计数可能短暂不一致 → `brokenLast7Days` 明确定性为**遥测口径、非权威健康计数**（UI 文案 + 本 ADR 标注）。
+  - **可选 follow-up（不强制）**：beacon 触发 rescan 入队。**裁定不做**——浏览器报错根因常为 worker 无法复现（防盗链/CORS），rescan 大概率写回 ok 不解决问题，且无鉴权端点入队会放大队列压力；信号列自过期已满足可见性。若未来要，须做「per-catalog 节流入队」并单独起卡。
+
+- **D-213-7（读端·单一谓词〔含 stale-ok〕+ total 不漂移 + problemReason 重写）**：新增单一真源函数 `problemFilterSqlV2(kind)`（落 imageHealth.scan.ts，与窗口常量同处）。**三道命中条件并入同一谓词**（Codex round-2 MEDIUM：stale-ok 必须在此单一谓词、不得另设散落面）：
+  ```
+  mc.<url> 非空非空白 AND (
+    mc.<status> <> 'ok'                                                                          -- ① 当前态非 ok
+    OR mc.<kind>_client_error_at >= NOW()-INTERVAL '7 days'                                       -- ② 浏览器自过期信号
+    OR (mc.<status> = 'ok' AND COALESCE(mc.<kind>_checked_at,'-infinity'::timestamptz)
+          < NOW()-INTERVAL 'STALE_CHECK_DAYS')                                                    -- ③ stale-ok=unknown（ADV-213-4）
+  )
+  ```
+  常量 `CLIENT_ERROR_WINDOW_DAYS=7` + `STALE_CHECK_DAYS`（建议 30）单一定义于 scan.ts，禁散落硬编码。**counts 与 list 逐字共用此函数**（CLAUDE.md 价值排序 2 沉淀）→ 结构性保证 total 不漂移（ADR-209 §17.3.2）+ **stale-ok 在 counts/list 两路一致入板**（消除 round-2 MEDIUM「counts/list 可合法丢 stale-ok」）。getProblemImages 移除 events 进 WHERE 的 LATERAL（:156-163 → 仅保留**纯遥测 LATERAL** 供 hover 展示 domain/原因，**不进 WHERE/不影响命中**）。
+  - **problemReason CASE 重写**（含 unknown）：`CASE WHEN <kind>_client_error_at>=NOW()-INTERVAL '7 days' THEN 'client_error' WHEN status='broken' THEN 'broken' WHEN status='low_quality' THEN 'low_quality' WHEN status='pending_review' THEN 'pending_review' WHEN status='ok' AND COALESCE(<kind>_checked_at,'-infinity'::timestamptz) < NOW()-INTERVAL 'STALE_CHECK_DAYS' THEN 'unknown' ELSE 'other' END`。`ProblemReason` 类型（scan.ts:75）新增 **`'client_error'`（替 `broken_event`）+ `'unknown'`** 两值（**DTO 值域变更**，跨消费方）；UI 分色/排序：`client_error`=1 / `broken`=2 / `low_quality`=3 / `pending_review`=4 / **`unknown`=5** / `other`=6。C 卡同步前端分色（`ImageMatrixCell.tsx`/`ImageHealthProblemBoard.tsx`）+ 测试（**fresh-ok 排除 vs stale-ok 入板为 unknown**）；不触 admin-ui 公开 Props（不触发强制 Opus 组件契约红线）。
+
+- **D-213-8（存量收敛·误报上线即消失，零运维）**：① **7 张误报封面上线即自动消失**——健康读路径不再读 events，`status='ok'` 行只要 `client_error_at` 不在窗口即不入板，**无需重扫/无需 resolve**（相对 ADR-212 需运维触发一次性重扫的显著优势）。② **历史 broken_image_events（~5376 条）原样保留**作遥测，无需 resolve/迁移/去重（避免 ADR-212 migration 049 回填去重的真库演练风险）。③ **`checked_at` 不用 `updated_at` 回填——留 NULL（Codex round-3 HIGH 修订）**：`media_catalog.updated_at` 是**通用时间戳**（BEFORE UPDATE 触发器维护，改标题/元数据/外部 ID 都刷），用它 seed 健康专属的 `checked_at`，会让「近期被非健康编辑过、但图久未健康复检」的 ok 行**冒充刚验证** → 绕过 D-213-7 的 `stale-ok→unknown` 网（正是 round-2 要堵的假阴性）。**改为不回填**：存量 ok 行 `checked_at=NULL` → D-213-7 `COALESCE(checked_at,'-infinity')` 判 **`unknown`**（诚实「未验证」，宁可标未知不可谎报健康）。**初始 unknown 桶 = 一次性真实健康扫描（A-SCAN）排空，但必须在 P4-A 之后跑**（Codex round-4 HIGH）：扫描依赖 A 的新 worker 写 checked_at——放 0M 时 worker 仍旧路径、写不进 checked_at → 扫描无效。**时序硬约束**：`0M → A → A-SCAN（一次性把所有 `<kind>_url` 非空行入 health-check，worker 落 checked_at 真值；不限 pending_review）→ C`；**P4-C〔unknown 谓词〕显式依赖 A-SCAN 完成**——否则 C 上线时存量 ok 全 `checked_at=NULL` → 全 `unknown` 泛滥、抵消「零运维」。扫描前 NULL→unknown 仅作安全默认，不作 C 上线态。**测试**：A-SCAN 后 ok 行 checked_at 落真值；且 `updated_at` 近期、`checked_at` NULL/陈旧的 ok 行在扫描前**仍入 unknown 桶**（证 checked_at 不 derive 自 updated_at）。④ **`client_error_at` 从 events 一次性回填——带与 D-213-6 相同的当前 URL 守卫**（Codex round-2 HIGH）：仅当未解决 client_load_error 的 **`url = catalog 当前 <kind>_url`** 且在窗口内才 seed：`UPDATE media_catalog mc SET <kind>_client_error_at=sub.last_seen FROM (SELECT v.catalog_id, MAX(b.last_seen_at) last_seen FROM broken_image_events b JOIN videos v ON v.id=b.video_id JOIN media_catalog m2 ON m2.id=v.catalog_id WHERE b.image_kind='<kind>' AND b.event_type='client_load_error' AND b.resolved_at IS NULL AND b.last_seen_at>=NOW()-INTERVAL '7 days' AND b.url=m2.<url_col> GROUP BY v.catalog_id) sub WHERE mc.id=sub.catalog_id`。**为何必须**：events 可含**旧 URL**，无此守卫会给**已替换的图** seed client_error_at → P4-C 7 天假阳性，直接抵消「误报上线即消失」。0M 测试：旧 URL 事件**不得** populate client_error_at。
+
+- **D-213-9（stale-ok 收敛·`unknown` 可观测面兜底 + 周期巡检收尾卡 / Codex ADV-213-4 修订）**：事实核验③ 暴露——系统**无自动周期巡检**，`checked_at` 会大面积 stale（ok 行回填后再不复检）。**Codex ADV-213-4 戳穿**：方案 C 读端「`status<>'ok' OR client_error 窗口`」把「stale 的 ok」等同「健康」，构成**确证的假阴性类**——图在旧 `ok` 后变坏、worker 从不复检、浏览器又无上报（如该图无前台展示位） → 永不入板。原 v1「不依赖新鲜度故不阻塞」表述**不成立**（命中确不依赖新鲜度，但「漏检」依赖）。**两道修订（职责正交，② 兜底正确性、① 自动收敛）**：
+  - **② stale-ok 并入 D-213-7 单一谓词为 `unknown`（不再散落另设·round-2 MEDIUM 修订）**：problem 板**不把「无信号」等同「健康」**——`status='ok' AND checked_at 早于 STALE_CHECK_DAYS`（含 NULL）由 **D-213-7 同一谓词**判为 **`unknown`** 入板（counts/list 一致）。**这一道即让读端诚实**（不谎报健康），**不依赖 P4-S** → 故 P4-S 可非阻塞。**前提**：`checked_at` 仅在确定性出口推进（D-213-2/5），瞬态不刷 → 否则 unknown 被瞬态「续命」压制（round-2 HIGH 已修）。
+  - **① 周期巡检 scheduler = 非阻塞根治收尾卡 IMGH-P4-S**（仿 server.ts:295 verify-scheduler setInterval：定期把 `checked_at` 超阈值的 ok/缺检行重入 health-check 队列，自动消化 unknown→ok/broken）。**不阻塞 0M/A/B/C 开发与合并**（过渡正确性已由 ② 兜底）；P4-S 上线后健康板方可宣称「零漏检/完备」。
+  - 注：「ok 行永不复检」是**先存缺口**（ADR-211/212 同样不复检），非方案 C 引入；但方案 C 让健康判定单靠 status → 必须正面处理它，不能再隐于 events 读路径。
+
+### 实施拆分（沿用 IMGH-P4 命名）
+
+| 卡 | 范围 | 依赖 | 建议模型 | 前置 |
+|---|---|---|---|---|
+| **IMGH-P4-0M** | migration（8 列 ADD COLUMN IF NOT EXISTS：4×checked_at〔**留 NULL，不回填**〕+ 4×client_error_at）+ D-213-8 ④ **client_error_at 回填 SQL（URL 守卫）** + `CLIENT_ERROR_WINDOW_DAYS`/`STALE_CHECK_DAYS` 常量 + 同步 architecture.md §5.11。**不含 checked_at 扫描**（依赖 A，见 A-SCAN 门，Codex round-4） | 无（硬前置） | **opus** | 🚨 schema 硬前置；跨 worker/internal/读端 3+ 消费方；commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer；真库回填演练 |
+| **IMGH-P4-A**（含 A-SCAN 门） | worker：`updateCatalogImageStatus` **确定性出口**写 checked_at〔瞬态不刷〕+ `fetchImageDimensions` 判别式 + 三级 status 映射（D-213-5）。**部署后跑一次性真实健康扫描 A-SCAN**：所有 `<kind>_url` 非空行入 health-check → worker 给 checked_at 落真值、排空初始 unknown 桶（**C 硬前置门**，Codex round-4） | 0M | sonnet | 无新端点；**A-SCAN 为 C 的硬前置** |
+| **IMGH-P4-B** | internal 端点：beacon 写 `<kind>_client_error_at`（**URL 同源守卫 `mc.<url>=$url` + 仅 4 受治理 kind**，ADV-213-1/6）+ events 双写（best-effort，**结构化 warn**，禁空 catch） | 0M | sonnet | 端点契约不变（不触 verify:endpoint-adr）+ 测（URL 不匹配→0 行 / stills·thumbnail 跳信号列仅 events） |
+| **IMGH-P4-C** | 读端：`problemFilterSqlV2` 单一真源（counts+list **逐字共用，禁内联独立谓词**，ADV-213-3）+ 移除 events 进 WHERE + problemReason CASE 重写 + `ProblemReason` DTO 变更 + 前端分色同步 + **stale-ok 可观测面**（D-213-9②） | **0M + A + A-SCAN 完成**（unknown 谓词上线前 checked_at 须已落真值，否则 ok 全 NULL→泛滥，Codex round-4） | **opus** | ADR-209 total 红线〔**大 limit 下 list 长度==counts[kind] 每 kind/scope 回归测**〕+ DTO 契约变更 + **A-SCAN 完成门** |
+| **IMGH-P4-S**（stale-ok 收尾·周期巡检，D-213-9①） | 图片健康周期巡检 scheduler（仿 server.ts:295 verify-scheduler setInterval：定期把 `checked_at` 超阈值的 ok/缺检行重入 health-check 队列）→ 自动消化 unknown、根治 stale-ok 假阴性（ADV-213-4）。**非阻塞根治收尾卡**（不阻塞 0M/A/B/C 合并；过渡正确性由 P4-C `unknown` 面兜底，P4-S 上线后板方可宣称「完备」） | ≤3 | sonnet | 0M + A | 测（stale 行被重扫入队 / checked_at 刷新） |
+
+依赖序 `0M → A → A-SCAN门 → C`（**C 硬依赖 A-SCAN 完成**，Codex round-4 HIGH）；`B` 依赖 0M、与 A 并行；`P4-S` 依赖 0M+A，为 stale-ok 假阴性的**根治收尾卡**（**非阻塞** 合并；过渡正确性由 P4-C `unknown` 面兜底）。**A-SCAN ≠ P4-S**：A-SCAN 是 C 前的**一次性初始排空门**，P4-S 是上线后的**周期维护**。
+
+### 关联 ADR
+
+**supersede ADR-212**（dissolve 取代 patch，互斥；保留 ADR-212 D-212-9 吸收 + 「patch 路线行不通」三轮论证作审计）/ **refine ADR-211**（D-211-2 判定口径 events EXISTS→信号列窗口 + D-211-3 problemReason broken_event→client_error；端点契约/响应框架不变；转 Accepted 时在 ADR-211 状态行加 `refined by ADR-213`，仿 211→210 范式）/ **refine ADR-210**（`BROKEN_SAMPLE_EVENT_TYPES` 降级为纯遥测用途，D-210-6 timeout 误报洞见由 D-213-5「确定性失败才 broken」结构性消化）/ ADR-209（§17.3.2 total 不漂移 = D-213-7 单谓词共用满足）/ ADR-046·048（+8 列 media_catalog 治理层扩展 → 同步 architecture.md §5.11）/ ADR-174（信号列/checked_at 均 per-catalog，beacon 经 video→catalog 子查询写，与 N:1 对齐；checked_at per-当前-URL 规避 ADR-212 D-212-3 redirect url_hash 边界）/ ADR-135（worker 写 status·checked_at、beacon 写信号列均自动化非 admin 动作，不加审计）。
+
+### 端点契约（verify:endpoint-adr）
+
+**无新增/修改 admin route**（P4-0M/A/B/C 均改既有 migration/worker/query/internal 端点，不新增 `fastify.{get,post,...}`，不触红线）。`/internal/image-broken` 仅改内部写入目标，对外契约不变。
+
+### BLOCKER / 前置
+
+**🚨 一个硬 BLOCKER**：migration = schema 变更 → **必须同步 `docs/architecture.md` §5.11 media_catalog 表定义**（CLAUDE.md 绝对禁止项），0M 卡内同 commit。软护栏（arch-reviewer 7 放行条件）：① 连败裁定 = 瞬态不改 status、仅确定性失败置 broken（D-213-5）；② checked_at **不用 updated_at 回填**（留 NULL→unknown，**A 后 A-SCAN 一次性真实扫描排空**〔时序见 ⑰〕；Codex round-3+4，D-213-8③）；③ worker 周期巡检缺口登记 follow-up 卡（D-213-9）；④ ADR-212 转 Superseded、保留 D-212-9 吸收 + 论证（已落，见 ADR-212 状态行）；⑤ 0M migration 同步 architecture.md §5.11（BLOCKER）；⑥ C 卡 `ProblemReason` 值域变更 + 前端分色同步 + total 不漂移测试（ADR-209 红线，opus）；⑦ **定稿前 Codex 对抗性 re-review**（信号列 per-catalog 与 N:1 一致性 / 双写一致性 / `problemFilterSqlV2` 两处逐字同源 / checked_at staleness 不影响命中）。**Codex round-1 追加护栏（全吸收）**：⑧ 信号列写带 **URL 同源守卫 `mc.<url>=$url`**（ADV-213-1）；⑨ 信号列**仅 4 受治理 kind**、stills/thumbnail 仅遥测（ADV-213-6）；⑩ **stale-ok**：P4-C 加 **`unknown` 可观测面**兜底过渡正确性（`checked_at` 超阈值的 ok 标 `unknown` 非 healthy，板不谎报健康）+ 登记 **P4-S 周期巡检为非阻塞根治收尾卡**（ADV-213-4）；⑪ 双写任一失败**结构化 warn** + `brokenLast7Days` 定性**遥测非权威健康计数**（ADV-213-2）；⑫ **recall 取舍段落** + P4-C **大 limit total 回归测**（ADV-213-5/3）。**Codex round-2 追加护栏（全吸收）**：⑬ **回填 URL 守卫**——D-213-8 ④ client_error_at 回填带 `b.url=m2.<url_col>` 当前 URL 守卫 + 0M 测「旧 URL 不 populate」（R2-HIGH-1）；⑭ **checked_at 仅确定性出口推进**（瞬态不刷，否则 stale-ok 被续命）+ P4-A 测「瞬态不推进 checked_at」（R2-HIGH-2）；⑮ **stale-ok 并入 D-213-7 单一谓词**（第三道 OR + problemReason `unknown`）+ P4-C 测「fresh-ok 排除 vs stale-ok 入板」（R2-MEDIUM）。**Codex round-3 追加护栏（全吸收）**：⑯ **checked_at 不用 updated_at 回填**——留 NULL→unknown + 一次性真实健康扫描落真值排空 + 测「updated_at 近期但 checked_at NULL 的 ok 仍入 unknown」（R3-HIGH）。**Codex round-4 追加护栏（全吸收）**：⑰ **A-SCAN 时序**——一次性真实健康扫描移到 **P4-A 之后**（依赖新 worker 写 checked_at；放 0M 无效），时序 `0M→A→A-SCAN门→C`，**C 硬依赖 A-SCAN 完成**（否则 ok 全 NULL→unknown 泛滥）+ 测「A-SCAN 后 ok checked_at 落真值」（R4-HIGH）。**待 Codex re-review 验证 round-4 闭环。**
+
+### arch-reviewer 裁定摘要 2026-06-21（claude-opus-4-8 / agentId a06695fa2c0aa033c）
+
+**CONDITIONAL-PASS（方向正确，7 修订已全数吸收入本 ADR）。** 独立核实全部代码事实为真（4 处补正见 §事实核验）。核心判断：方案 C 在正确性 #1（溶解根因，误报上线即消失零运维）与边界复用 #2（单一 `problemFilterSqlV2`，无 currentUrlExpr/class 分支）上**显著优于 ADR-212 patch**——使 ADR-212 三轮 Codex 反复的「单行模型坍缩边界」整类消失（健康判定根本不读 events）。最大弱点 = checked_at staleness（暴露「无周期巡检」先存缺口），但不影响命中判定（D-213-9 已缓解 + 登记 follow-up）。满足后端分层、无 any/空 catch/硬编码色、无新增 admin route、ADR-209 total 不漂移；schema 同步 architecture.md 已列 0M BLOCKER。**放行条件 7：定稿前须 Codex 对抗性 re-review。**
+
+### Codex 对抗审核摘要 round-1 2026-06-21（codex-rescue / agentId a1d0700349d19909a）
+
+**NEEDS-ATTENTION（3 HIGH + 2 MEDIUM + 1 LOW，逐条吸收，全部已写入上文决策）。**
+- **ADV-213-1 HIGH（信号列 per-catalog fanout 无 URL 守卫）→ 吸收**：beacon 写信号列未比对上报 URL 与 catalog 当前 URL → 过期页/旧 URL 上报可标记同 catalog 全部 video 7 天。**修订**：D-213-6 ① 加 URL 同源守卫 `mc.<url_col>=$url`（不匹配 0 行），per-catalog fanout 在 URL 匹配前提下定性为有意。
+- **ADV-213-4 HIGH（stale-ok 确证假阴性）→ 吸收**：无周期巡检 → 图旧 ok 后变坏、不复检、无浏览器上报则永不入板。**修订**：D-213-9 = P4-C 加 stale-ok `unknown` 可观测面（过渡兜底，板不谎报健康，**不依赖 P4-S**）+ 登记 P4-S 周期巡检为**非阻塞**根治收尾卡。
+- **ADV-213-6 HIGH（信号列 4 kind vs 端点 6 kind）→ 吸收**：internal 端点 image_kind 接受 stills/thumbnail，但仅加 4 列 → 二者无目标列。**修订**：D-213-3/6 明确信号列仅 4 受治理 kind，stills/thumbnail 跳信号列仅遥测。
+- **ADV-213-2 MEDIUM（双写漂移遥测可见）→ 吸收**：D-213-6 加结构化 warn + `brokenLast7Days` 定性遥测非权威健康计数。
+- **ADV-213-5 MEDIUM（recall 较 ADR-212 更差）→ 吸收**：D-213-4 加 recall 取舍段（放弃 status=ok 残留 server 事件召回 = 正确消假阳性；残差 stale-ok 由 P4-S 补偿）。
+- **ADV-213-3 LOW（total 不漂移待实现证明）→ 吸收**：P4-C 门禁加「大 limit 下 list 长度==counts[kind] 每 kind/scope」回归测 + 禁 getProblemImages 内联独立谓词。
+- **Next steps（Codex）**：6 findings 修订后 re-review 闭环（用户触发）→ 放行转 Accepted。
+
+### Codex 对抗审核摘要 round-2 2026-06-21（codex-rescue / threadId 019eedf0）
+
+**NEEDS-ATTENTION（2 HIGH + 1 MEDIUM）。** 关键定性：「draft 在散文里关闭了 round-1 问题，但实现契约仍可达假阳性/stale 假阴性」——3 项均**我 round-1 修正的传播/一致性缺口**，非新正交发现：
+- **R2-HIGH-1（回填缺 URL 守卫）→ 吸收**：D-213-6 给实时 beacon 加了 `mc.<url>=$url`，但 D-213-8 ④ 的 client_error_at **回填**按 catalog/窗口、**未带同款当前 URL 守卫** → 旧 URL 事件给已替换图 seed → P4-C 7 天假阳性，抵消「误报上线即消失」。**修订**：D-213-8 ④ 回填 SQL 加 `b.url=m2.<url_col>` + 0M 测「旧 URL 不 populate」。
+- **R2-HIGH-2（瞬态刷 checked_at 拆 stale 网）→ 吸收**：D-213-5 让瞬态失败不改 status 却仍更新 checked_at → checked_at 退化为「最近探测尝试」而非「最近确定性判定」→ stale-ok 被瞬态续命、unknown 永不触发。**修订**：D-213-2/5 改 `checked_at` **仅确定性出口（ok/low_quality/broken）推进、瞬态不刷** + P4-A 测。
+- **R2-MEDIUM（stale-ok 未并入单一谓词）→ 吸收**：D-213-7 单一谓词只有 `status<>'ok' OR client_error 窗口`，而 stale-ok 仅在 D-213-9 散文里 → counts/list 可合法丢 stale-ok、ADV-213-4 未真闭。**修订**：D-213-7 把 stale-ok 作第三道 OR 并入 `problemFilterSqlV2`（counts/list 逐字共用）+ problemReason 加 `unknown` + `STALE_CHECK_DAYS` 常量 + P4-C 测。
+- **过程反思（落 ADR 备忘）**：round-2 三项暴露主循环修正的系统性失误模式——① 只补点名处、不扫同类孪生路径（实时↔回填）② 概念只写散文、未接进承诺的单一产物（谓词）③ 不追自引入修正间的二阶交互（瞬态×checked_at×stale 网）。本轮已按「单一谓词 + 单一 checked_at 语义」全局收敛，非局部打补丁。
+- **Next steps（Codex）**：round-2 三项修订后 re-review（用户触发）→ 放行转 Accepted；0M/A/C 加针对性验收测（旧 URL 回填 / 瞬态 checked_at 不推进 / stale-ok 入板）。
+
+### Codex 对抗审核摘要 round-3 2026-06-21（codex-rescue / threadId 019eee13）
+
+**NEEDS-ATTENTION（1 HIGH）——同类传播缺口第 3 次，收敛中（6→3→1）。** finding 非新维度，是 round-2 修正的**未完成传播**：
+- **R3-HIGH（checked_at 回填用通用 updated_at 仍违反收紧后语义）→ 吸收**：round-2 把 `checked_at` 语义收紧为「最近确定性健康判定」（D-213-2/5），但 D-213-8 ③ 的回填仍沿用 round-1 的 `= updated_at`。`updated_at` 由通用 BEFORE UPDATE 触发器维护、被任意非健康编辑（标题/元数据/外部 ID）刷新 → 久未健康复检但近期被编辑过的 ok 行**冒充刚验证** → 在 `STALE_CHECK_DAYS` 内绕过 `stale-ok→unknown`，正是 round-2 要堵的假阴性。**修订**：D-213-8 ③ 改「**不用 updated_at 回填、留 NULL**（COALESCE→unknown 诚实暴露）+ 一次性真实健康扫描（覆盖 ok 行）落真值排空初始桶」+ 测「updated_at 近期但 checked_at NULL 的 ok 仍入 unknown」。〔**注：round-3 当时把扫描置于 0M，后经 round-4 修正为 P4-A 之后的 A-SCAN 门——见 round-4 摘要**〕
+- **过程反思（落 ADR）**：这是「改定义未审计全部 producer」失误模式第 3 次——round-2 收紧 checked_at **语义（消费侧）**，却漏审 **producer 侧的回填**仍喂通用时间戳。本轮已把「checked_at 的唯一合法 producer = worker 确定性出口；回填不得用代理时间戳」钉死。**收敛信号**：findings 6→3→1、全同一类（单一定义跨全部 producer/consumer 一致性）、钻入越来越边角的 producer，非发散。
+- **Next steps（Codex）**：D-213-8 回填语义 + 0M 测计划改后 re-review（用户触发）。
+
+### Codex 对抗审核摘要 round-4 2026-06-21（codex-rescue / threadId 019eee21）
+
+**NEEDS-ATTENTION（1 HIGH）——层级已从数据模型转到 rollout 时序（rounds 1–3 数据模型未重开）。**
+- **R4-HIGH（一次性扫描排在能写 checked_at 的代码之前）→ 吸收**：round-3 把「一次性真实健康扫描」放进 P4-0M，但写 `checked_at` 的 worker 改动在 P4-A，**A 在 0M 之后** → 0M 阶段扫描走旧 worker、写不进 checked_at → 扫描无效 → P4-C 要么 ok 行全 NULL→unknown 泛滥、要么逼一次未文档化的二次扫描，抵消「误报零运维消失」。**修订**：拆分时序改 `0M（仅加列 + client_error_at 回填）→ A（worker 写 checked_at）→ A-SCAN（一次性扫描落真值，C 硬前置门）→ C（unknown 谓词，显式依赖 A-SCAN 完成）`；A-SCAN ≠ P4-S（前者一次性初始排空、后者周期维护）。
+- **过程反思（落 ADR）**：失误模式第 4 次——这次不在数据模型，而在**为修 round-3 新增的「一次性扫描」步骤未追其代码依赖（需 A 的 worker）与卡间时序**。教训升级为：**任何新增补救步骤必须同时定位「它依赖谁、必须排在谁之后、谁依赖它完成」**。**收敛信号**：rounds 1–3（数据模型语义）已封板、round-4 未重开任一条，问题已下沉到实施编排层——这正是 0M/A/B/C/S 拆卡要解决的层级。
+- **Next steps（Codex）**：时序改为 `0M→A→A-SCAN→C` + C 显式依赖门后 re-review（用户触发）。
