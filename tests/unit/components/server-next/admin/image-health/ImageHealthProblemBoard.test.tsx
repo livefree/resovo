@@ -10,7 +10,7 @@
  * - 点卡 → 打开 ImageGovernanceDrawer（focusKind 深链）
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
 const getProblemImagesMock = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/image-health/api', () => ({
@@ -146,6 +146,24 @@ describe('ImageHealthProblemBoard — reason 子筛选（客户端，H-2）', ()
       const reasons = Array.from(container.querySelectorAll('[data-problem-card]'))
         .map((el) => el.getAttribute('data-problem-reason'))
       expect(reasons).toEqual(['client_error', 'broken'])
+    })
+  })
+
+  it('「未验证」→ 仅 unknown 卡可见（IMGH-P4-BOARD-UX）', async () => {
+    getProblemImagesMock.mockResolvedValue(pageOf([
+      makeRow({ videoId: 'a', problemReason: 'unknown' }),
+      makeRow({ videoId: 'b', problemReason: 'low_quality' }),
+      makeRow({ videoId: 'c', problemReason: 'broken' }),
+    ], 3))
+    const { container } = render(<ImageHealthProblemBoard />)
+    await waitFor(() => expect(container.querySelectorAll('[data-problem-card]').length).toBe(3))
+    // '未验证' 同时出现在筛选 Segment 与 unknown 卡 Pill → 限定点筛选 Segment 内的
+    const reasonSeg = container.querySelector('[data-testid="problem-board-reason-segment"]') as HTMLElement
+    fireEvent.click(within(reasonSeg).getByText('未验证'))
+    await waitFor(() => {
+      const reasons = Array.from(container.querySelectorAll('[data-problem-card]'))
+        .map((el) => el.getAttribute('data-problem-reason'))
+      expect(reasons).toEqual(['unknown'])
     })
   })
 })

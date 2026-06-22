@@ -226,12 +226,14 @@ export async function getProblemImages(
        END AS broken_domain
      FROM base
      ORDER BY
+       -- 可操作项优先（client_error/broken/unknown 浮顶）；low_quality（能加载、仅尺寸小）最不紧急 → 沉底，
+       -- 避免大量 low_quality 把 broken/unknown 埋到末页（A-SCAN 后实测 low_quality 占 ~85%，IMGH-P4-BOARD-UX）。
        CASE base.problem_reason
          WHEN 'client_error'   THEN 1
          WHEN 'broken'         THEN 2
-         WHEN 'low_quality'    THEN 3
+         WHEN 'unknown'        THEN 3
          WHEN 'pending_review' THEN 4
-         WHEN 'unknown'        THEN 5
+         WHEN 'low_quality'    THEN 5
          ELSE 6
        END,
        base.last_seen_at DESC NULLS LAST,

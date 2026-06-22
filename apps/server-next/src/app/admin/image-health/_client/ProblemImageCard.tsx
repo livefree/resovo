@@ -91,6 +91,22 @@ const REASON_BADGE_STYLE: CSSProperties = {
   zIndex: 1,
 }
 
+// 分辨率角标（右下，常显）——便于扫图判 low_quality 阈值（natural 尺寸 = worker 测量同源）。全 token。
+const DIM_BADGE_STYLE: CSSProperties = {
+  position: 'absolute',
+  bottom: '4px',
+  right: '4px',
+  zIndex: 1,
+  padding: '0 4px',
+  borderRadius: 'var(--radius-sm)',
+  background: 'var(--bg-surface)',
+  color: 'var(--fg-muted)',
+  border: '1px solid var(--border-default)',
+  fontSize: 'var(--font-size-xs)',
+  fontVariantNumeric: 'tabular-nums',
+  pointerEvents: 'none',
+}
+
 // hover/focus 详情浮层（绝对定位盖缩略上方）
 const DETAIL_OVERLAY_STYLE: CSSProperties = {
   position: 'absolute',
@@ -125,6 +141,7 @@ export interface ProblemImageCardProps {
 export function ProblemImageCard({ row, onOpen }: ProblemImageCardProps) {
   const [failed, setFailed] = useState(false)
   const [hovered, setHovered] = useState(false)
+  const [dims, setDims] = useState<{ w: number; h: number } | null>(null)
   const reason = REASON_META[row.problemReason] ?? REASON_META.other
 
   return (
@@ -152,6 +169,10 @@ export function ProblemImageCard({ row, onOpen }: ProblemImageCardProps) {
             style={IMG_STYLE}
             loading="lazy"
             onError={() => setFailed(true)}
+            onLoad={(e) => {
+              const img = e.currentTarget
+              if (img.naturalWidth > 0) setDims({ w: img.naturalWidth, h: img.naturalHeight })
+            }}
             data-problem-thumb
           />
         )}
@@ -160,12 +181,19 @@ export function ProblemImageCard({ row, onOpen }: ProblemImageCardProps) {
           <Pill variant={reason.variant}>{reason.label}</Pill>
         </span>
 
+        {!failed && dims && (
+          <span style={DIM_BADGE_STYLE} data-problem-dims aria-hidden>
+            {dims.w}×{dims.h}
+          </span>
+        )}
+
         <span
           style={{ ...DETAIL_OVERLAY_STYLE, opacity: hovered ? 1 : 0 }}
           data-problem-detail
           aria-hidden={!hovered}
         >
           <span>状态 {row.status}</span>
+          {dims && <span>尺寸 {dims.w}×{dims.h}</span>}
           {row.source && <span>来源 {row.source}</span>}
           {row.eventType && <span>原因 {row.eventType}</span>}
           {row.brokenDomain && <span>域 {row.brokenDomain}</span>}

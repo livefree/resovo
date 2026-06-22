@@ -54,6 +54,26 @@ describe('ProblemImageCard — 缩略与失败态', () => {
   })
 })
 
+describe('ProblemImageCard — 分辨率显示（IMGH-P4-BOARD-UX）', () => {
+  it('img onLoad（naturalWidth>0）→ 右下角角标 + 详情显具体分辨率（便于判 low_quality 阈值）', () => {
+    const { container } = render(<ProblemImageCard row={makeRow()} onOpen={vi.fn()} />)
+    const img = container.querySelector('[data-problem-thumb]') as HTMLImageElement
+    Object.defineProperty(img, 'naturalWidth', { value: 342, configurable: true })
+    Object.defineProperty(img, 'naturalHeight', { value: 513, configurable: true })
+    fireEvent.load(img)
+    expect(container.querySelector('[data-problem-dims]')?.textContent).toBe('342×513')
+    expect(container.querySelector('[data-problem-detail]')?.textContent).toContain('尺寸 342×513')
+  })
+
+  it('naturalWidth=0（未取到尺寸）→ 不显分辨率角标', () => {
+    const { container } = render(<ProblemImageCard row={makeRow()} onOpen={vi.fn()} />)
+    const img = container.querySelector('[data-problem-thumb]') as HTMLImageElement
+    Object.defineProperty(img, 'naturalWidth', { value: 0, configurable: true })
+    fireEvent.load(img)
+    expect(container.querySelector('[data-problem-dims]')).toBeNull()
+  })
+})
+
 describe('ProblemImageCard — 标题 / reason 分色', () => {
   it('卡下显影片标题（取代域名）', () => {
     const { container } = render(<ProblemImageCard row={makeRow({ title: '奥本海默' })} onOpen={vi.fn()} />)

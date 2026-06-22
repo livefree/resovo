@@ -66,7 +66,7 @@ describe('getImageHealthStats SQL 集成', () => {
 
 describe('getProblemImages / getProblemImageCounts SQL 集成（ADR-211 / 4A arch-reviewer 风险 3）', () => {
   const REASON_RANK: Record<string, number> = {
-    client_error: 1, broken: 2, low_quality: 3, pending_review: 4, unknown: 5, other: 6,
+    client_error: 1, broken: 2, unknown: 3, pending_review: 4, low_quality: 5, other: 6,
   }
 
   it('getProblemImageCounts 返回 4 类非负计数', async () => {

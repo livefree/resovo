@@ -2430,3 +2430,18 @@
 - **数据库变更**：无
 - **触发背景（A-SCAN 真库诊断）**：用户跑 A-SCAN 后报「未见后台处理」。诊断证实 worker **已正常处理全部 URL**（poster 4857 已检〔ok 2424/low_quality 2422/broken 11〕+ 1062 未检；加总=5919 无漏入队，排除分页漂移）；「未见」实为队列已 drained + removeOnComplete 仅留 50 条 + A-SCAN 系 fire-and-forget。**真问题**：近 2h `timeout` 事件 1105 ≈ 未检数——`headRequest` 硬编码 300ms 对外部 CDN HEAD 过激进 → 慢但正常图判瞬态（D-213-5）不写 checked_at → 永停未检（300ms 下重跑无效），且 P4-C flag 开后会污染 unknown 桶。原始反思 B3 早标「300ms 误报慢 CDN」。
 - **注意事项**：默认 5000ms（与 GET 一致）；env `IMAGE_HEALTH_HEAD_TIMEOUT_MS` 可覆盖（CI/dev 调小）。**改后需重跑 A-SCAN** 排空 timeout 行 → 复跑 `verify-imgh-121` → 再置 `IMAGE_HEALTH_STALE_OK_ENABLED=true`（否则 ~1137 慢图污染 unknown）。**未修**：low_quality 阈值（minWidth=300/2:3±10% 判半数 poster 低质，独立阈值判断，待用户定）。门禁：typecheck=0/lint=0/test:changed=74/verify:adr-contracts=0。未含 IMGH-P3-5 parked 代码。
+
+## [IMGH-P4-BOARD-UX] 问题板可用性：可操作项浮顶（low_quality 沉底）+ 未验证筛选 + 卡显分辨率
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 11:25
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（UI 排序/筛选/展示调优，A-SCAN 后实测驱动，非架构决策）
+- **修改文件**：
+  - **A** `apps/api/src/db/queries/imageHealth.scan.ts` — getProblemImages ORDER BY 重排序：`client_error=1/broken=2/unknown=3/pending_review=4/low_quality=5/other=6`（原 low_quality=3 把 broken/unknown 埋到末页）。`docs/decisions.md` D-213-7 排序记述同步。
+  - **B** `apps/server-next/src/app/admin/image-health/_client/ImageHealthProblemBoard.tsx` — reason 子筛选加「未验证(unknown)」（ReasonFilter + REASON_ITEMS；visibleRows 末支 `===reasonFilter` 已泛化）。**经 git stash 隔离 parked IMGH-P3-5 视觉改动**（本提交仅含 reason 筛选，视觉改动 pop 后续 parked）。
+  - **C** `apps/server-next/src/app/admin/image-health/_client/ProblemImageCard.tsx` — `<img onLoad>` 读 naturalWidth×naturalHeight → 右下角常显角标 `data-problem-dims` + 详情浮层「尺寸 W×H」（全 token；便于扫图判 low_quality 阈值；natural 尺寸 = worker 测量同源）。
+  - 测试：filter-v2（锁新排序 unknown=3/low_quality=5）+ ProblemImageCard.test（onLoad→分辨率显示/naturalWidth=0 不显）+ ImageHealthProblemBoard.test（未验证筛选仅 unknown 可见，within 限定避 Pill 文案撞名）+ 集成 admin-image-health（REASON_RANK 同步新序）。
+- **新增依赖**：无
+- **数据库变更**：无
+- **背景（A-SCAN 后实测）**：板 all 口径 poster reason 分布 = low_quality 2793（85%）/ pending 439 / broken 18 / unknown 17 / client_error 1。原排序 low_quality=3 把 broken/unknown 埋在第 ~70 页 + 无「未验证」筛选 → 可操作项不可见。**A 是 B 前提**（unknown 升优先级 3 → 落第 1 页 → 客户端筛选才命中）。
+- **注意事项**：A+C committed；B 经 stash 隔离（parked board 视觉改动仍未提交，待用户验收 IMGH-P3-5 一并 commit）。low_quality 阈值仍未动——C 上线后用分辨率角标观察再定（多数小图在未发布、published 口径仅 21）。门禁：typecheck=0/lint=0/test:changed=213/集成 admin-image-health=12/verify:adr-contracts=0。

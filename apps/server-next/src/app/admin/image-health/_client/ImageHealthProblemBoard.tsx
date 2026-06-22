@@ -53,10 +53,11 @@ const SCOPE_ITEMS: ReadonlyArray<{ readonly value: ProblemImageScope; readonly l
   { value: 'all', label: '全部' },
 ]
 
-type ReasonFilter = 'all' | 'broken' | 'low_quality' | 'pending_review'
+type ReasonFilter = 'all' | 'broken' | 'unknown' | 'low_quality' | 'pending_review'
 const REASON_ITEMS: ReadonlyArray<{ readonly value: ReasonFilter; readonly label: string }> = [
   { value: 'all', label: '全部' },
   { value: 'broken', label: '真破损' },
+  { value: 'unknown', label: '未验证' }, // ADR-213 D-213-7：status=ok 但久未复检（A-SCAN 超时/未达）→ 一键筛出排查
   { value: 'low_quality', label: '低质量' },
   { value: 'pending_review', label: '待复核' },
 ]

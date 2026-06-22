@@ -69,6 +69,9 @@ describe('problemFilterSqlV2 — 单真源谓词（ADR-213 D-213-7）', () => {
     expect(sql).toContain("THEN 'client_error'")
     expect(sql).toContain("THEN 'unknown'")
     expect(sql).toContain('CASE base.problem_reason') // ORDER BY 复用 base 算的 problem_reason
+    // 排序优先级（IMGH-P4-BOARD-UX）：可操作项浮顶，low_quality 沉底
+    expect(sql).toContain("WHEN 'unknown'        THEN 3")
+    expect(sql).toContain("WHEN 'low_quality'    THEN 5")
     // LATERAL 仍保留作纯遥测展示（broken_domain/原因），但不进 WHERE
     expect(sql).toContain('LEFT JOIN LATERAL')
   })
