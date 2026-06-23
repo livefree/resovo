@@ -2800,3 +2800,13 @@
 - **门禁**：typecheck=0 / lint=0（4 successful）/ test:changed〔`vitest --changed` → CardSizeTab.test 8 passed〕/ verify:adr-contracts=0。**关键路径**：admin「前台展示」Tab——纯增量预览、不动表单/保存逻辑。
 - **六问自检**：① 契约/边界：后台自包含、不跨 app 引前台组件，未扩任何公开契约 ✓；② 复用：占位复用主题 CSS 变量、预览组件 page-local 消重（仅本 tab 用）✓；③ 分层：纯前端后台 UI ✓；④ 类型：无 any、props 显式类型、Number 防御 ✓；⑤ 测试：预览随 draft 变化 2 测 + 原 6 测全过 ✓；⑥ 沉淀：CardSizePreview 仅本 tab 消费、未达「3 处提取」阈值，page-local 即可 ✓。
 - **注意事项**：① 预览反映 **draft（未保存）值**——即时见效、保存后落库；与表单 dirty/save 解耦。② 预览仅示意布局（占位方块非真实海报）；真实视觉以前台为准，预览顶部已标注响应式降级规则避免误导。③ **合并流程**：本卡在 worktree 分支 `chore/card-size-phase2-20260622`（领先 governance），须再次 `git merge --ff-only` 合回 governance 集成分支才在主 checkout 生效。④ 用户反馈的「实时预览缺失」已闭环；「前台展示」Tab 现为「调参 + 即时预览 + 保存」完整工作流。
+
+## [CARD-SIZE-A1-ADR] Phase 0：ADR-214 Amendment A1 落档 + Codex 对抗审（standard size-driven + compact 废弃 + 详情/播放横滚，SEQ-20260623-01）
+
+- **日期**：2026-06-23 ｜ **类型**：ADR 修订（docs，非代码产物）｜ **执行模型**：claude-opus-4-8（主循环，满足「撰写 ADR 强制 Opus 级」）｜ **子代理**：codex-rescue runtime 等效对抗审（agentId `a4aaf4b8d68ae97b0`；`/codex:adversarial-review` skill 配 disable-model-invocation 不可模型自动触发，自动推进模式走 codex-rescue 同 runtime）+ 规划期 arch-reviewer (claude-opus-4-8) 设计背书。
+- **背景**：用户复盘——原 ADR-214 把「卡片尺寸」实现成「列数」是对原义（设卡片容器宽度）的误解；compact 档零消费方（幽灵配置）；详情/播放页相关推荐区过小、应作可浏览主体一行横滚。
+- **决策（ADR-214 Amendment A1，`docs/decisions.md` 文末，状态 Accepted 待用户裁可）**：D-214-A1-1 standard column-driven→size-driven（DB 存卡宽 px，CSS `repeat(auto-fill,minmax(min(var(--card-w-standard),100%),1fr))`）/ A1-2 仅 ≥1024px size-driven、移动平板保留 2/3 列 / A1-3 compact 废弃（删枚举/seed/默认/Tab + 重写 size_class CHECK）/ A1-4 desktop_columns NULLABLE 退化护栏 / A1-5 migration 125 schema 放宽 + 6 步严格顺序 / A1-6 详情·播放横滚 + 共享 ScrollRow / A1-7 搜索 SearchResultRow 范围外。
+- **修改文件**：`docs/decisions.md`（Amendment A1 正文 + ADR-214 标题指针）/ `docs/task-queue.md`（SEQ-20260623-01 序列 10 卡表 + 风险 + Codex 修正登记）/ `docs/tasks.md`（#0→#1A 卡更替）。**纯 docs，不改产品代码**。
+- **Codex 对抗审 round-1（3 BLOCKER + 2 CONCERN 全吸收）**：R1 CSS 卡宽语义校正（`minmax(W,1fr)` 的 W=最小宽非恒定 → 「目标/最小卡宽 + 弹性填充」+ auto-fill vs auto-fit 取舍）/ R2 compact 废弃须重写 124 `size_class` 枚举 CHECK（仅删行不够）/ R3 migration 125 NOT NULL 回填前置 + 6 步顺序（standard 现有行 width=NULL，直接 SET NOT NULL 必失败）/ R4 详情拆侧栏当完整布局迁移（`.detail-lower-grid` + `--detail-sidebar-*` + 响应式 + e2e）/ R5 测试漂移清单补全（card-size-admin/public/e2e/CardSizeTab）。
+- **门禁**：Codex 对抗审通过 / `verify:adr-contracts` EXIT=0（endpoint-adr 250 路由对齐、确认不新增端点）/ 纯 docs，typecheck/lint/test docs-only 跳过。
+- **注意事项**：① **卡宽语义为「目标/最小宽 + 弹性填充」非字面恒定**（Codex-R1 校正）——运营调 card_width_px 卡片明显变大/小（满足核心诉求），卡宽在 [W, W+gap) 间轻浮以消末列留白。② #1A 起为 schema/代码关键路径；migration 125 冷启动验证须主 checkout/CI 跑（worktree 缺 `.env.local`）。③ 强制 Opus 卡：#0（本）/#1B（admin body schema）/#2（ScrollRow 共享组件）/#3（SSR/CSS 原语翻转）。④ ADR-215 端点契约不变（#1B 仅放宽现有 PUT body zod 边界、非新增 route）。

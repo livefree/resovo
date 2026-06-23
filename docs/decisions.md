@@ -23805,7 +23805,7 @@ ADR-211（refine D-211-2「EXISTS 未解决事件」口径——读端改 event_
 
 ## ADR-214：DB 驱动、后台可配的前台卡片尺寸体系 — 3 档尺寸模型 + SSR `:root` 注入 + CardGrid 共享契约（SEQ-20260622-03 / CARD-SIZE-ADR-MAIN）
 
-**状态**：**Accepted**（2026-06-22 用户裁定，Phase 0 收口；Codex 对抗审核 round-1〔1 HIGH + 2 MEDIUM〕全数吸收〔CHECK 绑 size_class / 网格 minmax 防溢出 / SSR 新鲜度有界 + del best-effort〕，见文末摘要；**Phase 1 实现解锁，CARD-SIZE-DB 起**）。**设计背书**：规划期 arch-reviewer (claude-opus-4-8) ×2 全栈背书（前端 CardGrid 契约 + schema/SSR/admin 全栈）+ 第二轮对抗复审 6 项修正已纳入（见 SEQ-20260622-03 末尾「复审修正」/ commit `3c6a4ab8`）+ Codex round-1 3 项修正（CHECK 绑 size_class / 网格 minmax 防溢出 / SSR 新鲜度有界 + del best-effort）。**关系**：承接 SEQ-20260622-01「Follow-up ②」（定宽机制 5→1 + 双卡合并），由纯前端 token 治理**升级为 DB 可配体系**；复用 ADR-181/182 `home_section_settings` 配置范式（id UUID PK / audit 锚点 / 公开读·后台写分层）；落在 ADR-037 web-next 核心能力层之上。**🚨 含 schema 变更**（新建 `card_size_settings` 表 + `admin_audit_log` target_kind CHECK 扩展）→ Phase 1 CARD-SIZE-DB 卡须**同 commit 同步 `docs/architecture.md`**。**端点契约**：拆分至 ADR-215（admin-route + 公开 route），本 ADR 仅定数据模型 / SSR / 共享组件契约 / 缓存边界。
+**状态**：**Accepted**（2026-06-22 用户裁定，Phase 0 收口；Codex 对抗审核 round-1〔1 HIGH + 2 MEDIUM〕全数吸收〔CHECK 绑 size_class / 网格 minmax 防溢出 / SSR 新鲜度有界 + del best-effort〕，见文末摘要；**Phase 1 实现解锁，CARD-SIZE-DB 起**）。**设计背书**：规划期 arch-reviewer (claude-opus-4-8) ×2 全栈背书（前端 CardGrid 契约 + schema/SSR/admin 全栈）+ 第二轮对抗复审 6 项修正已纳入（见 SEQ-20260622-03 末尾「复审修正」/ commit `3c6a4ab8`）+ Codex round-1 3 项修正（CHECK 绑 size_class / 网格 minmax 防溢出 / SSR 新鲜度有界 + del best-effort）。**关系**：承接 SEQ-20260622-01「Follow-up ②」（定宽机制 5→1 + 双卡合并），由纯前端 token 治理**升级为 DB 可配体系**；复用 ADR-181/182 `home_section_settings` 配置范式（id UUID PK / audit 锚点 / 公开读·后台写分层）；落在 ADR-037 web-next 核心能力层之上。**🚨 含 schema 变更**（新建 `card_size_settings` 表 + `admin_audit_log` target_kind CHECK 扩展）→ Phase 1 CARD-SIZE-DB 卡须**同 commit 同步 `docs/architecture.md`**。**端点契约**：拆分至 ADR-215（admin-route + 公开 route），本 ADR 仅定数据模型 / SSR / 共享组件契约 / 缓存边界。**🔧 经 Amendment A1 修订（2026-06-23，见文末 Draft）**：standard 网格 column-driven → size-driven（设卡宽 px）/ compact 档废弃 / desktop_columns 转 NULLABLE / 详情·播放页相关视频横滚化 + 共享 ScrollRow——修订 D-214-2/3/4/7/8/10。
 
 **背景/问题**：用户反馈「前台卡片尺寸视觉不统一」——首页特色行（FeaturedRow `1.6fr` 异宽网格）vs 首页横滚推荐行（`--shelf-card-w-portrait/top10` 静态 170px）vs 分类/搜索网格（`lg:grid-cols-5` 等宽）vs 详情侧栏相关推荐（60px 缩略）四套尺寸机制并存。SEQ-20260622-01 卡片尺寸治理仅做了**外观归一**（gap / 列数 / 标题排版统一），未做**尺寸机制统一**——四套定宽机制（grid-cols 枚举 / 1.6fr 异宽 / 静态 px / 侧栏缩略）+ 两处容器 max-width 仍各自为政。本 ADR 解的是**机制层统一 + 可运营配置**：把卡片尺寸从「散落硬编码 + 静态 token」收敛为「DB 单真源 + 后台可配 + SSR 注入 CSS 变量」，使运营无需改码即可调间距/列数/卡宽。
 
@@ -23938,3 +23938,57 @@ ADR-211（refine D-211-2「EXISTS 未解决事件」口径——读端改 event_
 - **R2-MEDIUM（网格正确性断言漏 minmax）→ 吸收**：`repeat(N,1fr)` 的 1fr 轨道有 auto 最小值，海报固有宽/长标题 min-content 仍溢出 → 原「存列数避溢出」断言在常见场景为假（FeaturedRow/相关卡并入 CardGrid 后更甚）。**修订**：D-214-4/7 CardGrid 契约强制 `repeat(var(...), minmax(0,1fr))` + item `min-width:0` + 窄容器/长标题视觉回归测。
 - **R3-MEDIUM（缓存测后端不测用户可见 SSR 新鲜度 + del 失败欠定义）→ 吸收**：PUT→Redis del 确定失效，但前端 max-age 让 SSR 页在缓存窗内仍陈旧；原 e2e 只验 admin PUT→公开 API GET、漏用户脏读路径。且 DB 提交后 del 上抛 → 客户端见「失败但已应用」+ 留陈旧缓存。**修订**：D-214-9/D-215-6 SSR fetch 短 revalidate（≤60s）有界新鲜度 + del 失败 best-effort（warn + 返回成功，不上抛）+ CARD-SIZE-E2E 加渲染页新鲜度 e2e。
 - **Next steps（Codex）**：3 项修订后可接受进 Phase 1；Phase 1 加 DB CHECK 倒置 / 网格溢出 / SSR 新鲜度三测。**修订已全部落盘，待用户裁 Accepted。**
+
+---
+
+## ADR-214 Amendment A1：standard 网格由「设列数」转「设卡宽 px（size-driven）」+ compact 档废弃 + 详情/播放页相关视频横滚化（SEQ-20260623-01 / CARD-SIZE-A1-ADR）
+
+**状态**：**Accepted**（2026-06-23；Codex 对抗审 round-1〔3 BLOCKER + 2 CONCERN〕全数吸收，见文末摘要；待用户裁可后解锁 #1A 实现）。**类型**：ADR-214 主 ADR 的 **Amendment A1**（修订 D-214-2/3/4/7/8/10，新增 D-214-A1-1..7），不另起新 ADR 号。**关系**：承接 SEQ-20260622-03 卡片尺寸体系全栈（已交付 Phase 0–4）；ADR-215 端点契约不变（#1B 仅放宽现有 `PUT /admin/card-sizes/:sizeClass` body zod 边界，非新增 route）。**设计背书**：规划期 arch-reviewer (claude-opus-4-8) 出最终收敛方案。
+
+**动机（用户复盘）**：
+
+1. **语义错位（核心）**：原 D-214-4「网格档存列数不存卡宽」使运营后台调的是「桌面列数」。用户原始诉求「统一客户端卡片尺寸」中的「尺寸」= **卡片容器宽度**，非列数。「做了这么久卡片尺寸却保持原样」的根因 = 实现方向（column-driven）与原义（size-driven）相反。
+2. **compact 幽灵配置**：compact 档（原定详情侧栏相关推荐）零消费方——RelatedVideos 已是硬编码 60px 横向列表（SidebarList），CARD-SIZE-FEATURED-NORMALIZE 删了 RelatedVideos 的 grid 死分支。后台能配 compact、前台不生效。
+3. **相关推荐区过小**：详情页相关推荐是 320px 侧栏竖向列表（次要入口），播放页无相关视频区。用户要求两页统一为「一行横滚相关视频」作为可浏览内容（复用首页横滚 + VideoCard 范式）。
+
+### 决策
+
+- **D-214-A1-1（standard：column-driven → size-driven·修订 D-214-4）**：standard 档 DB 主配置由 `desktop_columns` 改为 `card_width_px`（卡片**目标/最小**宽度 px）。CSS 由 `repeat(var(--card-cols-standard-desktop), minmax(0,1fr))` 翻转为桌面级（≥1024px）`grid-template-columns: repeat(auto-fill, minmax(min(var(--card-w-standard, 200px), 100%), 1fr))`。**语义校正（Codex-A1-R1 BLOCKER 吸收）**：`minmax(W,1fr)` 的 W 是**轨道最小宽**、非字面恒定宽——实际行为为「卡宽 ≥ W，列数 = ⌊容器宽 ÷ (W+gap)⌋ 自动派生，末轨道 1fr 弹性拉伸填满容器消除留白」。即运营设定的是「**目标/最小卡宽**」：卡永不窄于 W、列数随容器变、卡宽在 [W, ~W+一档) 间轻浮以贴合容器——这才兑现「设卡片容器尺寸」的原义（卡宽跟随设定、不再写死列数）。**有意取舍**：相对 `repeat(auto-fill, var(--card-w))` 的精确定宽 + 末列留白，选弹性填充（无留白、卡宽贴近设定值）。**选 `auto-fill` 非 `auto-fit`**：auto-fill 保留容器可容纳的轨道数（卡宽稳定贴 W），auto-fit 在卡数 < 轨道数时折叠空轨道、把少量卡拉伸至撑满全宽（畸形大卡）；featured/相关卡数通常 ≥ 列数，auto-fill 让卡宽稳定可预期。`min(var(--card-w-standard,200px), 100%)` 双重防御：① 变量缺失兜底 200px（不塌 1 列）；② `min(…,100%)` 防卡宽 > 容器宽时单列溢出。
+
+- **D-214-A1-2（移动/平板保留 2/3 列·不破 D-214-10）**：size-driven `auto-fill` 在 <1024px 窄屏会塌 1 列（minmax 下限 > 半容器宽）→ 破既有移动端 2 列契约。**仅 ≥1024px 桌面级启用 size-driven**；移动（<640）2 列 / 平板（640–1023）3 列保留既有 `--cg-cols` 计数级联（D-214-10「移动/平板按 2/3 派生」不变，仅桌面档由设列数改设卡宽）。
+
+- **D-214-A1-3（compact 档废弃·修订 D-214-2）**：compact 档零消费方 → 废弃（幽灵配置须删）。同步 5 处：① migration 125 `DELETE FROM card_size_settings WHERE size_class='compact'`；② `@resovo/types` CardSizeClass 移除 'compact'；③ CARD_SIZE_DEFAULTS 删 compact；④ CardSizeTab 删 compact 卡；⑤ `GridCardSizeClass = Exclude<CardSizeClass,'scroll'>` 自动收窄为仅 'standard'。封闭枚举退役走本 Amendment（D-214-2「新增/退役档位走 ADR amendment + migration」的合规执行）。**⑥（Codex-A1-R2 CONCERN 吸收）migration 125 须重写 124 的 `size_class` 枚举 CHECK**（line 22-23 `IN ('standard','compact','scroll')` → `IN ('standard','scroll')`）：仅 DELETE compact 行 + 删 TS 枚举不够，DB 的 size_class CHECK 仍含 compact 则未来可再插入幽灵行。**blast radius 实测**（须随删同步改）：SSR fallback `CARD_SIZE_CLASSES.map`（随枚举自动收窄、测试断言须改）/ globals.css `.card-grid--compact`（删）/ CardGrid · CardSizeTab · `card-size-admin` · `card-size-public` 测（断言改）。
+
+- **D-214-A1-4（desktop_columns 转 NULLABLE 退化护栏·修订 D-214-3）**：standard 改存卡宽后 desktop_columns 非主配置 → 从「网格档 NOT NULL」改「**全档 NULLABLE**」。**本轮 standard seed = NULL（不启用列数护栏）**：超宽屏列数由页面容器既有 max-width 自然有界（如 1280px ÷ 200px ≈ 6 列），不引入 `max()` 列数钳位 CSS 复杂度。保留字段以备将来需「auto-fill 但最多 N 列」时启用 `repeat(auto-fill, minmax(max(var(--card-w-standard), (100%-(N-1)*gap)/N), 1fr))` 钳位（可选增强，登记不实施）。
+
+- **D-214-A1-5（migration 125 schema 放宽 + 严格步骤顺序·修订 D-214-3 / Codex-A1-R3 BLOCKER 吸收）**：① `card_width_px`：「仅 scroll 非空、[120,280]」→「**全档 NOT NULL、[120,400]**」（standard 卡可宽于 scroll 170）；② `desktop_columns`：全档 NULLABLE（D-214-A1-4）；③ **重写两个 CHECK**：(a) `size_class` 枚举 CHECK（124 line 22-23）删 compact → `IN ('standard','scroll')`；(b) 删 `card_size_settings_unit_by_class_check`（档位×单位绑定，单位统一为卡宽后失去前提——倒置「scroll 带 columns / 网格档带 width」不再可能）+ 删 124 内联匿名 `card_width_px BETWEEN 120 AND 280`（Postgres 自动命名 `card_size_settings_card_width_px_check`，#1A 落地查实际名 DROP），改加 `card_size_settings_size_unit_check`（`card_width_px IS NOT NULL AND BETWEEN 120 AND 400` + `desktop_columns IS NULL OR BETWEEN 2 AND 8`）。④ **严格步骤顺序（NOT NULL 回填前置——standard 现有行 width=NULL，直接 SET NOT NULL 必失败）**：(1) `DROP CONSTRAINT IF EXISTS card_size_settings_unit_by_class_check`；(2) `UPDATE ... SET card_width_px=200, desktop_columns=NULL WHERE size_class='standard'`（回填）；(3) `DELETE WHERE size_class='compact'`；(4) DROP+ADD `size_class` CHECK（删 compact 枚举）；(5) DROP 旧 width 范围 CHECK + ADD `size_unit_check`（[120,400] + 全档非空）；(6) `ALTER COLUMN card_width_px SET NOT NULL`（此时全行已非空）。全新库走 seed `INSERT ... ON CONFLICT` 新值。⑤ down 路径保持注释（项目约定，同 124：migrate.ts 整文件单 SQL 执行）+ 全程 `IF EXISTS` 幂等；scroll 行 170 在新旧范围均安全（无需动）。⑥ **同步 `docs/architecture.md` §5.19**（schema 变更 CLAUDE.md 硬约束，#1A 同 commit）。
+
+- **D-214-A1-6（详情/播放页横滚化 + 共享 ScrollRow 原语·修订 D-214-8）**：① 提取共享 `components/shared/scroll-row/ScrollRow.tsx`（横滚布局原语，平级 CardGrid）：flex + overflow-x-auto + scroll-snap，消费 `--card-w-scroll`/`--card-gap-scroll`，children 同构卡片（VideoCard）。首页三横滚行（Shelf/TopTenRow/DailyAnimeRow）手写同款骨架（触「3 处提取」信号）→ 首页迁移列**可选后续 #8**（避免动首页关键路径）。② **详情页**：拆 1fr + 320px 侧栏双栏 → hero 全宽 + 下方全宽 ScrollRow（**已核实 `VideoDetailClient.tsx` aside 仅含 RelatedVideos、无其他模块，组件层面拆除干净**）；RelatedVideos 退役 SidebarList（60px 硬编码列表）→ ScrollRow + VideoCard(navigate)。**当完整布局迁移处理（Codex-A1-R4 CONCERN 吸收，非 surgical 组件替换）**：除删组件，须同步更新 globals.css `.detail-lower-grid` 网格模板 + 删 `--detail-sidebar-w`/`--detail-sidebar-gap` root 变量（约 globals.css 122-128 / 610-619）+ 详情页桌面/移动响应式断点 + e2e 下半页布局断言 —— #5 卡范围据此扩。③ **播放页**：WatchPageClient 下方新增 `WatchRelatedRow`（同款 ScrollRow + VideoCard navigate），播放页此前无相关区。④ **数据仅相关**：`/videos/trending?type=${video.type}&exclude=${video.id}&limit=12`，**无筛选/无排序/无加载更多**（用户明确：只展示一行相关视频，非浏览门户）。⑤ **不耦合播放器状态机**：相关卡 `VideoCard interaction="navigate"`（纯跳转详情，严禁 usePlayerStore/hostMode），不触 GlobalPlayerHost full/mini/pip 状态机。
+
+- **D-214-A1-7（搜索结果 SearchResultRow 范围外·边界声明）**：`SearchResultRow`（search/_components/SearchPage.tsx）是**列表行**（横向 meta 布局：缩略图 + 标题 + 描述 + 元信息），非卡片网格 → 强接 card_size 是语义错配。**明确声明范围外**——card_size 体系服务「卡片网格（standard）+ 横滚行（scroll）」两形态，列表行不在其内（免未来当遗漏重提）。
+
+### 实施序列（Phase 0→4，详见 SEQ-20260623-01）
+
+#0 本 Amendment（docs + Codex）→ #1A schema/types/一致性测 → #1B admin zod body → #2 ScrollRow（共享，Opus）→ #3 SSR fetch + globals.css size-driven 翻转（Opus）→ #4 CardSizeTab → #5 详情拆侧栏 → #6 播放页新增 → #7 e2e 重写 + 全量回归 →（#8 可选 首页 ScrollRow 迁移）。
+
+### 隐藏破坏点（实施必守）
+
+1. **一致性单测漂移（Codex-A1-R5 BLOCKER 吸收，清单补全）**：migration 125 改 seed + 删 compact + 单位翻转 → ① 124 seed 一致性测（standard 改存卡宽 + 删 compact 行断言）；② `tests/integration/api/card-size-settings-schema.test.ts` 倒置行测（CHECK 重写、倒置语义消解）；③ `card-size-fetch` 测（standard 出 `--card-w-standard` 非 `--card-cols-standard-desktop`）；④ CardGrid（`.card-grid--compact` 删）/ CardSizeTab 测（compact 卡删）；⑤ `tests/unit/api/card-size-admin.test.ts`（PUT body 含列数/compact 断言）；⑥ `tests/unit/api/card-size-public.test.ts`（公开读断言 standard 单位/列数）；⑦ `tests/e2e-next/card-size-grid.spec.ts`（SSR 注入断言 standard 5 列/16 → 卡宽 + compact 变量删）—— 各卡门禁须同步重写，否则全量单测/e2e 红。
+2. **CSS 兜底脆化**：size-driven 变量缺失塌 1 列 → globals.css 必写 `minmax(min(var(--card-w-standard,200px),100%),1fr)` 兜底（#3 断言）。
+
+### 关系/影响
+
+修订 ADR-214 D-214-2（compact 退役）/ D-214-3（schema CHECK 重写）/ D-214-4（column→size-driven 翻转）/ D-214-7（GridCardSizeClass 收窄 standard）/ D-214-8（横滚纳入扩到详情/播放 + ScrollRow 提取）/ D-214-10（桌面档设卡宽、移动 2/3 保留）。**ADR-215 端点契约不变**（#1B 仅放宽现有 PUT body zod 边界、非新增 admin route → 不触红线，`verify:endpoint-adr` 无新增）。**强制 Opus**：#0 + #2（ScrollRow 新共享组件契约）+ #1B（admin body schema）+ #3（SSR/CSS 原语翻转）→ commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer（或主循环 opus 自证 + Codex 审）。
+
+**待用户裁可 → 解锁 #1A 实现。**
+
+### Codex 对抗审摘要 round-1 2026-06-23（codex-rescue runtime 等效对抗审 / agentId a4aaf4b8d68ae97b0；注：`/codex:adversarial-review` skill 配 disable-model-invocation 不可由模型自动触发，自动推进模式下走 codex-rescue 同 runtime 做等效独立对抗审）
+
+**3 BLOCKER + 2 CONCERN，全数吸收（已写入上文决策）。** 核心判断：三件事方向（standard size-driven / compact 废弃 / 详情·播放横滚化）不被质疑，但「卡宽恒定」措辞错、migration 步骤顺序欠定义、废弃/测试 blast radius 被低估。
+
+- **R1-BLOCKER（CSS 卡宽非恒定）→ 吸收**：`minmax(W,1fr)` 的 W 是轨道最小宽非恒定宽、轨道弹性填充至撑满 → 校正 D-214-A1-1 为「目标/最小卡宽 + 弹性填充」语义 + 明确 `auto-fill`（卡宽稳定）vs `auto-fit`（卡少时畸形撑满）取舍。
+- **R2-CONCERN（compact 废弃 blast radius）→ 吸收**：仅 DELETE 行 + 删 TS 枚举不够，须重写 124 `size_class` 枚举 CHECK 删 compact（否则 DB 仍允许插入幽灵行）；范围扩 SSR fallback `CARD_SIZE_CLASSES.map` / `.card-grid--compact` CSS / API 测（D-214-A1-3 ⑥）。
+- **R3-BLOCKER（migration 125 NOT NULL 回填 + 步骤顺序）→ 吸收**：standard 现有行 `card_width_px=NULL`，直接 `SET NOT NULL` 必失败 → D-214-A1-5 明确 6 步顺序（DROP 旧 unit CHECK → UPDATE 回填 standard → DELETE compact → size_class CHECK 重写 → width CHECK 放宽 [120,400] → SET NOT NULL）+ `IF EXISTS` 幂等 + down 注释；scroll 170 新旧范围均安全。
+- **R4-CONCERN（详情拆侧栏当布局迁移）→ 吸收**：非 surgical 组件替换，须同步 `.detail-lower-grid` 模板 + 删 `--detail-sidebar-*` 变量 + 响应式断点 + e2e 下半页断言（D-214-A1-6）。
+- **R5-BLOCKER（测试漂移清单不全）→ 吸收**：补 `card-size-admin` / `card-size-public` / `card-size-grid.spec`(e2e) / `CardSizeTab` 测到清单（隐藏破坏点 1 ⑤⑥⑦）。
+- **Codex 验证站得住**：播放器解耦（VideoCard navigate 为 plain Link、takeover 分支隔离、不耦合 GlobalPlayerHost full/mini/pip）+ scroll 行单位安全面 + 移动/平板 2/3 列保留方向。**5 项修订已全部落盘，方案可进 Phase 1 实现。**

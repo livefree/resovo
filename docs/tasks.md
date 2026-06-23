@@ -60,6 +60,18 @@ _（**SEQ-20260610-02 source-health v2 落地 🔄 15/17 — Phase 1 ✅ + Phase
 
 ---
 
+### 🔄 CARD-SIZE-A1-SCHEMA — migration 125 schema 放宽（6 步）+ types 单位翻转 + 一致性测重写（SEQ-20260623-01 Phase 1A）
+
+- **状态**：🔄 进行中 ｜ **创建/开始**：2026-06-23 ｜ **执行模型**：claude-opus-4-8（主循环；卡建议 sonnet）｜ **子代理**：无（按 ADR-214 Amendment A1 D-214-A1-3/4/5 实施，schema 翻转非新架构决策）。
+- **依据**：ADR-214 **Amendment A1 Accepted**（D-214-A1-3 compact 废弃 / A1-4 desktop_columns NULLABLE / A1-5 migration 125 6 步 + schema 放宽）。Codex round-1 R2/R3/R5 已吸收。
+- **问题理解**：standard 从「存列数」翻转为「存卡宽 px」+ 废弃零消费 compact 档 → 须改 DB schema（migration 125）+ `@resovo/types` 契约 + 一致性测，且 standard 现有行 `card_width_px=NULL`，migration 须严格顺序回填防 SET NOT NULL 失败。
+- **方案**：① **migration 125 严格 6 步**（Codex-R3）：(1) DROP `card_size_settings_unit_by_class_check` IF EXISTS →(2) UPDATE standard `card_width_px=200, desktop_columns=NULL` 回填 →(3) DELETE compact 行 →(4) DROP+ADD `size_class` CHECK 删 compact（`IN ('standard','scroll')`，Codex-R2）→(5) DROP 内联匿名 width CHECK（查实际名 `card_size_settings_card_width_px_check`）+ ADD `card_size_settings_size_unit_check`（width 全档非空 [120,400] + columns NULL OR [2,8]）→(6) `ALTER COLUMN card_width_px SET NOT NULL`；down 注释 + IF EXISTS 幂等。② `@resovo/types`：CardSizeClass 删 'compact' / CARD_SIZE_DEFAULTS standard `{desktopColumns:null,cardWidthPx:200,gapPx:16}` + 删 compact（注释/混合单位说明随改）。③ `docs/architecture.md` §5.19 同步。④ **一致性测重写**（Codex-R5）：seed==CARD_SIZE_DEFAULTS / `card-size-settings-schema.test.ts` 倒置行测随 CHECK 重写（倒置语义消解）。
+- **涉及文件**：`apps/api/src/db/migrations/125_*.sql`（新）、`packages/types/src/card-size.types.ts`、`docs/architecture.md`、`tests/integration/api/card-size-settings-schema.test.ts`、`apps/api/src/db/queries/card-size-settings.ts` 的 seed 一致性测、可能 `apps/api/src/db/queries/card-size-settings.ts`（若引用 compact）。
+- **门禁**：seed 一致性测 + 倒置行测（vitest 可跑）/ typecheck/lint。**migrate 冷启动验证**（实跑 migrate 连 DB）须主 checkout/CI 跑——worktree 缺 `.env.local`，登记他处（同 CARD-SIZE-E2E 环境约束）。**关键路径**：DB schema 变更，须同步 architecture.md。
+- **备注**：本卡为 schema/types 基础层；#1B（admin zod body）依赖之。types 基础包改动按 ADR-180 test:changed 自动升全量。
+
+---
+
 ## 工作流提示
 
 - 取新任务前先查 `docs/task-queue.md` 是否有 `🚨 BLOCKER`（当前无）。
