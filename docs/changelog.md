@@ -2821,3 +2821,12 @@
 - **#4 TAB**：`CardSizeTab` standard「桌面列数」→「卡片宽度」+ 删 compact 卡（CLASS_META）+ CardSizePreview standard 改 size-driven auto-fill 预览 + `validation` 卡宽 [120,400]（删 desktopColumns bound）+ `api` 统一 CardSizeBody + CardSizeTab 测重写（2 档 / 卡宽 body / 越界 401 / auto-fill 预览）。
 - **门禁**：typecheck=0 / lint=0（修复 worktree `node_modules/@resovo/types` symlink 缺失致 apps/api tsc 解析歧义 = 主仓 3 档 vs worktree 2 档，建本地 symlink 指向 worktree packages/types）/ **全量单测 602 文件 8221 测全过**（ADR-180 types 升全量 / PHASE COMPLETE 兜底）/ verify:adr-contracts=0（endpoint-adr 250 路由对齐，未新增 route）。
 - **注意事项**：① 卡宽语义 = 目标/最小宽 + 弹性填充（用户确认，AskUserQuestion）。② desktopColumns 护栏本轮全 NULL、不暴露编辑（D-214-A1-4）。③ migration 125 冷启动验证须主 checkout/CI（worktree 缺 `.env.local`）。④ worktree `node_modules/@resovo/types` symlink 为本地解析修复、不进 git（node_modules gitignored）。⑤ 剩横滚线 #2 ScrollRow / #5 详情拆侧栏 / #6 播放页 + #7 e2e。
+
+## [CARD-SIZE-A1-SCROLLROW] Phase 2：共享 ScrollRow 横滚布局原语（ADR-214 Amendment A1 D-214-A1-6，SEQ-20260623-01）
+
+- **日期**：2026-06-23 ｜ **类型**：前端共享组件（新 API 契约）｜ **执行模型**：claude-opus-4-8（主循环，新共享组件契约强制 Opus 级）｜ **子代理**：arch-reviewer (claude-opus-4-8) 契约评审 CONDITIONAL PASS。
+- **依据**：ADR-214 Amendment A1 D-214-A1-6（详情/播放横滚 + 共享 ScrollRow 原语，平级 CardGrid）。
+- **改动**：新建 `apps/web-next/src/components/shared/scroll-row/ScrollRow.tsx`（flex 横滚 + `React.Children.map` 把每 child 包裹 `.scroll-row__item` 定宽，消费 `--card-w-scroll`/`--card-gap-scroll`）+ `globals.css` `.scroll-row`/`.scroll-row__item` + `tests/unit/web-next/scroll-row.test.tsx` 9 测。
+- **arch-reviewer CONDITIONAL PASS（2 HIGH + 2 MEDIUM + 1 LOW 全吸收）**：H1 可达性（`tabIndex=0` + `role="region"` + 必填 `aria-label`——隐藏滚动条 + 无 nav 下键盘/纯鼠标可达，WCAG 2.1.1）/ H2 Fragment 边界（注释禁顶层 Fragment 聚合多卡 + 单测锁"Fragment→单 item"行为）/ M3 注入作用域论证修正（全局 `:root` 注入 + helper `CARD_SIZE_DEFAULTS` 降级，非"scroll 专属子树"）/ M4 `__item` 渲染韧性兜底 `var(--card-w-scroll, 170px)`（对齐 CardGrid `var(--cg-cols,2)`）/ L5 空槽补足非职责声明。
+- **门禁**：typecheck=0 / lint=0 / ScrollRow 测 9/9（组件契约 + a11y role/tabindex/aria-label + Fragment 边界 + globals.css 源快照）。
+- **注意事项**：① 本卡仅建组件，详情/播放消费在 #5/#6。② nav 左右翻页按钮 + 首页 Shelf/TopTenRow/DailyAnimeRow 迁移消重为可选后续 #8（提取 Shelf useScrollTrack/TrackNavButton）。③ children 契约：传 element 数组或并列 element，禁顶层 Fragment 聚合多卡。

@@ -60,15 +60,15 @@ _（**SEQ-20260610-02 source-health v2 落地 🔄 15/17 — Phase 1 ✅ + Phase
 
 ---
 
-### 🔄 CARD-SIZE-A1-SCROLLROW — 提取共享 ScrollRow 横滚布局原语（SEQ-20260623-01 Phase 2，强制 Opus）
+### 🔄 CARD-SIZE-A1-DETAIL — 详情页拆 320px 侧栏 → 全宽横滚相关视频（SEQ-20260623-01 Phase 5，完整布局迁移）
 
-- **状态**：🔄 进行中 ｜ **创建/开始**：2026-06-23 ｜ **执行模型**：claude-opus-4-8（主循环，新共享组件契约强制 Opus 级）｜ **子代理**：无（按 ADR-214 Amendment A1 D-214-A1-6 实施）。
-- **依据**：ADR-214 Amendment A1 D-214-A1-6（详情/播放页相关视频横滚化 + 共享 ScrollRow 原语，平级 CardGrid）。
-- **问题理解**：详情/播放页相关视频改一行横滚（#5/#6 消费），需共享横滚布局原语；首页三横滚行（Shelf/TopTenRow/DailyAnimeRow）各写各的 flex+overflow-x+scroll-snap 骨架（重复，触「3 处提取」信号）。本卡建组件，首页迁移列可选后续 #8。
-- **方案**：新建 `apps/web-next/src/components/shared/scroll-row/ScrollRow.tsx`（横滚布局原语：flex + overflow-x-auto + scroll-snap，消费 `--card-w-scroll`/`--card-gap-scroll`；children 同构卡片〔VideoCard〕，封闭契约）+ 必要时 globals.css `.scroll-row` 类 + ScrollRow 单测（class/消费变量/children 透传/data-testid）。
-- **涉及文件**：`apps/web-next/src/components/shared/scroll-row/ScrollRow.tsx`（新）、可能 `apps/web-next/src/app/globals.css`（横滚类）、`tests/unit/web-next/scroll-row.test.tsx`（新）。
-- **门禁**：typecheck/lint/test:changed + ScrollRow 单测。**关键路径**：新共享组件契约。
-- **备注**：新共享组件契约 commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer（或 opus 主循环自证）。本卡仅建组件，详情/播放消费在 #5/#6；首页三行迁移 ScrollRow 是可选后续 #8（不进本轮关键路径，避免动首页回归）。
+- **状态**：🔄 进行中 ｜ **创建/开始**：2026-06-23 ｜ **执行模型**：claude-opus-4-8（主循环；卡建议 sonnet）｜ **子代理**：无（按 ADR-214 Amendment A1 D-214-A1-6 + Codex-R4 实施）。
+- **依据**：ADR-214 Amendment A1 D-214-A1-6（详情拆侧栏 + 横滚）+ Codex-R4（**当完整布局迁移**，非 surgical 组件替换）。
+- **问题理解**：详情页下方双栏 1fr + 320px 侧栏（RelatedVideos 60px SidebarList 竖向列表，次要入口）→ hero 全宽 + 下方全宽 ScrollRow 相关横滚（VideoCard navigate），相关视频成可浏览内容。已核实侧栏仅含 RelatedVideos、拆除干净。
+- **方案**：① `VideoDetailClient` 拆下方双栏布局（去 320px `aside` 侧栏，相关行移主区下方全宽）；② `RelatedVideos` 退役 SidebarList（60px 硬编码竖列表）→ `<ScrollRow aria-label="相关视频">` + `VideoCard interaction="navigate"`，数据仍 `trending?type=&exclude=&limit=12`（无筛选/排序/加载更多）；③ `globals.css` `.detail-lower-grid` 模板调整 + 删 `--detail-sidebar-w`/`--detail-sidebar-gap` 死 token + 详情桌面/移动响应式断点；④ 详情相关测/e2e 断言更新。
+- **涉及文件**：`apps/web-next/src/components/video/VideoDetailClient.tsx`、`apps/web-next/src/components/detail/RelatedVideos.tsx`、`apps/web-next/src/app/globals.css`、详情相关单测/e2e。
+- **门禁**：typecheck/lint/test:changed + **VIDEO e2e**（详情布局回归，worktree 受限 → 登记主 checkout/CI）。**关键路径**：详情页布局大改。
+- **备注**：完整布局迁移（Codex-R4）须同步 `.detail-lower-grid` + `--detail-sidebar-*` + 响应式 + e2e；相关卡 navigate 纯跳转、不耦合播放器状态机。
 
 ---
 

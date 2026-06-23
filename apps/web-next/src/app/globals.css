@@ -656,6 +656,32 @@
   }
 }
 
+/* ───────────────────────────────────────────────────────────────────────────
+ * ScrollRow（CARD-SIZE-A1-SCROLLROW / ADR-214 Amendment A1 D-214-A1-6）— 横滚布局原语
+ *
+ * 平级 .card-grid：容器 flex 横滚 + scroll-snap，每个 child 经组件包裹为 .scroll-row__item 定宽。
+ * 消费 scroll 档 DB 真源变量 --card-w-scroll（卡定宽）/ --card-gap-scroll（间距），
+ * 经 [locale]/layout.tsx 全局 :root 注入 + card-size-fetch helper 内置 CARD_SIZE_DEFAULTS 降级、生产恒有值。
+ * __item 加渲染韧性兜底 var(--card-w-scroll, 170px)（对齐 .card-grid var(--cg-cols,2)，消非注入子树/隔离测卡宽飘移；非配置真源、不违 D-214-5）。
+ * 容器 tabindex=0 + role=region：隐藏滚动条 + 无 nav 下键盘/纯鼠标可达（WCAG 2.1.1，arch-reviewer HIGH）。
+ * ─────────────────────────────────────────────────────────────────────────── */
+.scroll-row {
+  display: flex;
+  gap: var(--card-gap-scroll);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  padding-bottom: var(--shelf-bottom-padding);
+}
+.scroll-row::-webkit-scrollbar {
+  display: none;
+}
+.scroll-row__item {
+  width: var(--card-w-scroll, 170px);
+  flex-shrink: 0;
+  scroll-snap-align: start;
+}
+
 /* HANDOFF-18 — Player 布局响应式工具类 */
 /* 主布局：mobile=列，≥1024=行（flex 1fr + panel） */
 .player-layout {
