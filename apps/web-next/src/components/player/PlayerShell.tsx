@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { usePlayerStore } from '@/stores/playerStore'
 import { apiClient } from '@/lib/api-client'
 import { extractShortId } from '@/lib/short-id'
+import { buildEpisodeUrl } from '@/lib/episode-url'
 import { getVideoDetailHref } from '@/lib/video-route'
 import { buildLineMatrix, buildThemedLines, type VideoLine } from '@/lib/line-matrix'
 import { classifyRouteHealth } from '@/lib/line-display-name'
@@ -80,7 +81,6 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
   // ADR-160 D-160-5：preview 模式禁用所有 feedback / audit 写入路径
   const feedbackEnabled = isPlaybackFeedbackEnabled(previewMode)
   void feedbackEnabled  // 显式保留：未来 usePlaybackFeedback / view_count 写入引用
-  void portalMode
   const hostOriginSlug = usePlayerStore((s) => s.hostOrigin?.slug)
   const slug = slugProp ?? hostOriginSlug ?? ''
   const searchParams = useSearchParams()
@@ -239,13 +239,26 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
     [setMode]
   )
 
+  // BUGFIX-WATCH-EP-URL：选集写回 URL `?ep`（地址栏即时反映 + 刷新按 URL 恢复集号）。
+  // 用 history.replaceState 而非 router.replace：同 slug 改 query 不触发 watch server component
+  // 重取 video+sources，也不污染历史栈。portalMode（全局播放器）/SSR 下不改 URL。
+  const syncEpisodeToUrl = useCallback(
+    (ep: number) => {
+      if (portalMode || typeof window === 'undefined') return
+      const url = buildEpisodeUrl(window.location.pathname, window.location.search, ep)
+      window.history.replaceState(window.history.state, '', url)
+    },
+    [portalMode]
+  )
+
   // 选集（活跃线路内，网格仅列该线路有的集 → 恒有效）
   const handleEpisodeSelect = useCallback(
     (ep: number) => {
       setEpisode(ep)
       setStartTime(undefined)
+      syncEpisodeToUrl(ep)
     },
-    [setEpisode]
+    [setEpisode, syncEpisodeToUrl]
   )
 
   // 切线路：setActiveLineKey；新线路不含当前集 → 收敛到该线路第 1 集（用户裁定）
@@ -257,11 +270,14 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
       setStartTime(undefined)
       if (!line.episodes.has(currentEpisode)) {
         const firstEp = line.episodeNumbers[0]
-        if (firstEp !== undefined) setEpisode(firstEp)
+        if (firstEp !== undefined) {
+          setEpisode(firstEp)
+          syncEpisodeToUrl(firstEp)  // BUGFIX-WATCH-EP-URL：切线收敛改集亦同步 URL
+        }
       }
       setPlayerVersion((v) => v + 1)
     },
-    [lineMatrix, currentEpisode, setActiveLineKey, setEpisode]
+    [lineMatrix, currentEpisode, setActiveLineKey, setEpisode, syncEpisodeToUrl]
   )
 
   // ── 报错驱动切换（ADR-166 watchdog/retry 沿用；线路键化）──────────

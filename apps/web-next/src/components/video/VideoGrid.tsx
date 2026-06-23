@@ -5,9 +5,11 @@ import { VideoCard } from './VideoCard'
 import { apiClient } from '@/lib/api-client'
 import type { VideoCard as VideoCardType, ApiListResponse } from '@resovo/types'
 
+// 前台卡片网格统一 gap（CARD-SIZING-B 口径冻结 16px）→ 复用 --page-inline-gap 真源
+const GRID_GAP_STYLE: React.CSSProperties = { gap: 'var(--page-inline-gap)' }
+
 interface VideoGridProps {
   query: string
-  variant?: 'portrait' | 'landscape'
   gridCols?: string
   layout?: 'grid' | 'scroll'
   /** PC 端 stagger fade（分类页 Sibling 过渡用） */
@@ -19,12 +21,11 @@ function VideoGridSkeleton({
   gridCols = 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
   testId,
 }: {
-  variant?: 'portrait' | 'landscape'
   gridCols?: string
   testId?: string
 }) {
   return (
-    <div className={`grid gap-4 lg:gap-6 ${gridCols}`} data-testid={testId ?? 'video-grid-skeleton'}>
+    <div className={`grid ${gridCols}`} style={GRID_GAP_STYLE} data-testid={testId ?? 'video-grid-skeleton'}>
       {Array.from({ length: 10 }).map((_, i) => (
         <VideoCard.Skeleton key={i} />
       ))}
@@ -34,7 +35,6 @@ function VideoGridSkeleton({
 
 export function VideoGrid({
   query,
-  variant = 'portrait',
   gridCols = 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5',
   layout = 'grid',
   stagger = false,
@@ -55,13 +55,13 @@ export function VideoGrid({
   const scrollContainerStyle: React.CSSProperties = {
     display: 'flex',
     overflowX: 'auto',
-    gap: '16px',
+    gap: 'var(--page-inline-gap)',
     scrollSnapType: 'x mandatory',
     scrollbarWidth: 'none',
     paddingBottom: '4px',
   }
 
-  const cardWidth = '160px'
+  const cardWidth = 'var(--shelf-card-w-portrait)'
 
   if (loading) {
     if (layout === 'scroll') {
@@ -84,7 +84,7 @@ export function VideoGrid({
     }
 
     return (
-      <div className={`grid gap-4 lg:gap-6 ${gridCols}`} data-testid={testId}>
+      <div className={`grid ${gridCols}`} style={GRID_GAP_STYLE} data-testid={testId}>
         {Array.from({ length: 10 }).map((_, i) => (
           <div
             key={i}
@@ -123,10 +123,10 @@ export function VideoGrid({
     )
   }
 
-  const gridClass = `grid gap-4 lg:gap-6 ${gridCols}${stagger ? ' video-grid-stagger' : ''}`
+  const gridClass = `grid ${gridCols}${stagger ? ' video-grid-stagger' : ''}`
 
   return (
-    <div className={gridClass} data-testid={testId}>
+    <div className={gridClass} style={GRID_GAP_STYLE} data-testid={testId}>
       {videos.map((video) => (
         <VideoCard key={video.id} video={video} />
       ))}

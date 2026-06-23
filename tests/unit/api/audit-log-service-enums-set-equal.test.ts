@@ -127,6 +127,8 @@ const EXPECTED_ACTION_TYPES = [
   // ADR-173 / META-30：API 凭证统一管理（2 项 / targetKind 复用 'system'）
   'integration.credential_update',
   'integration.credential_test',
+  // ADR-214/215 / SEQ-20260622-03：前台卡片尺寸档位写（targetKind 'card_size'）
+  'card_size.update',
 ] as const
 
 const EXPECTED_TARGET_KINDS = [
@@ -147,6 +149,7 @@ const EXPECTED_TARGET_KINDS = [
   'identity_candidate',  // CHG-VIR-9-B / ADR-178 D-178-6（migration 088 CHECK 14→15）
   'home_section',  // CHG-HOME-PREVIEW-API-A / ADR-182 D-182-5（migration 095 CHECK 15→16）
   'home_page',  // CHG-HOME-DRAFT-PUBLISH-A / ADR-185 D-185-3.5（migration 097 CHECK 16→17）
+  'card_size',  // ADR-214/215 / SEQ-20260622-03（migration 124 CHECK 17→18）
 ] as const
 
 describe('AuditLogService enums set-equal 守卫（ultrareview P1-2）', () => {

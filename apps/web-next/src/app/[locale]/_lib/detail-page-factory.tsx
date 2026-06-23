@@ -32,7 +32,8 @@ export function createDetailPage(showEpisodes: boolean) {
     // - fetchVideoSources 失败返回空数组（VideoDetailClient 渲染"暂无可用播放源"占位）
     // - preview 模式下两个 fetch 都走 admin preview 派发链路（middleware header → Bearer → cache:no-store）
     const initialVideo = await fetchVideoDetail(slug)
-    const initialSources = await fetchVideoSources(slug, 1)
+    // BUGFIX-WATCH-EP-URL ③：拉**全集源**（省略 episode），与播放页线路矩阵同源 → 线路名逐字一致
+    const initialSources = await fetchVideoSources(slug)
     return (
       <Suspense fallback={<VideoDetailClientSkeleton />}>
         <VideoDetailClient

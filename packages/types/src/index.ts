@@ -6,6 +6,8 @@ export type * from './home-module.types'
 export * from './home-section.types'
 // ADR-185 / CHG-HOME-DRAFT-PUBLISH-A：发布治理（HOME_PUBLISH_SOURCES 常量 value export）
 export * from './home-publish.types'
+// ADR-214 / SEQ-20260622-03：卡片尺寸体系（CARD_SIZE_CLASSES / CARD_SIZE_DEFAULTS 常量 value export）
+export * from './card-size.types'
 export type * from './home.types'
 export type * from './user.types'
 // ADR-165 / CHG-SN-9-ROUTE-LABEL-D-A1：runtime exports（zod schema + 常量 + helper）

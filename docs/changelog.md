@@ -2478,3 +2478,325 @@
 - **问题（Codex stop-gate）**：REASON-SSF 后 reason 变更触发 useEffect 重取；但 handleLoadMore 无 cleanup/守卫 → load-more 在途时切 reason/kind/scope，旧响应回来仍 `setRows(dedupeAppend)`/setCounts/setTotal/setRequested → 旧筛选数据污染新视图（且 requested 错位）。useEffect 有 cancelled 守自身，handleLoadMore 无。
 - **修复要点**：单一 `fetchSeqRef` 代次计数——重置即 +1（useEffect），load-more 捕获并在响应后比对，不匹配即整体丢弃（数据 + requested 均不动）。保留 dedupeAppend（防同代次边界重复）。
 - **门禁**：typecheck=0/lint=0/test:changed=60/verify:adr-contracts=0。board 改动经手动 toggle 隔离 parked 不关抽屉（避 stash-pop 冲突，上次教训）。
+
+## [CARD-SIZING-A] 前台视频卡片尺寸碎片化治理·死代码/死配置清理（SEQ-20260622-01）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 16:30
+- **执行模型**：claude-opus-4-8（主循环；纯死代码收敛，零架构决策）
+- **子代理**：无
+- **来源**：调查报告 `docs/designs/client-video-card-sizing-audit_20260622.md`（问题清单 4/5/6 项）。用户裁定中力度治理「清理 + 规范统一」，本卡 = 清理半（零视觉变化）。规范统一移 CARD-SIZING-B（口径已冻结，commit `e0cd28fc`）。
+- **修改文件**（清理正body `cd78e527` + 补完 `d68dbbc8`；VideoCardWide 删除随 `b75e7a00`）：
+  - `apps/web-next/src/components/video/VideoCardWide.tsx` — 删（`@deprecated` 全仓零引用）。
+  - `apps/web-next/src/components/video/Shelf.tsx` — 删 `landscape-row` template（type union 值 + `LandscapeTrack` 函数 + render 分支，零调用方）+ 头部注释 landscape 行。
+  - `apps/web-next/src/components/video/VideoGrid.tsx` — 删死 `variant` prop（`VideoGridProps` + `VideoGridSkeleton` + 解构默认值，函数体零使用）；scroll 模式 `cardWidth` 硬编码 `'160px'` → `var(--shelf-card-w-portrait)`（消 token 漂移）。
+  - `apps/web-next/src/components/detail/RelatedVideos.tsx` — 移除 `variant="portrait"` 传值（`RelatedVideos` 自身 `variant="sidebar"|"grid"` 是另一 prop，不动）。
+  - `packages/design-tokens/src/semantic/layout.ts` — 删 `shelf-card-w-landscape: 300px` 死 token（**真源**）。
+  - `packages/design-tokens/src/css/tokens.css` — `build-css.ts` 重新生成（删 landscape 1 行）。
+  - `apps/web-next/src/app/globals.css` — 同步删 `--shelf-card-w-landscape` 镜像行。
+  - `apps/web-next/src/components/search/SearchEmptyState.tsx` — 移除残留 `variant="portrait"` 传值（`portrait` 为原默认值，零行为变化）。
+- **新增依赖**：无
+- **数据库变更**：无
+- **补完（Codex stop-gate 续）**：原 commit `cd78e527` 两处漏网，`d68dbbc8` 补齐——①landscape 死 token 真源在 `design-tokens/src/semantic/layout.ts`（调查报告 §3 仅盘点 `globals.css`，漏 design-tokens 真源链 → `build-css` 生成 `tokens.css` → 手工镜像 globals.css；只删 globals.css 脆，重生成会回灌），删真源 + 重新生成 + 同步三处（`dist/` gitignore 随 build 重生）；②`SearchEmptyState.tsx:32` 残留 `variant="portrait"`（早于 A 引入，致原 commit 声称 typecheck 8/8 实际不成立）。
+- **门禁**：typecheck=0 / lint=0 / test:changed=142（含 `design-tokens/alias-coverage` 23 测，确认删 token 未破坏别名覆盖校验）。**零视觉变化**（landscape-row/variant/scroll/landscape token 均零消费，静态可证）。
+- **注意事项**：① `VideoGrid` `layout="scroll"` 路径仍零消费方（本卡仅 token 化未删整段，follow-up 登记 task-queue）。② CARD-SIZING-B（gap/列数/标题归一，口径已冻结于 task-queue）实施前须过 arch-reviewer token 结构方案 PASS。③ 调查报告 §3「token 层」盘点不完整（漏 design-tokens 真源），后续若据此再治理需以 `packages/design-tokens/src/semantic/` 为真源。
+
+## [CARD-SIZING-B] 前台视频卡片尺寸规范统一（gap / 列数 / 标题归一，SEQ-20260622-01）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 17:15
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8) — token 结构方案，**PASS-WITH-CONCERNS**（CLAUDE.md 强制升 Opus 第 5 条：Token 层结构与引用规则）
+- **来源**：调查报告问题清单 1/2/3/7；口径用户冻结（commit `e0cd28fc`）。CARD-SIZING-A ✅（`cd78e527`+`d68dbbc8`）。
+- **arch-reviewer 关键裁决（采纳，覆盖 task-queue 草拟）**：(a) **复用既有 `--page-inline-gap`=16px**（真源 layout.ts 已有），**不新增 `--grid-gap`**——真源单一性，避免第三个 16px 同义 token；连带 (e) **零真源改动、无需跑 build-css**。(b) 删 orphan `--browse-grid-gap`，其余 browse/search 别名「镜像超集」遗留债本卡不收口（独立回填卡）。(c) 不抽列数共享常量，RelatedVideos 删 override 落回 VideoGrid 默认、BrowseGrid inline grid→Tailwind 类。(d) 标题不 token 化，VideoCard inline 对齐 BrowseCard 基准。
+- **修改文件**：
+  - `apps/web-next/src/components/video/VideoGrid.tsx` — 去 `gap-4 lg:gap-6`（grid 3 处）→ 模块常量 `GRID_GAP_STYLE` inline `var(--page-inline-gap)`；scroll 内联 `gap:'16px'` → 同 token（grid/scroll 表达统一）。
+  - `apps/web-next/src/components/browse/BrowseGrid.tsx` — inline `repeat(5,1fr)` → Tailwind `grid-cols-2 sm:3 lg:5`（skeleton + grid 两处）；gap → `var(--page-inline-gap)`；docstring 同步。
+  - `apps/web-next/src/components/detail/RelatedVideos.tsx` — 删 `gridCols="...3/4/6"` override（grid + Skeleton 两处）→ 落回 VideoGrid 默认 2/3/5。
+  - `apps/web-next/src/components/video/VideoCard.tsx` — 标题 `text-sm line-clamp-1` → `line-clamp-2` + inline `fontSize:13px/fontWeight:500/lineHeight:1.4`（对齐 BrowseCard）；VideoCardSkeleton title height 14→13 同步。
+  - `apps/web-next/src/app/globals.css` — 删 orphan `--browse-grid-gap: 20px`。
+  - `tests/e2e-next/typography-layout.spec.ts` + `tests/e2e-next/card-dual-exit.spec.ts` — VideoCard 标题 locator `p.line-clamp-1` → `p.line-clamp-2`（共 3 处，Codex stop-gate 第一轮捕获 card-dual-exit 2 处）+ gap 注释同步。
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：typecheck=0 / lint=0 / test:changed=42（VideoCard/BrowseGrid/ShelfRow/Skeleton/HomeBrandFiltering）；**e2e=48 passed / 0 失败 / 1 flaky（browse /series 冷构建首跑超时，retry 通过）/ 3 skipped**（typography-layout VideoGrid gap≥16 + title vs tag-layer / card-dual-exit / search / browse / detail / homepage / smoke，PLAYWRIGHT_SERVERS=web）。
+- **e2e 环境插曲（与改动无关）**：首两轮 e2e 全盘失败（含 smoke/主题/banner），诊断为 `apps/web-next/.next` 构建缓存损坏（webpack `invalid block type` + 503 次 SSR `JSON.parse` 500，连不取数据的 next-placeholder 静态页都 500）；`rm -rf apps/web-next/.next` 清缓存后全绿。视觉回归对改动有效。
+- **注意事项**：① 本卡复用 `--page-inline-gap`，design-tokens 真源**未改**（区别于草拟的新增 token）。② browse/search/detail 其余别名「镜像超集」遗留债未收口 → 独立「token 真源回填」卡。③ 高力度选项（定宽机制 5→1 CardGrid + VideoCard/BrowseCard 合并）+ VideoGrid scroll 死路径删除仍在 task-queue follow-up。④ 标题排版 3 处 inline 重复触及提取信号，本卡按口径只统一值未提取（arch-reviewer 非阻塞 CONCERN）。⑤ e2e 期间清了 web-next `.next` 缓存且用户 :3000 dev server 已被用户终止——下次 `npm run dev` 会全新重建（顺带修复原损坏）。
+
+## [BUGFIX-WATCH-EP-URL] 播放页选集/线路 URL 同步 + 详情页进播放页集号丢失 + 详情/播放线路名统一（用户反馈，SEQ-20260622-02）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 18:30
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **背景（用户反馈 3 个前台 bug）**：① 详情页选集点击进播放页总是「默认线路第一集」；② 播放页切换选集地址栏不变、刷新后集号重置；③ 详情页线路名与播放页线路名不一致。
+- **根因**：
+  - ①②：watch 页双 `initPlayer` 所有权竞争——`useWatchSlugSync` 写死 `initPlayer(slug, 1)`（集号恒 1 + 传完整 slug 当 shortId），hydration 后晚于 PlayerShell init 执行 → 覆盖已按 URL `?ep` 对齐的 `currentEpisode`（→1）+ 重置 `activeLineKey`（→matrix[0]）；且选集为纯 store 操作未与 URL 双向同步 → 刷新按旧 `?ep` 回退。附带：完整 slug 当 shortId 落 store → mini player `/videos/${shortId}` 端点拼错。
+  - ③：播放页主题化线路名（`buildThemedLines` + `useRouteTheme`，按线路索引）vs 详情页原始 `siteDisplayName/sourceName` 逐源；且详情页用第 1 集源、播放页用全集源 → 索引对不齐。命名唯一真源 = `line-display-name.ts` 主题系统。
+- **修改文件**：
+  - `apps/web-next/src/lib/episode-url.ts`（新）— `parseEpisodeParam` + `buildEpisodeUrl` 纯函数（选集↔URL `?ep` 同步）。
+  - `apps/web-next/src/app/[locale]/watch/[slug]/_hooks/use-watch-slug-sync.ts` — `initPlayer(slug,1)` → `initPlayer(extractShortId(slug), parseEpisodeParam(?ep))`（两处），sameSlug（mini→full 交接）路径不变。
+  - `apps/web-next/src/components/player/PlayerShell.tsx` — 新增 `syncEpisodeToUrl`（`history.replaceState` 写 `?ep` + portalMode/SSR 守卫），接入 `handleEpisodeSelect` + `handleLineChange` 收敛改集；移除死代码 `void portalMode`。
+  - `apps/web-next/src/app/[locale]/_lib/detail-page-factory.tsx` — `fetchVideoSources(slug,1)` → `fetchVideoSources(slug)`（全集源，与播放页同源）。
+  - `apps/web-next/src/components/video/VideoDetailClient.tsx` — 线路选择器消费全集源（episode 无关），移除按集重取 + `activeSourceId` plumbing。
+  - `apps/web-next/src/components/detail/DetailHero.tsx` — `useRouteTheme(locale).theme` + `buildLineMatrix` + `buildThemedLines` 渲染主题化线路名（`themeLabel · quality` + dead/pending，与 SourceBar 口径一致）；段标题「播放源」→「线路」；活跃线路改内部 state；移除 `activeSourceId`/`onSourceChange` props。
+  - `tests/unit/web-next/{episode-url,use-watch-slug-sync,player-episode-url-sync,detail-hero-line-names}.test.*`（新，4 文件）。
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：typecheck=0 / lint=0 / test:changed=36 passed；web-next 全量 414 passed 零回归。e2e 未跑（合并 main 前补；详情源选择器 testid `source-btn-N` 实为播放页 SourceBar，未受影响）。
+- **注意事项**：① 线路未写入 URL（详情无 per-line 深链，超反馈范围不做）；init-effect 收敛集的 URL 回写未做（幂等、低风险）。② 详情页线路选择器仍为装饰性（不深链播放，仍 `?ep` 走默认线路）。③ `VideoDetailHero` 为未引用遗留组件（仅 media/types.ts 注释提及），本次未动。④ 刷新后 hostMode 不持久 full（hydrateFromSession 仅恢复 mini/pip），靠 URL `?ep` 重建集号。
+
+---
+
+## [CARD-SIZE-ADR] Phase 0：ADR-214（卡片尺寸体系）+ ADR-215（admin-route 端点契约）起草 + Codex 对抗审核 + Accepted（SEQ-20260622-03）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22
+- **执行模型**：claude-opus-4-8（主循环；撰写即将成为 ADR 的决策文档 + 新共享组件契约 + 跨消费方 schema，CLAUDE.md 强制 Opus）
+- **子代理**：无（本卡未 spawn Task 工具子代理；设计背书 = 规划期 arch-reviewer (claude-opus-4-8) ×2，已记入 SEQ-20260622-03；Phase 0 门禁 = Codex `adversarial-review` round-1 threadId `019ef2ce-967a-7e73`，非 Task 工具 spawn）
+- **修改文件**：
+  - `docs/decisions.md` — 追加 ADR-214（3 档尺寸模型 standard/compact/scroll·混合单位 / `card_size_settings` schema migration 124·id UUID PK·size_class 绑定单位 CHECK / 存列数不存卡宽·CardGrid `minmax(0,1fr)` / SSR `:root` 注入+降级 / 缓存两层边界+SSR 短 revalidate / `CARD_SIZE_DEFAULTS` 一致性）+ ADR-215（`GET/PUT /admin/card-sizes` + 公开 `GET /card-sizes` 端点契约表 / zod 镜像绑 size_class / 错误码 / audit card_size.update·target_kind 17→18 / Redis del best-effort 失效）；两 ADR 状态 Draft→**Accepted**（用户裁定）+ Codex round-1 摘要。
+  - `docs/tasks.md` — Phase 0 卡 `CARD-SIZE-ADR` 删除（完成）。
+  - `docs/task-queue.md` — SEQ-20260622-03 状态 Phase 0 ✅ / Phase 1 解锁 + Codex round-1 3 项修正登记。
+- **新增依赖**：无
+- **数据库变更**：无（ADR 仅定 schema 契约；migration 124 落地属 Phase 1 CARD-SIZE-DB）
+- **门禁**：Codex 对抗审核 round-1 = needs-attention（1 HIGH + 2 MEDIUM）三项全数吸收：① R1-HIGH CHECK 绑 size_class（拒倒置行）；② R2-MEDIUM CardGrid `minmax(0,1fr)` + `min-width:0` 防溢出；③ R3-MEDIUM SSR 短 revalidate 有界新鲜度 + del best-effort 不上抛 + 渲染页新鲜度 e2e。docs-only，无代码门禁。
+- **注意事项**：① 两 ADR 已 Accepted，**Phase 1（CARD-SIZE-DB migration 124）解锁可起**，建议模型 sonnet（cost 信号，可另起 sonnet 会话执行）。② Phase 1 门禁较 SEQ 原登记 +3 测：DB 级倒置行 CHECK 测 / 网格窄容器+长标题视觉回归 / admin PUT→SSR 渲染页新鲜度 e2e。③ ADR-215 新增 2 admin route（GET+PUT）→ `verify:endpoint-adr` 红线已由本 ADR 满足。④ commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer（撰写 ADR + 共享组件契约 + 跨消费方 schema 强制 Opus 审计）。
+
+---
+
+## [CARD-SIZE-DB] Phase 1：migration 124 建表 card_size_settings + seed 3 行 + audit target_kind 17→18 + architecture.md §5.19（SEQ-20260622-03）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22
+- **执行模型**：claude-opus-4-8（主循环；本卡建议模型 sonnet，用户裁定本 Opus 会话执行——不违规仅偏贵）
+- **子代理**：无（schema 落地按 ADR-214 D-214-3 既定口径，非新架构决策；schema 设计背书 = 规划期 arch-reviewer (claude-opus-4-8) ×2 + Codex round-1，已记入 [CARD-SIZE-ADR] / ADR-214）
+- **修改文件**：
+  - `apps/api/src/db/migrations/124_card_size_settings.sql`（新）— 建表 `card_size_settings`（id UUID PK / size_class TEXT UNIQUE CHECK 3 值 / desktop_columns INT NULL CHECK 2–8 / card_width_px INT NULL CHECK 120–280 / gap_px INT NOT NULL CHECK 0–64 / settings JSONB / updated_at）+ **档位×单位绑定 CHECK** `card_size_settings_unit_by_class_check`（Codex-R1：网格档列数非空·width 空 / scroll 反之）+ updated_at 触发器（仿 095）+ seed 3 行（SQL 字面量 standard 5/16·compact 3/12·scroll 170/16，`ON CONFLICT DO NOTHING`）+ audit target_kind CHECK 17→18（+`card_size`，DROP/ADD 仿 095/097）。
+  - `docs/architecture.md`（§5.19 新增）— `card_size_settings` 表定义 + 单位绑定 CHECK + audit 扩展 + 端点/SSR/types/queries 契约位登记（CLAUDE.md schema 变更必同步硬约束）。
+  - `tests/integration/api/card-size-settings-schema.test.ts`（新）— DB 级倒置行测（Codex-R1）：seed 3 行值 + 倒置行被 CHECK 拒（scroll+columns / 网格档+width / compact 双列）+ 范围越界拒（列 9/1·卡宽 300·gap 65）+ 枚举外拒（huge）+ 正向控制（范围内通过），事务 ROLLBACK 不污染 dev DB，SQLSTATE 23514 断言。
+- **新增依赖**：无
+- **数据库变更**：migration 124（新表 `card_size_settings` + seed 3 行 + `admin_audit_log.target_kind` CHECK 17→18）；已 `npm run migrate` 应用至 dev DB（resovo_dev）无错。
+- **门禁**：typecheck=0 / lint=0 / test:changed=0（2 非文档改动；集成测在 integration scope）/ verify:adr-contracts=0 / **migrate 冷启动 124 应用成功** / **集成测 12/12 passed**（card-size-settings-schema：倒置行+范围+枚举+正向控制）。
+- **注意事项**：① 本卡仅扩 DB CHECK，`AuditLogService` TARGET_KINDS/ACTION_TYPES TS 枚举扩展归 CARD-SIZE-SERVICE-ADMIN（DB CHECK ⊇ TS 枚举方向安全，TS 此时不写 card_size）。② 默认值真源 `CARD_SIZE_DEFAULTS`（@resovo/types）+ seed 一致性单测归下一卡 CARD-SIZE-TYPES-QUERIES（D-214-5 防 SQL↔TS 漂移）。③ 倒置行测用 UPDATE 既有行避 UNIQUE 干扰、ROLLBACK 不污染（integration-pg 约定）。④ 下一卡：CARD-SIZE-TYPES-QUERIES（types + queries + seed 一致性单测），建议模型 sonnet。
+
+## [CARD-SIZE-TYPES-QUERIES] Phase 1：`@resovo/types` 卡片尺寸契约 + db/queries + seed 一致性单测（SEQ-20260622-03）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22
+- **执行模型**：claude-opus-4-8（主循环；本卡建议模型 sonnet，用户裁定本 Opus 会话执行——不违规仅偏贵）
+- **子代理**：无（契约镜像 home-section-settings 既有范式 + ADR-214 既定 schema 口径，非新架构决策；设计背书 = 规划期 arch-reviewer ×2 + Codex round-1，已记入 [CARD-SIZE-ADR] / ADR-214）
+- **修改文件**：
+  - `packages/types/src/card-size.types.ts`（新）— `CardSizeClass` 封闭枚举 3 值（standard/compact/scroll）+ `CARD_SIZE_CLASSES` 常量数组 + `CardSizeSettings` 接口（id/sizeClass/desktopColumns/cardWidthPx/gapPx/settings/updatedAt）+ `UpdateCardSizeSettingsInput`（部分更新，queries 消费）+ `CardSizeDefault` + **`CARD_SIZE_DEFAULTS`**（Record<CardSizeClass,{desktopColumns/cardWidthPx/gapPx}>，前端 SSR 降级 + token 兜底真源，D-214-5）。混合单位注释（网格档存列数·scroll 存卡宽，D-214-4）。
+  - `packages/types/src/index.ts`（+1）— `export * from './card-size.types'`（value re-export，含运行时常量 `CARD_SIZE_CLASSES`/`CARD_SIZE_DEFAULTS`，非 `export type *`）。
+  - `apps/api/src/db/queries/card-size-settings.ts`（新，仿 home-section-settings.ts）— `listCardSizeSettings`（全量 3 行）/ `findCardSizeSettings`（按 sizeClass）/ `updateCardSizeSettings`（动态 SET 参数化，settings JSONB 整体替换语义），全 SQL 参数化、`updated_at::TEXT` 投影、`mapRow` snake→camel。
+  - `tests/unit/db/migrations/124_card_size_settings_seed.test.ts`（新）— 读 migration 124 SQL 解析 INSERT seed → 逐档断言 == `CARD_SIZE_DEFAULTS`（档位集合 1 测 + 逐档值 3 测，双向守 SQL↔TS 漂移，D-214-5）。
+- **新增依赖**：无
+- **数据库变更**：无（纯 TS 契约 + 查询 + 单测；表已由 CARD-SIZE-DB migration 124 落地）→ architecture.md 零同步（§5.19 已含 types/queries 契约位登记）。
+- **门禁**：typecheck=0 / lint=0 / test:changed=0（597 文件 / 8167 测全过——`packages/types` 基础包改动按 ADR-180 自动升全量，零回归）/ verify:adr-contracts=0（advisory baseline 提示与本卡无关）/ seed 一致性单测 4/4 passed。
+- **注意事项**：① 偏离登记——额外纳入 `UpdateCardSizeSettingsInput`：`updateCardSizeSettings`（在范围内的 queries 镜像）必须消费其入参类型，属 queries 契约必要组成，非越界。② 严守边界——CardSizeService / admin route / zod / audit ACTION_TYPES 扩展归 CARD-SIZE-SERVICE-ADMIN；公开 route / 缓存归 PUBLIC-CACHE；SSR 注入归 CARD-SIZE-SSR。③ 下一卡：CARD-SIZE-SERVICE-ADMIN（CardSizeService + admin GET/PUT 端点〔ADR-215〕 + audit card_size.update + AuditLogService TS 枚举扩展 + zod 倒置 body 测），建议模型 sonnet。
+
+## [CARD-SIZE-SERVICE-ADMIN] Phase 1：CardSizeService + admin GET/PUT 端点 + audit card_size.update + zod 倒置 body 守卫（SEQ-20260622-03）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22
+- **执行模型**：claude-opus-4-8（主循环；本卡建议模型 sonnet，用户裁定本 Opus 会话执行——不违规仅偏贵）
+- **子代理**：无（端点契约已由 ADR-215 Accepted 锁定 + Opus 背书〔规划期 arch-reviewer ×2〕；本卡为契约实现，非新架构决策）
+- **修改文件**：
+  - `apps/api/src/services/CardSizeService.ts`（新）— `CardSizeService`（`listCardSizes` 按 CARD_SIZE_CLASSES 枚举序重排 / `updateCardSize` before/after 全行快照 + `auditSvc.write('card_size.update', targetId=row.id)`，仿 HomeCurationService）+ inline zod schemas：`CardSizeClassParamSchema` + `GridCardSizeBodySchema`〔desktopColumns 2–8 + gapPx 0–64〕/ `ScrollCardSizeBodySchema`〔cardWidthPx 120–280 + gapPx 0–64〕（均 `.strict()`）+ `bodySchemaFor(sizeClass)` 派发（**档位×单位绑定 zod 守卫，Codex-R1 HIGH**：grid+width / scroll+columns 倒置 body 的 unknown key → 422）。
+  - `apps/api/src/routes/admin/card-sizes.ts`（新）— `GET /admin/card-sizes`（adminOnly，3 档枚举序）+ `PUT /admin/card-sizes/:sizeClass`（adminOnly，sizeClass 枚举外 422 先于 404、body 经 `bodySchemaFor` zod 422、行缺失 404）。
+  - `apps/api/src/server.ts` — import + `register(adminCardSizeRoutes, { prefix: '/v1' })`。
+  - `packages/types/src/admin-moderation.types.ts` — `AdminAuditActionType` +`card_size.update` / `AdminAuditTargetKind` +`card_size`。
+  - `apps/api/src/services/AuditLogService.ts` — `ACTION_TYPES` +`card_size.update` / `TARGET_KINDS` +`card_size`（runtime enums 端点真源）。
+  - `tests/unit/api/audit-log-coverage.test.ts` — `REQUIRED_ACTION_TYPES` + `PAYLOAD_ASSERTION_REQUIRED` +`card_size.update`（审计覆盖率 4 镜像之 2）。
+  - `tests/unit/api/audit-log-service-enums-set-equal.test.ts` — `EXPECTED_ACTION_TYPES` +`card_size.update` / `EXPECTED_TARGET_KINDS` +`card_size`（set-equal 第 4 真源镜像）。
+  - `tests/unit/api/card-size-admin.test.ts`（新）— 13 路由测：GET 枚举序 + 401 / PUT 网格档·scroll 档成功 + **audit payload 内容断言**（actionType/targetKind/targetId=row.id + before/after）/ **倒置 body 422**（grid+cardWidthPx · scroll+desktopColumns）/ 范围越界 422（列 9·卡宽 300·gap 65）/ 缺必填 422 / 枚举外 sizeClass 422 先于 find / 行缺失 404。
+  - `docs/decisions.md`（ADR-215 端点表）— 补首列 `#` 令 `verify:endpoint-adr` 共享解析器可读（canonical `| # | 方法 | 路径 | … |` 格式；不改语义契约）。
+- **新增依赖**：无
+- **数据库变更**：无（audit target_kind CHECK 已由 CARD-SIZE-DB migration 124 落地；action_type 无 DB CHECK，D-182-5.2）→ architecture.md 零同步（§5.19 已含端点契约位 + audit 扩展记录）。
+- **门禁**：typecheck=0 / lint=0 / test:changed=0（598 文件 / 8182 测全过——`packages/types` 基础包升全量，+15 测零回归）/ **verify:endpoint-adr=0**（250 admin 路由对齐，card-sizes GET/PUT 识别）/ verify:adr-contracts=0。
+- **注意事项**：① 偏离登记——修改 `docs/decisions.md` ADR-215 端点表（补 `#` 列），超原"涉及文件"清单，但属满足本卡强制门禁 `verify:endpoint-adr` 的必要格式修复（Phase 0 表缺首列、仅本卡路由落地才暴露解析错位，不改语义）。② audit 4 镜像真源同步：类型 union（admin-moderation.types）/ runtime 数组（AuditLogService）/ coverage 测（REQUIRED + PAYLOAD_ASSERTION_REQUIRED）/ set-equal 测（EXPECTED_*）——任一漏同步即 set-equal 红。③ PUT 非 PATCH（D-215-2：可编辑投影小封闭集恒整体提交）。④ 倒置 body 守卫靠 `.strict()` + 按 sizeClass 派发 schema（DB CHECK ⊇ zod 双层，D-214-10）。⑤ 下一卡：CARD-SIZE-PUBLIC-CACHE（公开 `GET /card-sizes` Redis 读缓存 + PUT→Redis del 失效 best-effort，D-215-6），建议模型 sonnet。
+
+## [CARD-SIZE-PUBLIC-CACHE] Phase 1 收官：公开 GET /card-sizes Redis 读穿缓存 + PUT→del 失效 best-effort（SEQ-20260622-03）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22
+- **执行模型**：claude-opus-4-8（主循环；本卡建议模型 sonnet，用户裁定本 Opus 会话执行——不违规仅偏贵）
+- **子代理**：无（缓存/失效契约已由 ADR-215 D-215-6 锁定；镜像 HomeService 读穿 + home-cache-invalidation 既有范式，非新架构决策）
+- **修改文件**：
+  - `apps/api/src/services/CardSizeService.ts` — 构造加 `redis: Redis`；`getPublicCardSizes()`（读穿：`redis.get` hit→JSON.parse / miss→`listCardSizes` 枚举序 + `setex('card-sizes:v1', 60, …)` TTL 兜底，仿 HomeService.getTop10）；`invalidatePublicCache()`（`redis.unlink('card-sizes:v1')` try/catch `baseLogger.warn` 不上抛——**best-effort**，区别于 home-cache-invalidation scheduler 上抛，Codex-R3 / D-215-6）；`updateCardSize` 末尾 DB 写提交 + audit 后 `await invalidatePublicCache()`。
+  - `apps/api/src/routes/card-sizes.ts`（新）— 公开 `GET /card-sizes`（**无鉴权只读**，SSR 取数）→ `getPublicCardSizes`。
+  - `apps/api/src/routes/admin/card-sizes.ts` — `new CardSizeService(db, redis)` 传 redis（PUT→del 失效需）。
+  - `apps/api/src/server.ts` — import + `register(cardSizeRoutes, { prefix: '/v1' })`。
+  - `tests/unit/api/card-size-public.test.ts`（新）— 3 测：cache hit（不触 DB + 不 setex）/ cache miss（DB 枚举序 + `setex('card-sizes:v1', 60, …)`）/ 无鉴权 200。
+  - `tests/unit/api/card-size-admin.test.ts` — 补 redis mock + 2 测：PUT 成功→`redis.unlink('card-sizes:v1')` / `unlink` 失败 PUT 仍 200（best-effort 不上抛）。
+- **新增依赖**：无
+- **数据库变更**：无（纯 route/service/cache）→ architecture.md 零同步 + `verify:endpoint-adr` 不变（公开 route 非 admin、不触红线；GET/PUT /admin/card-sizes 路径未变）。
+- **门禁**：typecheck=0 / lint=0 / test:changed=0（18 测：public 3 + admin 15；本卡无基础包变更 → ADR-180 仅选 2 测文件，非升全量）/ verify:adr-contracts=0。CardSizeService 构造签名变更经 typecheck=0 确认全调用点对齐。
+- **注意事项**：① del best-effort 不上抛（D-215-6 / Codex-R3）：DB 写已提交、缓存派生物 → unlink 失败结构化 warn + PUT 返成功，避「失败但已应用」歧义，陈旧由 TTL 60s 自愈。② key `card-sizes:v1` 用独立 key 不注册 CACHE_PREFIXES（避免触碰 admin cache-clear `type` 枚举 + 其测，保持原子）。③ admin GET 直读 DB 不走缓存（后台要实时）；仅公开 GET 走读穿缓存。④ **Phase 1 全 4 卡交付**（DB → TYPES-QUERIES → SERVICE-ADMIN → PUBLIC-CACHE）。⑤ 下一卡 Phase 2 CARD-SIZE-SSR（`lib/server/card-size-fetch.ts` server-only 取数〔revalidate ≤60s，D-214-9〕 + `[locale]/layout.tsx` 注入 `:root` `<style>` + 失败降级 CARD_SIZE_DEFAULTS），建议模型 sonnet。
+
+## [CARD-SIZE-SSR] Phase 2：SSR `:root` 注入卡片尺寸 CSS 变量 + server-only 取数 helper（ADR-214 D-214-6/9，SEQ-20260622-03）
+- **完成时间**：2026-06-23
+- **记录时间**：2026-06-23 10:05
+- **执行模型**：claude-opus-4-8（主循环；本卡 task-queue 建议 sonnet，会话以 opus 承接 Phase 2 — 非降级违规，SSR 取数为既有 server-fetch 范式复用、非新共享组件契约故无需 Opus 子代理）
+- **子代理**：无
+- **修改文件**：
+  - `apps/web-next/src/lib/server/card-size-fetch.ts`（新）— server-only：`fetchCardSizeSettings()`（`GET ${NEXT_PUBLIC_API_URL}/card-sizes` + `next.revalidate=60`〔D-214-9 新鲜度有界〕；非 2xx / 抛错 / 空 data → `defaultsAsSettings()` 由 `CARD_SIZE_DEFAULTS` 合成 3 档降级行 + `serverLogger.warn` 非空 catch〔D-214-6，CLAUDE.md 禁空 catch〕，首屏永有可渲染变量）+ 纯函数 `buildCardSizeRootCss(settings)`（按档位单位派生 `:root` 变量：网格档〔desktopColumns 非空〕→ `--card-cols-{class}-desktop` + `--card-gap-{class}`；scroll 档〔cardWidthPx 非空〕→ `--card-w-{class}` + `--card-gap-{class}`；值经 `Number()` 强制 → 杜绝 `dangerouslySetInnerHTML` 注入；档位×单位绑定天然防倒置变量）+ 导出 `CARD_SIZE_REVALIDATE_SECONDS=60`。
+  - `apps/web-next/src/app/[locale]/layout.tsx` — import + `buildCardSizeRootCss(await fetchCardSizeSettings())`；在 `BrandProvider` 内、`.app-shell` children 之前注入 `<style data-card-size-vars dangerouslySetInnerHTML={{__html: cardSizeCss}} />`（在 children 前渲染 → 消 FOUC/CLS；`data-card-size-vars` 供 CARD-SIZE-E2E 渲染页新鲜度锚定）。
+  - `tests/unit/web-next/lib/card-size-fetch.test.ts`（新）— 6 测：fetchCardSizeSettings 成功〔URL `/card-sizes` + `next.revalidate=60` + 无 warn〕/ 非 2xx 降级〔warn×1〕/ fetch 抛错降级 / 空 data 降级；buildCardSizeRootCss 网格出 cols+gap·scroll 出 w+gap·无倒置变量（`not.toContain('--card-w-standard')`/`'--card-cols-scroll'`）/ 降级值 == `CARD_SIZE_DEFAULTS`（D-214-5）。
+- **新增依赖**：无
+- **数据库变更**：无（纯前端 SSR 取数 + CSS 变量注入；消费 Phase 1 既有公开 route）
+- **门禁**：typecheck=0 / lint=0（4 successful；web-next 改动零新增告警）/ test:changed〔`vitest run --changed HEAD` 6 passed；worktree `.bin/vitest` 缺符号链经 npx 复刻〕/ verify:adr-contracts=0（endpoint-adr 250 路由对齐——SSR 纯前端无新 admin route）。**附加稳定性验证**：`next build` web-next `✓ Compiled successfully`，**确认 `serverLogger`（pino）首次入 Next bundle 零 `Critical dependency` warning**（本仓 pino 此前未入任何 Next 打包，关键路径首激活故验证）；build 静态生成阶段 `/500`·`/_error` 报 `<Html> should not be imported outside of pages/_document` 经 `git stash` 差分确认在 Phase 1 干净 baseline 同样复现 → **既有/环境问题、与本卡无关**。
+- **注意事项**：① CSS 变量命名契约（下游消费）：网格 `--card-cols-{standard|compact}-desktop` + `--card-gap-{class}`；scroll `--card-w-scroll` + `--card-gap-scroll`。CARD-SIZE-CARDGRID（下一卡，建议 opus 新共享组件契约）读这些变量、`repeat(var,minmax(0,1fr))`+item `min-width:0` 防溢出（D-214-4/7）；CARD-SIZE-SCROLL 接横滚行旧 `--shelf-card-w-*` 静态 token → `--card-w-scroll`。② `serverLogger`（logger.server.ts INFRA-10 预备入口）经本卡**首次激活**于 web-next 运行时；build 已验证 pino 打包无碍。③ 降级路径合成行 `id:'default-{class}'`/`updatedAt:epoch`，仅供 CSS 生成不入持久层。④ **既有 web-next build `/500` `<Html>` prerender 失败为预存问题**（非本卡引入），后续若起前端构建门禁需独立排查（疑 Next 15 error-page prerender + 依赖链）。⑤ 下一卡 CARD-SIZE-CARDGRID（Phase 2，新共享组件契约 → **强制 Opus 子代理 + commit `Subagents: arch-reviewer` trailer**）。
+
+## [CARD-SIZE-CARDGRID] Phase 2：新建共享 CardGrid 网格组件（sizeClass 封闭枚举读 DB 注入列数/gap，ADR-214 D-214-4/7/10，SEQ-20260622-03）
+- **完成时间**：2026-06-23
+- **记录时间**：2026-06-23 11:20
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8)（新共享组件 API 契约强制 Opus 背书，CLAUDE.md 模型路由 #1/#6；裁决 CONDITIONAL PASS）
+- **修改文件**：
+  - `apps/web-next/src/components/shared/card-grid/CardGrid.tsx`（新）— 共享网格容器。`sizeClass: GridCardSizeClass = Exclude<CardSizeClass,'scroll'>`（'standard'|'compact'）封闭枚举 prop，**禁自由 gridCols**（D-214-7）；纯 `cn('card-grid', 'card-grid--{sizeClass}', className)` className 透传 + children + data-testid，**无 inline style**（模板入 CSS 类，仿既有 `.detail-hero-grid` 范式，arch-reviewer BLOCKER 裁决）。docstring 声明为 VideoGrid/BrowseGrid 网格后继真源 + 挂载契约（须在 SSR 注入子树内）+ 新增档位 4 处改动清单。
+  - `apps/web-next/src/app/globals.css` — 新增 `.card-grid` 段：`grid-template-columns: repeat(var(--cg-cols, 2), minmax(0, 1fr))`（`--cg-cols` 组件私有派生计数，与 SSR 全局真源 `--card-cols-{class}-desktop` 命名拉开）；`--cg-cols` 级联 mobile=2 / ≥640px=3 / ≥1024px=`var(--card-cols-{class}-desktop)`；桌面 var 缺失 → `var(--cg-cols, 2)` 兜底退 2 列不坍塌（arch-reviewer HIGH）；`.card-grid > * { min-width: 0 }` + `minmax(0,1fr)` 防 1fr auto 最小值被海报/长标题撑破（D-214-4/Codex-R2）；gap `var(--card-gap-{class})`。
+  - `tests/unit/web-next/card-grid.test.tsx`（新，9 测）— 组件契约 5（card-grid+档位类应用 / compact / className 透传 / children 渲染 / 无 data-testid 不崩）+ globals.css 源契约 4（`repeat(var(--cg-cols,2),minmax(0,1fr))` / `.card-grid > * min-width:0` / 桌面媒体查询引 `--card-cols-{class}-desktop` / gap 引 `--card-gap-{class}`）。相对路径 import 组件（vitest config 把 `@/components/shared/*` 硬路由 server-next，web-next 共享组件须绕 alias）。
+- **新增依赖**：无
+- **数据库变更**：无（纯前端共享组件 + CSS；消费 CARD-SIZE-SSR 注入的 :root 变量）
+- **门禁**：typecheck=0 / lint=0（4 successful）/ test:changed〔`vitest run --changed HEAD` 9 passed〕/ verify:adr-contracts=0（endpoint-adr 250 对齐——纯前端无新 admin route）。CardGrid 本卡**未被任何消费方引用**（消费迁移属后续卡）→ `.card-grid` 新类不匹配现有元素、零渲染路径回归。
+- **arch-reviewer 裁决吸收（CONDITIONAL PASS）**：① BLOCKER「inline grid-template-columns 的『为单测断言 minmax』是伪命题（jsdom 不算布局）」→ 采 Scheme A 模板入 CSS 类、删 inline，minmax 真实生效靠 CARD-SIZE-E2E 视觉回归。② HIGH「桌面 var 缺失整条 grid 坍塌」→ `var(--cg-cols, 2)` 非数值兜底退 2 列（`2` 为 D-214-10 移动基线常量非配置值，守 D-214-5）。③ HIGH「与 VideoGrid/BrowseGrid 并行真源」→ docstring 声明后继真源 + 迁移卡收敛 `gridCols`/gap。④ MEDIUM 命名 `--card-grid-cols`→`--cg-cols`。⑤ MEDIUM 删伪断言、CSS 契约测定位脆性源快照。⑥ **注**：arch-reviewer 因子代理被 pin 在父 session 启动目录（根 checkout `chore/card-sizing-governance-20260622`、无 SSR commit）误报「SSR 未交付」BLOCKER(a)——已核实本 worktree 分支 `chore/card-size-phase2-20260622` 含 SSR commit `354dc604`，误报排除。
+- **注意事项**：① **偏离登记（D-214-7 字面）**：`sizeClass` 收紧为 `Exclude<CardSizeClass,'scroll'>`（类型层挡 scroll 误传，优于运行时忽略）；引入中间变量 `--cg-cols`（D-214-7 字面直引 `--card-cols-{class}-desktop`，本实现加一层派生计数以支持响应式 2/3/桌面级联 + 缺值兜底）——两项均经 arch-reviewer 裁定成立。② **CardGrid 挂载契约**：须在注入卡片尺寸 :root 变量的子树内（[locale]/layout.tsx）；children 应为同构卡片（VideoCard/Skeleton）。③ **后继真源**：CardGrid standard 档（2/3/桌面）= VideoGrid 默认布局，后续 BROWSE-MIGRATE/FEATURED-NORMALIZE 迁移并收敛 `VideoGrid.gridCols:string` 自由 prop + gap 真源分歧（`--card-gap-{class}` vs `--page-inline-gap`，D-214-8）。④ **follow-up（arch-reviewer LOW）**：6 个 `--card-*` 变量名跨 SSR(TS 模板)↔CardGrid(CSS 字面) 无编译期绑定、防漂移的「抽共享 const」因 CSS 无法 import TS 不可直接实现，登记为后续考量。⑤ Phase 2 剩 4 卡：VIDEOCARD-VARIANT(opus) / SCROLL(sonnet 独立) / BROWSE-MIGRATE(sonnet 依赖前两卡) / FEATURED-NORMALIZE(sonnet 依赖 CARDGRID)。
+
+## [CARD-SIZE-SCROLL] Phase 2：首页横滚行接入 DB 注入卡宽/gap 变量（ADR-214 D-214-8，SEQ-20260622-03）
+- **完成时间**：2026-06-23
+- **记录时间**：2026-06-23 11:45
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（纯 CSS 变量 wiring，非新共享组件契约 / 非架构决策；横滚行消费 CARD-SIZE-SSR 已注入的 `--card-w-scroll`/`--card-gap-scroll`）
+- **修改文件**：
+  - `apps/web-next/src/components/video/Shelf.tsx` — PosterTrack（poster-row 横滚）/ Top10Track（top10-row 横滚）/ HorizontalTrackSkeleton 的卡宽 `--shelf-card-w-portrait`·`--shelf-card-w-top10` → `--card-w-scroll`、横滚 track gap `--shelf-gap` → `--card-gap-scroll`；docstring Token 消费区同步。**FeaturedGrid（featured-grid 网格路径）gap 保留 `--shelf-gap`**（非横滚、归 CARD-SIZE-FEATURED-NORMALIZE）；RowHeader header gap（10px）不动。
+  - `apps/web-next/src/components/home/TopTenRow.tsx` — Top10Track + TrackSkeleton 卡宽 `--shelf-card-w-portrait` → `--card-w-scroll`、gap `--shelf-gap` → `--card-gap-scroll`；docstring 同步。
+  - `apps/web-next/src/components/home/DailyAnimeRow.tsx` — 主横滚 track（`data-daily-anime-track`）+ DailyAnimeCard + skeleton 卡宽 `--shelf-card-w-portrait` → `--card-w-scroll`、gap `--shelf-gap` → `--card-gap-scroll`。
+- **新增依赖**：无
+- **数据库变更**：无（纯前端 CSS 变量 wiring；消费 CARD-SIZE-SSR 注入的 :root 变量）
+- **门禁**：typecheck=0 / lint=0（4 successful）/ test:changed〔`vitest run --changed HEAD` 13 passed：ShelfRow/DailyAnimeRow/HomeBrandFiltering 横滚回归全过、零破〕/ verify:adr-contracts=0。**视觉中性**：`--card-w-scroll` 默认 170px = 原 `--shelf-card-w-*` 170px、`--card-gap-scroll` 默认 16px = 原 `--shelf-gap` 16px → 渲染像素无变化、仅从静态 token 转为 DB 后台可配。
+- **注意事项**：① **无兜底依赖 SSR 恒注入**：横滚行专属 [locale] 首页子树（CARD-SIZE-SSR 在 [locale]/layout 恒注入 + 取数失败降级 CARD_SIZE_DEFAULTS），故 `var(--card-w-scroll)`/`var(--card-gap-scroll)` 不加字面兜底（避免重复 D-214-5 单一真源）。② **未触 VideoGrid `layout='scroll'` 死路径**（line 64 `--shelf-card-w-portrait`，零消费方，SEQ-20260622-01 follow-up① 登记的待删段）—— 非本卡范围、保持原样。③ globals.css `--shelf-card-w-portrait`/`--shelf-card-w-top10`/`--shelf-gap` 定义保留（仍由 VideoGrid 死路径 + Shelf FeaturedGrid 引用，清理待 follow-up）。④ 视觉真实验证（横滚卡宽响应 DB 改值）靠 CARD-SIZE-E2E。⑤ Phase 2 剩 3 卡：VIDEOCARD-VARIANT(opus) / BROWSE-MIGRATE(sonnet) / FEATURED-NORMALIZE(sonnet)。
+
+## [CARD-SIZE-VIDEOCARD-VARIANT] Phase 2：VideoCard 加 interaction:'takeover'|'navigate' 外壳分流（ADR-214 D-214-7，SEQ-20260622-03）
+- **完成时间**：2026-06-23
+- **记录时间**：2026-06-23 11:55
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8)（VideoCard Props 契约变更强制 Opus，D-214-7 / CLAUDE.md §模型路由"共享组件 API 契约强制 Opus"）
+- **问题理解**：VideoCard 此前仅 takeover 单一交互（海报点击 Fast Takeover 直达播放器 + usePlayerStore），分类/搜索/相关页需要的"纯跳转详情页"语义靠独立 BrowseCard 重复实现 → 卡片交互模式撕裂、海报视觉不统一（StackedPosterFrame vs 裸 SafeImage）。
+- **根因判断**：缺少声明式的交互意图维度。D-214-7 裁定给 VideoCard 加 `interaction` 变体、navigate 分支纯跳转，为 BROWSE-MIGRATE（BrowseGrid→VideoCard navigate）与 FEATURED-NORMALIZE 铺路。
+- **方案**：VideoCard 加 `interaction?: 'takeover' | 'navigate'`（默认 `'takeover'`），外壳变薄分发器按值分流两**独立内部组件**（非条件分支同一函数——保证 navigate 渲染路径根本不调用 `usePlayerStore`，不建立 store 订阅，满足 P2 硬约束）。
+- **修改文件**：
+  - `apps/web-next/src/components/video/VideoCard.tsx` — ① 加 `export type VideoCardInteraction` + `interaction?` prop（默认 takeover）；② `VideoCard` 变薄分发器；③ `VideoCardTakeover`（保留 usePlayerStore/useRouter/useParams/FloatingPlayButton/poster button overlay/handlePosterClick，**DOM 逐字保留**，根 `data-interaction="takeover"`）；④ `VideoCardNavigate`（整卡 `<Link href={detailHref}>` 纯跳转，`style={{textDecoration:'none'}}` 对齐 BrowseCard，**不 import/调用 usePlayerStore/useRouter/useParams、不渲染 FloatingPlayButton**，根 `data-interaction="navigate"`）；⑤ 提取共享子件 `VideoCardCover`（StackedPosterFrame 基底）/ `VideoCardMeta`（标题+年份，`titleLinksToDetail` 控制标题是否自带 Link）/ `PosterHoverDim`（hover 暗化遮罩，两分支共用）消重。两分支根均 `data-testid="video-card"`（选择器兼容）。
+  - `tests/unit/web-next/VideoCard.test.tsx` — 扩 `describe('interaction 变体')` 8 测：默认=takeover〔article+data-interaction+播放按钮〕/ 显式 takeover 行为一致〔enter+push〕/ navigate 根 `<a>`+href 详情 / **navigate 恰 1 link**〔HIGH-1 防标题嵌套 Link〕/ navigate 无 button+无 FloatingPlayButton〔P2〕/ navigate 点击不调 enter·push〔P2 严禁 takeover hook〕/ navigate text-decoration:none〔HIGH-2〕/ navigate 内容对等〔标题+年份〕。原 11 测（双出口/Tab 顺序/Skeleton/内容）默认渲染即 takeover、全过零回归。
+- **新增依赖**：无
+- **数据库变更**：无（纯前端组件 API 契约变更）
+- **arch-reviewer 结论（CONDITIONAL PASS，全吸收）**：
+  - **HIGH-1**：navigate 标题必须 `titleLinksToDetail={false}`（裸 `<p>`），防整卡 `<Link>` 内嵌套第二 `<Link>` 非法 + 双可点区 → 补"navigate 恰 1 link"断言守卫 + VideoCardMeta JSDoc 钉死前提。
+  - **HIGH-2**：navigate 根 `<Link>` 显式 `textDecoration:'none'` 对齐 BrowseCard 一致性（否则 meta 文本带下划线）；裁定**不设 aria-label**（依赖内部标题文本作可访问名，无读屏冗余）。
+  - **HIGH-3**：navigate 严禁 player store/router takeover hook → 拆**独立组件**（非单函数条件调 hook，React Hooks 规则禁条件调用；无条件调用又会建立订阅）是唯一正确形态，已采纳。
+  - **MEDIUM**：① `group/poster` hover 作用域容器归属——VideoCardCover 不吞 group/poster，由各分支 poster div 持有，FloatingPlayButton `group-hover/poster` 触发链不断裂（takeover DOM 逐字一致）；② navigate 渲染 TagLayer（信息对等，分类页标签与首页同等重要，TagLayer 全 pointer-events-none 可安全置 Link 内）+ 保留 hover dim（纯视觉）、不渲染 FloatingPlayButton（避免误导"播放"可供性）；③ `bg-black/40` 为既有逐字复刻非本卡新增，登记技术债（PosterHoverDim 注释 + 本条），token 化留待后续 token 卡，本卡不顺手改色。
+- **偏离检测（D-214-7 字面 3 处增量，均经 arch-reviewer 裁定合理并登记）**：① `interaction` 设为可选 `?` 且默认 `'takeover'`（ADR 字面无默认）——向后兼容 5 处现存消费方零 diff；② 导出 `VideoCardInteraction` type 别名（ADR 未提）——消费方 prop 透传需要，就近 VideoCard.tsx 导出、不进 @resovo/types（web-next 内组件 API 非跨 app 契约）；③ 加 `data-interaction` 属性（ADR 未提）——便于 E2E/单测断言分支。
+- **门禁**：typecheck=0 / lint=0 / test:changed〔`vitest run --changed HEAD` 4 文件 43 passed，VideoCard.test 19〕/ verify:adr-contracts=0（enum SSOT 为既有 advisory 非本卡）。**关键路径**：首页/搜索卡片 takeover 海报直达播放器——默认 takeover + DOM 逐字保留 + 原 11 测全过，零回归。
+- **六问自检**：① 契约/边界：interaction 封闭二值、navigate 独立组件断 store 订阅 ✓；② 复用：提取 Cover/Meta/PosterHoverDim 三子件消重 ✓；③ 分层：纯前台组件不涉后端分层 ✓；④ 类型：无 any、新增 VideoCardInteraction 导出 ✓；⑤ 测试：两分支契约 + 向后兼容均覆盖 ✓；⑥ 沉淀：navigate 变体即沉淀（替代 BrowseCard 的统一卡片），BROWSE-MIGRATE 接入。
+- **注意事项**：① navigate 分支**本卡仅建不接**——当前无消费方，BrowseGrid→VideoCard navigate 切换 + 删 BrowseCard + 改 spec testid 归 CARD-SIZE-BROWSE-MIGRATE；过渡期 BrowseCard + `browse-card` testid 保持。② FeaturedRow（line 112 `<VideoCard className="min-w-0"/>`）仍默认 takeover 不变，归一等宽归 FEATURED-NORMALIZE。③ navigate 是相对旧 BrowseCard 的正向升级（StackedPosterFrame 叠层海报 + TagLayer 信息对等）。④ worktree 无本地 `node_modules/.bin` → `npm run test:changed` spawn 失败，用等价 `npx vitest run --changed HEAD`（脚本已判定 2 非文档改动、无升全量触发）。⑤ Phase 2 剩 2 卡：BROWSE-MIGRATE(sonnet，依赖本卡) / FEATURED-NORMALIZE(sonnet，仅依赖 CARDGRID)。
+
+## [CARD-SIZE-BROWSE-MIGRATE] Phase 2：BrowseGrid 切 CardGrid + 卡切 VideoCard navigate + 删 BrowseCard（ADR-214 D-214-7/8，SEQ-20260622-03）
+- **完成时间**：2026-06-23
+- **记录时间**：2026-06-23 12:20
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（消费既有 CardGrid〔CARD-SIZE-CARDGRID〕+ VideoCard navigate〔CARD-SIZE-VIDEOCARD-VARIANT〕契约，非新共享组件契约 / 非架构决策）
+- **问题理解**：BrowseGrid 用硬编码 `grid grid-cols-2 sm:3 lg:5` + gap `--page-inline-gap` + 独立 BrowseCard（裸 SafeImage、无 TagLayer），与 CardGrid standard 档（DB 可配）+ VideoCard 统一卡片撕裂。
+- **根因判断**：分类浏览页是 D-214-7 navigate 变体的目标消费方之一；CARDGRID + VIDEOCARD-VARIANT 已就绪，本卡把 BrowseGrid 切到统一组件并退役 BrowseCard。
+- **方案**：BrowseGrid 网格容器换 `<CardGrid sizeClass="standard">`（standard 档默认 5 列/16px gap == 原 lg:5 + `--page-inline-gap` 16px → 渲染像素无变、转 DB 可配）；卡换 `<VideoCard interaction="navigate">`（整卡 Link 纯跳转、href 经 getVideoDetailHref 与旧 BrowseCard 完全一致）；删零消费方 BrowseCard.tsx；e2e spec testid `browse-card`→`video-card`。
+- **修改文件**：
+  - `apps/web-next/src/components/browse/BrowseGrid.tsx` — import CardGrid + VideoCard（移除 BrowseCard）；主网格 + skeleton 网格 `div.grid grid-cols-2 sm:3 lg:5` → `<CardGrid sizeClass="standard" data-testid="browse-grid"/skeleton>`；`<BrowseCard>` → `<VideoCard interaction="navigate">`；docstring Token 消费区改述（网格列数/gap → CardGrid standard DB 注入）。
+  - `apps/web-next/src/components/browse/BrowseCard.tsx` — **删除**（迁移后零消费方；功能由 VideoCard navigate 变体取代）。
+  - `apps/web-next/src/components/video/VideoCard.tsx` — docstring 更新（navigate 消费方 = BrowseGrid 已切，旧 BrowseCard 退役）。
+  - `tests/e2e-next/browse-category-routes.spec.ts` — testid `browse-card`→`video-card`（locator + 测试名 + 失败消息 + 注释/文件头）。
+  - `tests/e2e-next/browse-tvshow.spec.ts` — `getByTestId('browse-card')`→`('video-card')` + 注释（href `/tvshow/` 非 `/variety/` 断言依赖 getVideoDetailHref 不变、迁移后仍成立）。
+  - `tests/unit/components/browse/BrowseGrid.test.tsx` — fixture 补 `subtitleLangs:[]`/`posterStatus:'ok'`/`posterBlurhash:null`（VideoCard→videoCardToTagProps 读 subtitleLangs）+ `beforeAll` 加 `window.matchMedia` stub（StackedPosterFrame useEffect 读 matchMedia）。
+  - `vitest.config.ts` — `@/components/shared/*` 别名改 **importer-aware**（见下）。
+- **vitest.config.ts 别名修复（范围外但必要的根因修复）**：原 `@/components/shared/*` 被**无条件**硬路由到 `apps/server-next/src/components/shared`（CHG-CUTOVER-EXECUTE 遗留，早于 web-next 有 shared 目录）。CARD-SIZE-CARDGRID 起 web-next 新增 `components/shared/`（CardGrid 等真实共享层），BrowseGrid 经 `@/components/shared/card-grid/CardGrid` 导入在 vitest 解析失败。**核实当前零 server-next 消费方**经此别名（grep apps/tests/packages 仅 BrowseGrid + card-grid.test 命中），故改为 importer-aware（与 `@/stores`/`@/` 同款：server-next importer→server-next、默认→web-next），源码保持 `@/` 一致性、不塞相对路径破坏约定。**触动 config → 按 ADR-180 升全量单测验证**（601 文件 8210 测全过、零回归）。
+- **新增依赖**：无
+- **数据库变更**：无（纯前端组件迁移）
+- **删除**：`apps/web-next/src/components/browse/BrowseCard.tsx`（92 行，零消费方）。
+- **门禁**：typecheck=0 / lint=0 / **全量单测 601 文件 8210 passed**（vitest.config.ts 改动按 ADR-180 升全量）/ verify:adr-contracts=0。**关键路径**：分类/浏览页卡片渲染——视觉中性（列数/gap 默认值同原口径）+ href 经 getVideoDetailHref 不变；BrowseGrid.test 7 测 + VideoCard.test 19 测全过。
+- **六问自检**：① 契约/边界：消费既有 CardGrid/VideoCard navigate 封闭契约，未扩公开 API ✓；② 复用：BrowseCard 死重复实现退役、归一到 VideoCard ✓；③ 分层：纯前台组件 ✓；④ 类型：无 any、fixture 补全为合法 VideoCardType ✓；⑤ 测试：单测全量 + e2e testid 对齐 ✓；⑥ 沉淀：BrowseCard→VideoCard 收敛即本卡核心沉淀。
+- **注意事项**：① **playwright e2e 未实跑本卡**——spec testid 已对齐源码改动（browse-card→video-card），但 playwright 需 live dev server（web-next + api）；按 SEQ 计划全 e2e 回归 + 视觉回归归 CARD-SIZE-E2E（Phase 4），与 CARDGRID/SCROLL 口径一致。② browse-tvshow href 断言（`/tvshow/` 非 `/variety/`）是 getVideoDetailHref 属性、与卡组件无关，迁移后不变。③ skeleton 保持 poster-rect 外观（未掺入 VideoCard.Skeleton 重设计），仅换 CardGrid 包裹保持视觉中性。④ `--page-inline-gap` 真源仍被其他模块引用、未清理（非本卡范围）。⑤ Phase 2 剩 1 卡：CARD-SIZE-FEATURED-NORMALIZE（sonnet，仅依赖 CARDGRID）。
+
+## [CARD-SIZE-FEATURED-NORMALIZE] Phase 2 收官：FeaturedRow 归一 CardGrid standard 等宽 + 删死路径（ADR-214 D-214-8，SEQ-20260622-03）
+- **完成时间**：2026-06-23
+- **记录时间**：2026-06-23 12:45
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（消费既有 CardGrid 契约 + 删零消费方死代码，非新契约 / 非架构决策）
+- **问题理解**：① FeaturedRow `1.6fr 1fr 1fr 1fr` 首列大卡异宽 → 与全站等宽卡片撕裂（用户反馈①核心）；② Shelf `featured-grid`/`top10-row` 模板零消费方（page.tsx 3 处全 `poster-row`，TOP10 用独立 TopTenRow 组件）；③ RelatedVideos `grid` 默认分支零消费方（唯一消费 VideoDetailClient 用 `variant="sidebar"`）。
+- **根因判断**：D-214-8 裁定 FeaturedRow 归一等宽 + 清退三处随体系演进而死的旧路径，收束「卡片尺寸/交互机制」到 CardGrid + VideoCard 单一范式。
+- **方案**：FeaturedRow 异宽 grid → CardGrid standard 等宽；删 Shelf/RelatedVideos 死路径与其专属占位/骨架。
+- **修改文件**：
+  - `apps/web-next/src/components/home/FeaturedRow.tsx` — FeaturedGrid + FeaturedGridSkeleton `gridTemplateColumns:'1.6fr 1fr 1fr 1fr'` + gap `--shelf-gap` → `<CardGrid sizeClass="standard">`（等宽，DB 注入列数/gap）；**删 MIN_SLOTS sparse-fill 空占位逻辑**（等宽 `minmax(0,1fr)` + CardGrid `> *{min-width:0}` 结构上消除「空占位反推挤垮真实卡」问题 → 占位不再必要，且固定槽数与 DB 可配列数不兼容）；新增 `FEATURED_SLOTS=5` 常量，fetch `limit=4`→`limit=5`、骨架 4→5（对齐 standard 默认 5 列）；删 VideoCard `className="min-w-0"`（CardGrid 已统一处理）；docstring 同步。
+  - `apps/web-next/src/components/video/Shelf.tsx` — 删死函数 `Top10Track`/`FeaturedGrid`/`EmptyPlaceholderCardGrid`（零消费）；`ShelfTemplate` 收窄 `'featured-grid'|'top10-row'|'poster-row'` → `'poster-row'`；ShelfRow 不再解构 `template`、render dispatch 三元 → 直 `<PosterTrack>`；docstring 三模板 → 单模板。**保留 `template` prop**（收窄单值，兼容 page.tsx 3 + ShelfRow.test 5 调用点，避免无谓 churn）。
+  - `apps/web-next/src/components/detail/RelatedVideos.tsx` — 删 `grid` 默认分支（VideoGrid 全宽网格 + `related-videos-grid` testid）+ `RelatedVideosSkeleton`/`RelatedVideos.Skeleton`（零消费）+ VideoGrid import；移除 `variant` prop（恒 sidebar 纵向列表）；docstring 同步。
+  - `apps/web-next/src/components/video/VideoDetailClient.tsx` — `<RelatedVideos video={video} variant="sidebar"/>` → 去 `variant`（唯一消费方对齐 prop 移除）。
+  - `tests/e2e-next/featured-row-sparse.spec.ts` — 文件头注释更新为 CardGrid standard 等宽归一背景（断言「稀疏单卡占 1 列等宽、不被挤垮、poster 维持 2:3」对等宽布局〔单卡 ≈ 1/列数 宽〕仍成立，由 CardGrid `min-width:0` 保障；assertions 不变）。
+- **新增依赖**：无
+- **数据库变更**：无（纯前端组件归一 + 死代码清退）
+- **净变更**：6 文件，+62/-223（净删约 161 行死代码）。
+- **门禁**：typecheck=0 / lint=0 / test:changed〔`vitest run --changed HEAD` 改动域绿〕+ 首页/详情相关组件测 ShelfRow/DailyAnimeRow/HomeBrandFiltering 13 测全过 / verify:adr-contracts=0。**关键路径**：首页 FeaturedRow + Shelf poster-row + 详情侧栏相关推荐——改后回归（ShelfRow poster-row 5 测、TopTenRow/DailyAnimeRow 横滚无破）。
+- **六问自检**：① 契约/边界：消费 CardGrid 封闭契约；Shelf/RelatedVideos 公开 prop 收窄/移除均经消费方核实 ✓；② 复用：FeaturedRow 归一到 CardGrid、删三处死重复 ✓；③ 分层：纯前台组件 ✓；④ 类型：无 any、ShelfTemplate 收窄、RelatedVideosProps 去 variant ✓；⑤ 测试：改动域 + 首页组件测全过 ✓；⑥ 沉淀：本卡即「卡片体系归一」沉淀收口。
+- **注意事项**：① **playwright e2e 未实跑本卡**——featured-row-sparse 断言对等宽布局逻辑成立、首页/详情全 e2e + 视觉回归归 CARD-SIZE-E2E（Phase 4，同前序卡口径）。② **sparse 占位行为变更**：归一后稀疏数据（真实卡 < 列数）末行自然留空，不再以 dashed 占位填满——等宽布局下单卡不塌缩（CardGrid min-width:0），与分类/搜索 standard 网格末行留空一致。③ Shelf `template` prop 收窄单值后为「兼容性 vestigial」，彻底移除〔+ 改 8 调用点〕留后续 tidy；RelatedVideos `variant` 因仅 1 消费方已直接移除。④ globals.css `--shelf-gap`（FeaturedGrid/Shelf featured-grid 删后疑似孤儿）/ `--page-inline-gap` 未清理——需全量核引用方可删，留 token 卡。⑤ **🎉 Phase 2 全 6 卡交付**（SSR/CARDGRID/SCROLL/VIDEOCARD-VARIANT/BROWSE-MIGRATE/FEATURED-NORMALIZE）；剩 Phase 3 CARD-SIZE-ADMIN-UI（server-next 后台 Tab）+ Phase 4 CARD-SIZE-E2E（全栈 e2e + 视觉回归 + 新鲜度链路）。
+
+## [CARD-SIZE-ADMIN-UI] Phase 3：server-next「前台展示」Tab — 3 档卡片尺寸表单（ADR-214/215，SEQ-20260622-03）
+- **完成时间**：2026-06-23
+- **记录时间**：2026-06-23
+- **执行模型**：claude-opus-4-8（主循环；卡建议 sonnet，主循环模型已为 opus、按规则不降级）
+- **子代理**：无（page-local settings tab 消费既有 ADR-215 端点；非新共享组件 API 契约 / 非跨 3+ 消费方 schema / 非新 admin route / 不改 admin-ui types.ts → 不触发强制 Opus arch-reviewer）
+- **问题理解**：Phase 1/2 已铺好 DB 真源 + 读写端点 + 前端 SSR 消费，但 admin 无可视化编辑入口——运营须改 seed/常量发版才能调列数/间距/卡宽。本卡补齐后台编辑面板（SEQ「运营自助调尺寸」目标的最后一块）。
+- **根因判断**：缺的是消费既有端点的后台 UI 一层，无需触碰 schema / route / service。
+- **方案**：新建 card-size API client + 校验镜像 + 「前台展示」settings tab（3 档表单、每档独立 save），注册进 SettingsContainer。
+- **修改文件**：
+  - `apps/server-next/src/lib/card-size/api.ts`（新）— `listCardSizes()`→`GET /admin/card-sizes`、`updateCardSize(sizeClass, body)`→`PUT /admin/card-sizes/:sizeClass`；导出 `GridCardSizeBody`/`ScrollCardSizeBody`/`CardSizeBody`（镜像服务端可编辑投影 D-215-2）。仿 `home-curation/api.ts`，经统一 `apiClient`（UI 不直连 DB，分层合规）。
+  - `apps/server-next/src/lib/card-size/validation.ts`（新）— `CARD_SIZE_BOUNDS`（列数 [2,8] / 卡宽 [120,280] / gap [0,64]）+ `validateCardSizeField`（整数 + 范围 → 中文文案）。**plain 常量镜像服务端 zod**（CardSizeService `GridCardSizeBodySchema`/`ScrollCardSizeBodySchema`）+ DB CHECK；**不引入 zod 依赖**（server-next 无 zod、沿用 sibling tab inline 校验约定、避免技术栈外依赖）；docstring 标注服务端 zod `.strict()` + DB CHECK 为权威、客户端镜像仅供即时反馈。
+  - `apps/server-next/src/app/admin/settings/_tabs/CardSizeTab.tsx`（新）— 取数渲染 3 档：`standard`/`compact`（网格档=桌面列数 + 间距）、`scroll`（卡定宽 px + 间距）；**每档独立 save**（对齐 PUT/:sizeClass 端点粒度 + 单档 audit `card_size.update`）；越界禁 save + AdminInput `error` 态 + hint 红字；dirty 指示 / 重置 / 重新加载 + toast，仿 LoginSessionsTab；复用 admin-ui 原语 `AdminCard`/`AdminButton`/`AdminInput`/`ErrorState`/`LoadingState`/`useToast`（零新组件）；内部 `NumberField`/`CardSizeClassCard` page-local 消重（仅本 tab 用、未达「3 处提取」信号、不沉淀共享层）；`CLASS_META` 按 `CardSizeClass` 封闭枚举驱动展示文案（新档位走 ADR-214 amendment 自动渲染）。
+  - `apps/server-next/src/app/admin/settings/_client/SettingsContainer.tsx`（注册）— `TabId` 加 `'card-size'` + `TABS` 加「前台展示」（描述「卡片尺寸 / 网格列数 / 横滚卡宽」）+ import + tabpanel 分支；**additive 不动既有 8 tab**。
+  - `tests/unit/components/server-next/admin/system/CardSizeTab.test.tsx`（新）— 6 测：① 渲染 + testid；② 三档卡渲染 + 字段初值注入（standard 列数 5 / scroll 卡宽 170 / gap 16）；③ 改标准列数→dirty→`updateCardSize('standard', {desktopColumns:6, gapPx:16})`（网格档 body）；④ 越界（列数 10>8）→ save 原生 disabled + 「范围 2–8」文案 + 不调 updateCardSize；⑤ scroll 档渲卡宽字段（aria-label「卡片宽度」、非列数）；⑥ 加载失败 ErrorState（不渲档卡）。
+- **新增依赖**：无（未引入 zod 到 server-next，详见 validation.ts 决策）
+- **数据库变更**：无（纯前端后台 UI，消费既有端点）→ architecture.md 零同步。
+- **偏离登记**：task-queue 原登记「校验镜像 zod」——实现以 **plain 常量镜像服务端 zod 边界** 而非引入 zod。属实现手段选择（契约/边界值未变）；理由：server-next 无 zod 依赖，引入即技术栈外依赖扩张，与 sibling tab inline 校验约定相悖；服务端 zod `.strict()` + DB CHECK 仍为权威校验层，客户端镜像漂移仅退化为「服务端 422 报错」体验、不破坏正确性。
+- **门禁**：typecheck=0 / lint=0（4 successful，本卡零告警；既有 ProblemImageCard/SourcesClient/TabImages 告警与本卡无关）/ test:changed〔`vitest run --changed HEAD` → CardSizeTab.test 6 passed〕/ verify:adr-contracts=0（endpoint-adr 对齐，**无新 admin route**）。**关键路径**：admin 设置面板新增 tab——纯增量、既有 tab 分支不变。
+- **六问自检**：① 契约/边界：消费既有 ADR-215 端点 + admin-ui 封闭原语，未扩任何公开 API ✓；② 复用：API client 仿 home-curation、tab 仿 LoginSessionsTab、组件全复用 admin-ui ✓；③ 可扩展：档位经 CardSizeClass 封闭枚举 + CLASS_META 驱动，新档走 ADR amendment + migration ✓；④ 一致性：样式/交互（dirty/save/reset/reload+toast）对齐 sibling tab ✓；⑤ 类型：无 any、无空 catch（catch 均 toast/setError）、无硬编码颜色（CSS 变量 --fg-danger/--fg-muted）✓；⑥ 沉淀：NumberField/CardSizeClassCard 仅本 tab 消重未达提取阈值，page-local 即可 ✓。
+- **注意事项**：① **ADMIN e2e playwright 未实跑本卡**——纯增量 tab 不动既有路由；按 SEQ 计划全栈 e2e（含 admin PUT→公开读新鲜度链路 + 网格视觉回归 + test:e2e 4 projects）归 Phase 4 CARD-SIZE-E2E，与 Phase 2 各卡口径一致。② tab 位置追加在「登录会话」之后（TABS 末位），additive 不扰既有 tab 顺序。③ scroll 档保存后约 ≤60s（SSR revalidate / 公开缓存 TTL，D-214-9）前台渲染新尺寸——tab 顶部 advisory 已向运营说明该新鲜度边界。④ **Phase 3 交付 ✅**；SEQ-20260622-03 剩最后 1 卡 Phase 4 CARD-SIZE-E2E（全栈 e2e + 视觉回归 + 新鲜度链路 + 全量门禁，sonnet）。⑤ 后台编辑能力就绪后，「运营无需改码自助调卡片尺寸」目标在代码层闭环；端到端可用仍待 Phase 4 验证 + 合并 main + 部署。
+
+## [CARD-SIZE-E2E] Phase 4 收官：卡片尺寸体系 e2e spec + 全量回归门禁（ADR-214 D-214-4/7/9，SEQ-20260622-03）
+- **完成时间**：2026-06-23（spec 交付 + 可跑门禁全绿）
+- **记录时间**：2026-06-23
+- **执行模型**：claude-opus-4-8（主循环；卡建议 sonnet）
+- **子代理**：无（e2e spec 编写 + 跑门禁，非新架构决策 / 非新契约）
+- **问题理解**：卡片尺寸体系全栈代码已就绪（Phase 0–3），缺端到端 e2e 验证「SSR 注入 CSS 变量 → 前台真实页面渲染 → CardGrid 消费」链路 + 网格窄容器/长标题视觉防溢出（D-214-4/7）。
+- **根因判断**：前序卡单测覆盖各契约单元（card-size-fetch / CardGrid / VideoCard / service / public-cache / admin-ui），但跨 SSR→浏览器渲染的整链路 + computed `grid-template-columns` 防溢出仅 e2e 可验。
+- **方案**：新建 e2e spec 覆盖 SSR→视觉链路 + 防溢出 + 响应式；跑全量回归门禁。
+- **修改文件**：
+  - `tests/e2e-next/card-size-grid.spec.ts`（新）— 4 测，严格仿 `typography-layout.spec.ts` / `featured-row-sparse.spec.ts` 既证范式（同 `_fixtures` SSR 500 守门 + `page.route` mock `/banners`·`/videos/trending` + 选择器约定）：
+    - ① **SSR 注入**（D-214-6/9）：`<style data-card-size-vars>` 存在 + `:root` computed 6 变量（`--card-cols-standard-desktop`=5 / `--card-gap-standard`=16px / `--card-cols-compact-desktop`=3 / `--card-gap-compact`=12px / `--card-w-scroll`=170px / `--card-gap-scroll`=16px）+ 无倒置变量（`--card-w-standard`/`--card-cols-scroll-desktop` 为空，D-214-10）。
+    - ② **CardGrid 消费 DB 列数**（D-214-7）：桌面视口（1280≥1024）`featured-grid` computed `grid-template-columns` 轨道数=5 + `columnGap`=16px。
+    - ③ **防溢出**（D-214-4 / Codex-R2）：含超长标题首卡，`minmax(0,1fr)` + `> *{min-width:0}` → grid `scrollWidth ≤ clientWidth`（无水平溢出）+ 首卡宽 ≤ 单列宽上界（gridWidth/5+容差）。
+    - ④ **响应式级联**：窄视口（375<640）`--cg-cols` 默认退 2 列、仍不溢出。
+  - 取值稳定性设计：SSR `fetchCardSizeSettings` 取数失败（apps/api 无表 / 不可达）降级 `CARD_SIZE_DEFAULTS`，与 migration 124 seed 同值（standard 5/16）→ 无论后端 DB 状态如何注入值恒为 5/16，断言稳定，仅需 web dev server。
+- **新增依赖**：无
+- **数据库变更**：无（纯测试新增）
+- **门禁（可跑全绿）**：typecheck=0 / lint=0（4 successful，本卡零告警）/ **全量单测 `npx vitest run` 602 文件 8216 测全过**（PHASE COMPLETE 兜底节点；602 = Phase 3 后 601+本卡 e2e spec 被 vitest 默认 config 排除、不计入）/ verify:adr-contracts=0（verify-endpoint-adr 250 路由对齐、**无新 route**；verify-error-message advisory 为既有路由、与本卡无关）。
+- **⚠️ e2e 实跑环境阻塞（关键，须他处补跑）**：worktree 隔离副本**缺 `.env.local`**（gitignore 本地文件、不随 git worktree 复制）→ dev server 命令 `node --env-file=../../.env.local` 解析失败 → apps/api(:4000) / web-next(:3000) / server-next(:3003) dev server **均无法启动** → playwright e2e（还需 DB migration 124 + Redis + globalSetup seed）**在本 worktree 背景会话不可实跑**。`npm run test:e2e`（4 projects 含本 spec）+ admin PUT→公开读新鲜度端到端（D-214-9 R3 mutation 侧）**须在具备 `.env.local`+DB+Redis 的主 checkout / CI 跑 = 合并 main 前的 e2e gate 节点**（CLAUDE.md「合并 main 前必跑 test:e2e」）。mutation 侧契约已由 `card-size-admin.test.ts`（PUT→Redis unlink）+ `card-size-public.test.ts`（miss→setex 重读）单测覆盖，端到端实跑随该 gate。
+- **六问自检**：① 契约/边界：消费既有 SSR 注入 + CardGrid 契约，断言对齐 ADR-214 D-214-4/7/9/10，未扩任何代码契约 ✓；② 复用：spec 仿既证范式（_fixtures + route mock + 选择器）零新基建 ✓；③ 分层：纯测试层 ✓；④ 类型：无 any、TS 严格（trackCount helper + 显式类型）✓；⑤ 测试：本卡即测试收口；全量单测全绿 ✓；⑥ 沉淀：spec 落 e2e-next 标准目录、复用统一 fixture ✓。
+- **注意事项**：① **e2e 实跑非本 worktree 能力范围**——Phase 4 性质 = 测试收口 + 门禁，e2e 实跑是合并 gate 节点（环境依赖），与「写 spec + 跑全量单测」分离；spec 已就绪、在正确环境可直接跑（建议 `PLAYWRIGHT_SERVERS=web npx playwright test --project=web-chromium tests/e2e-next/card-size-grid.spec.ts`）。② **🎉 SEQ-20260622-03 代码全交付**（Phase 0–4 全部代码 + spec）；DB 驱动可配卡片尺寸体系 + 后台编辑 UI + 前台统一 CardGrid/VideoCard 全栈闭环。③ **唯一剩余前置门** = 合并 main 前 `npm run test:e2e` 全量 4 projects + 视觉回归实跑（具完整环境处）；通过后即可合并 + 部署，用户端见统一卡片尺寸 + 运营后台自助调尺寸生效。④ 视觉回归（admin-visual project）须 `PLAYWRIGHT_VISUAL=1` + baseline 入库，按 SEQ 与 test:e2e 同 gate 跑。
+
+## [CARD-SIZE-ADMIN-PREVIEW] Phase 3 增强：「前台展示」Tab 实时 WYSIWYG 预览（用户反馈，SEQ-20260622-03）
+- **完成时间**：2026-06-23
+- **记录时间**：2026-06-23
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（page-local 预览组件，非新共享契约 / schema / route）
+- **问题理解**：用户反馈——CARD-SIZE-ADMIN-UI 的「前台展示」Tab 仅有表单数据修改，缺实时预览；运营调列数/间距/卡宽是「盲改」，须切前台才能看效果。
+- **根因判断**：Phase 3 表单卡只做了输入 + 保存，未含预览（原卡范围外）；补 WYSIWYG 闭环。
+- **方案**：CardSizeTab 每档卡内（表单与操作行之间）内嵌 `CardSizePreview`，消费该档 **draft 值**（未保存即时反映、随输入实时重渲）。
+- **修改文件**：
+  - `apps/server-next/src/app/admin/settings/_tabs/CardSizeTab.tsx` — 新增 `CardSizePreview` 子组件 + 预览样式（`PREVIEW_WRAP_STYLE`/`PREVIEW_LABEL_STYLE`/`PREVIEW_CARD_STYLE`）；在 `CardSizeClassCard` 表单 grid 与 action 行之间插入 `<CardSizePreview>`（传 draft `Number(sizeInput)`/`Number(gapInput)`）。
+    - **网格档（standard/compact）**：`display:grid; grid-template-columns: repeat(列数, minmax(0,1fr)); gap` 渲染「列数」个 2:3 占位卡（铺满一行直观映射「N 列」）+ 标注响应式（移动 2 / ≥640 3 / 桌面 N）。
+    - **scroll 档**：`display:flex; gap; overflow-x:auto`，固定 `width:卡宽px` 的 2:3 占位 ×6 → 直观看定宽 + 横滚 + gap。
+    - **边界**：后台 server-next 自包含，**不跨 app import 前台 CardGrid/VideoCard**（apps/web-next，跨 app 边界违规 + 前台 context 依赖）；占位仅以 `--bg-surface-raised`/`--border-default`/`--radius-sm` 主题变量复刻布局语义、**零硬编码色**。
+    - **健壮性**：越界值照实渲染（可视化「越界后果」，如 10 列 → 占位很挤）；列数上限 `PREVIEW_GRID_MAX_CARDS=12` 防越界值撑爆 DOM；NaN/空输入降级（网格档 →1 列、scroll →170px）。
+  - `tests/unit/components/server-next/admin/system/CardSizeTab.test.tsx` — 扩 2 测（共 8）：⑦ 标准档 `card-size-standard-preview-track` 初始 `grid-template-columns` 含 `repeat(5,`、gap=16px，改列数 5→6 预览实时更新 `repeat(6,`；⑧ scroll 档 `card-size-scroll-preview-track` `display:flex`、首张占位卡 `width:170px`，改卡宽 170→200 占位实时更新 `200px`。
+- **新增依赖**：无（纯 CSS + inline style，无组件库）
+- **数据库变更**：无（纯前端后台 UI 增强）
+- **门禁**：typecheck=0 / lint=0（4 successful）/ test:changed〔`vitest --changed` → CardSizeTab.test 8 passed〕/ verify:adr-contracts=0。**关键路径**：admin「前台展示」Tab——纯增量预览、不动表单/保存逻辑。
+- **六问自检**：① 契约/边界：后台自包含、不跨 app 引前台组件，未扩任何公开契约 ✓；② 复用：占位复用主题 CSS 变量、预览组件 page-local 消重（仅本 tab 用）✓；③ 分层：纯前端后台 UI ✓；④ 类型：无 any、props 显式类型、Number 防御 ✓；⑤ 测试：预览随 draft 变化 2 测 + 原 6 测全过 ✓；⑥ 沉淀：CardSizePreview 仅本 tab 消费、未达「3 处提取」阈值，page-local 即可 ✓。
+- **注意事项**：① 预览反映 **draft（未保存）值**——即时见效、保存后落库；与表单 dirty/save 解耦。② 预览仅示意布局（占位方块非真实海报）；真实视觉以前台为准，预览顶部已标注响应式降级规则避免误导。③ **合并流程**：本卡在 worktree 分支 `chore/card-size-phase2-20260622`（领先 governance），须再次 `git merge --ff-only` 合回 governance 集成分支才在主 checkout 生效。④ 用户反馈的「实时预览缺失」已闭环；「前台展示」Tab 现为「调参 + 即时预览 + 保存」完整工作流。

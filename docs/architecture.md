@@ -954,6 +954,28 @@ UserPreferences = {
 - 投影收敛（P2-a-B 已落地）：`TaskAggregator` 副源由「bull active 瞬时快照」切「task_runs 持久登记」（`listTaskRuns` 读，`taskrun-${id}` 前缀 + `TASK_RUN_STATUS_MAP` 6→4 态〔cancelled→failed / cancelling→running〕）；`queueCounts` 仍取 bull `getJobCounts` 供任务闪电 running 计数（§4.1，Redis 不可用降级）
 - 控制路径（P2-a-C 已落地）：`routes/admin/tasks.ts parseTaskId` 扩 `taskrun-{id}` 分派（bull- → taskrun- → crawler 顺序）+ `AdminTaskControlTarget.kind` 扩 `'task_run'`（加性 D-194-6，未镜像 admin-ui）+ `getTaskRunById`（`/^\d+$/` 守卫防非法 `::bigint`）。**cancel**：终态 no-op cancelled=false / running-ish → **409 诚实暴露**（D-194-6 黄线②：maintenance 批次 service 无 abortController → 退回 ADR-191 P0 的 409，协作式取消 status='cancelling' 待 worker 具备 abortController 后启用，schema 已预留）。**retry**：failed → 经 `run.kind`→queue 映射 + `run.ref`(bull jobId) `getJob().retry()`（作业已清理→409）。**worker 未改**（黄线② fallback）。**-B→-C 瞬时态已闭环**（taskrun- 不再落 crawler 分支 500）
 
+### 5.19 前台卡片尺寸体系（ADR-214 / ADR-215，Migration 124）
+
+- `card_size_settings`（Migration 124，ADR-214 D-214-3）：DB 驱动、后台可配的前台卡片尺寸体系数据底座（3 档 seed 恒存在；不可删，档位新增/退役走 ADR-214 amendment + migration）
+
+| 列名 | 类型 | 说明 |
+|------|------|------|
+| id | uuid | 主键 DEFAULT gen_random_uuid()；audit `card_size.update` 的 target_id 锚点（仿 home_section D-182-5.3） |
+| size_class | text | UNIQUE，`CardSizeClass` 封闭枚举 3 值 CHECK（`'standard'｜'compact'｜'scroll'`） |
+| desktop_columns | int | 网格档（standard/compact）列数，CHECK BETWEEN 2 AND 8；scroll 档 NULL（D-214-4 存列数不存卡宽，弹性列由容器派生） |
+| card_width_px | int | scroll 档横滚卡定宽 px，CHECK BETWEEN 120 AND 280；网格档 NULL（横滚无列概念、本就定宽） |
+| gap_px | int | 卡间距 px，NOT NULL CHECK BETWEEN 0 AND 64 |
+| settings | jsonb | 非关键扩展项，NOT NULL DEFAULT '{}'（禁关键策略字段，ADR-052/182 守则） |
+| updated_at | timestamptz | 触发器 `card_size_settings_set_updated_at_trg` 维护 |
+
+  - **档位×单位绑定 CHECK**（`card_size_settings_unit_by_class_check`，ADR-214 D-214-3 / Codex-R1 HIGH）：`(size_class IN ('standard','compact') AND desktop_columns IS NOT NULL AND card_width_px IS NULL) OR (size_class='scroll' AND desktop_columns IS NULL AND card_width_px IS NOT NULL)`——单位绑定到具体 size_class（非仅"二选一"），拒绝语义倒置行（scroll 带 columns / 网格档带 width）。DB 级倒置行测见 `tests/integration/api/card-size-settings-schema.test.ts`。
+  - seed 3 行（SQL 字面量，`ON CONFLICT (size_class) DO NOTHING`，运营可改）：standard(列 5, gap 16) / compact(列 3, gap 12) / scroll(卡宽 170, gap 16)。默认值真源 `CARD_SIZE_DEFAULTS`（`@resovo/types`，CARD-SIZE-TYPES-QUERIES 落地）+ seed 一致性单测守 SQL↔TS 同步（D-214-5；migration 纯 SQL 不能 import TS）。
+  - migration 124 同时扩 `admin_audit_log.target_kind` CHECK 17 → 18（+`card_size`）；`AdminAuditActionType` +1（`card_size.update`，由 CARD-SIZE-SERVICE-ADMIN 落地，action_type 列无 DB CHECK——D-182-5.2 既有裁定）
+  - 端点契约（ADR-215）：`GET /admin/card-sizes`（adminOnly）+ `PUT /admin/card-sizes/:sizeClass`（adminOnly，422 VALIDATION_ERROR / 404 NOT_FOUND，audit `card_size.update` targetId=row.id）+ 公开 `GET /card-sizes`（无鉴权只读，Redis 缓存 + PUT 成功后 del 失效 best-effort）——由 CARD-SIZE-SERVICE-ADMIN / CARD-SIZE-PUBLIC-CACHE 落地
+  - SSR `:root` 注入（ADR-214 D-214-6）：`lib/server/card-size-fetch.ts` server-only 取数（短 revalidate ≤60s 新鲜度有界，Codex-R3）→ `[locale]/layout.tsx` 注入 CSS 变量 `--card-cols-{class}-desktop` / `--card-gap-{class}` / `--card-w-scroll`，失败降级 `CARD_SIZE_DEFAULTS`（非空 catch，结构化 warn）——由 CARD-SIZE-SSR 落地
+  - TS 类型：`CardSizeClass` / `CardSizeSettings` / `CARD_SIZE_DEFAULTS`（`packages/types/src/card-size.types.ts`，CARD-SIZE-TYPES-QUERIES 落地）
+  - DB 查询：`listCardSizeSettings / findCardSizeSettings / updateCardSizeSettings`（`apps/api/src/db/queries/card-size-settings.ts`，CARD-SIZE-TYPES-QUERIES 落地）
+
 ---
 
 ## 6. 视频状态机（DB 强约束）

@@ -1,11 +1,12 @@
 /**
  * tests/e2e-next/featured-row-sparse.spec.ts
- * CHORE-FEATUREDGRID-SPARSE 回归：首页 FeaturedRow 真实卡 < 4 时布局不塌缩
+ * 首页 FeaturedRow 稀疏数据布局回归：真实卡 < 列数时单卡不塌缩
  *
- * 背景：FeaturedGrid（1.6fr+3×1fr）真实卡 < MIN_SLOTS(4) 时用 aspectRatio:'2/3' 空占位填剩余列。
- * 缺陷（修复前）：grid item 默认 min-width:auto，空占位 aspect-ratio 从被拉伸的 grid row height
- * 反推出过大 width(~416px) 挤压真实 VideoCard 列到 min-content(~27px)，poster 塌到 ~41px 高。
- * 修复：FeaturedGrid 直接子加 min-width:0，阻止空占位反推撑宽。
+ * 背景（CARD-SIZE-FEATURED-NORMALIZE / ADR-214 D-214-8）：FeaturedRow 已由 1.6fr+3×1fr 异宽 +
+ * sparse-fill 空占位归一为 CardGrid standard 等宽网格（repeat(var(--card-cols-standard-desktop),
+ * minmax(0,1fr)) + `.card-grid > * { min-width:0 }`）。等宽 + min-width:0 结构上消除"空占位反推
+ * 挤垮真实卡"问题（原 CHORE-FEATUREDGRID-SPARSE 缺陷），占位逻辑随归一删除。
+ * 本回归断言稀疏数据下单卡占 1 列等宽（远宽于旧塌缩值）、poster 维持 2:3，不被挤垮。
  */
 
 import { test, expect } from './_fixtures'

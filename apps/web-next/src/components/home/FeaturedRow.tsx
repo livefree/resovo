@@ -2,15 +2,17 @@
 
 /**
  * FeaturedRow — 首页精选推荐区块（HANDOFF-22）
+ *   （CARD-SIZE-SYSTEM Phase 2 / ADR-214 D-214-8：1.6fr 异宽 → CardGrid standard 等宽网格归一）
  *
  * 数据源：GET /home/modules?slot=featured → HomeModule[]
- * 布局：1.6fr + 3×1fr CSS grid（共 4 列，首列较宽）
+ * 布局：CardGrid standard 档等宽网格（DB 注入 --card-cols-standard-desktop / --card-gap-standard，
+ *       默认 5 列/16px；移动/平板按 2/3 契约派生）。归一前为 1.6fr+3×1fr 首列大卡异宽。
  *
  * 策略：
  *   - Section 始终以"精选推荐"身份渲染，不替换为其他 section
  *   - 无运营模块时：以趋势视频填充 grid（保持标题与布局不变）
  *   - 有运营模块时：显示编辑精选内容（当前仍以趋势填位，TODO: 待后端实现）
- *   - loading 时：FeaturedGridSkeleton，骨架尺寸与实际 grid 一致，无闪烁
+ *   - loading 时：FeaturedGridSkeleton（CardGrid standard 骨架，无闪烁）
  *
  * TODO(featured-videos-endpoint): 待后端实现 /home/featured-videos 批量端点（类似 /home/top10）
  * 以返回运营选定的 VideoCard 列表，替换当前趋势视频填位逻辑。
@@ -19,10 +21,14 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
+import { CardGrid } from '@/components/shared/card-grid/CardGrid'
 import { VideoCard } from '@/components/video/VideoCard'
 import { useBrand } from '@/hooks/useBrand'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import type { HomeModule, VideoCard as VideoCardType, ApiResponse } from '@resovo/types'
+
+// 精选展示槽位：对齐 standard 档默认列数（DB 默认 5）。列数 DB 可配，此为 JS 侧取数/骨架上限。
+const FEATURED_SLOTS = 5
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -75,14 +81,8 @@ function RowHeader({
 
 function FeaturedGridSkeleton() {
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '1.6fr 1fr 1fr 1fr',
-        gap: 'var(--shelf-gap)',
-      }}
-    >
-      {Array.from({ length: 4 }).map((_, i) => (
+    <CardGrid sizeClass="standard">
+      {Array.from({ length: FEATURED_SLOTS }).map((_, i) => (
         <Skeleton
           key={i}
           shape="rect"
@@ -90,46 +90,19 @@ function FeaturedGridSkeleton() {
           delay={i >= 2 ? 300 : undefined}
         />
       ))}
-    </div>
+    </CardGrid>
   )
 }
 
 function FeaturedGrid({ videos }: { readonly videos: VideoCardType[] }) {
-  const MIN_SLOTS = 4
-  const displayed = videos.slice(0, MIN_SLOTS)
-
+  // 等宽 standard 网格：minmax(0,1fr) + CardGrid `> * { min-width:0 }` 结构上消除挤垮，
+  // 故无需归一前的 sparse-fill 空占位（占位机制亦与 DB 可配列数不兼容）。卡 <列数 时末行自然留空。
   return (
-    <div
-      data-testid="featured-grid"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '1.6fr 1fr 1fr 1fr',
-        gap: 'var(--shelf-gap)',
-      }}
-    >
-      {displayed.map((video) => (
-        // min-w-0：grid item 防溢出——阻止真实卡被空占位反推 width 挤垮（默认 min-width:auto）
-        <VideoCard key={video.id} video={video} className="min-w-0" />
+    <CardGrid sizeClass="standard" data-testid="featured-grid">
+      {videos.slice(0, FEATURED_SLOTS).map((video) => (
+        <VideoCard key={video.id} video={video} />
       ))}
-      {displayed.length < MIN_SLOTS &&
-        Array.from({ length: MIN_SLOTS - displayed.length }).map((_, i) => (
-          <div
-            key={`empty-${i}`}
-            aria-hidden="true"
-            style={{
-              // minWidth:0：阻止空占位的 aspect-ratio 从被拉伸的 grid row height 反推出过大
-              // width（真实卡 <4 时会挤垮真实卡列到 min-content，见 CHORE-FEATUREDGRID-SPARSE）
-              minWidth: 0,
-              aspectRatio: '2/3',
-              borderRadius: '8px',
-              border: '1px dashed var(--border-default)',
-              background: 'var(--bg-surface-sunken)',
-              opacity: 'var(--shelf-empty-opacity)',
-              pointerEvents: 'none',
-            }}
-          />
-        ))}
-    </div>
+    </CardGrid>
   )
 }
 
@@ -148,7 +121,7 @@ export function FeaturedRow({ title, viewAllHref, viewAllLabel }: FeaturedRowPro
       : '/home/modules?slot=featured'
     Promise.all([
       apiClient.get<ApiResponse<HomeModule[]>>(modulesUrl, { skipAuth: true }),
-      apiClient.get<{ data: VideoCardType[] }>('/videos/trending?period=week&limit=4', { skipAuth: true }),
+      apiClient.get<{ data: VideoCardType[] }>(`/videos/trending?period=week&limit=${FEATURED_SLOTS}`, { skipAuth: true }),
     ])
       .then(([_modulesRes, trendingRes]) => {
         // TODO(featured-videos-endpoint): 当 _modulesRes.data.length > 0 时

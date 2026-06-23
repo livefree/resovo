@@ -2,12 +2,13 @@
 
 /**
  * BrowseGrid — HANDOFF-15 对齐 docs/frontend_design_spec_20260423.md §12.4
+ *   （CARD-SIZE-SYSTEM Phase 2：网格切共享 CardGrid standard 档、卡切 VideoCard navigate）
  *
- * 从 URL searchParams 读取 page + 筛选条件，请求 API 后渲染 5 列网格 + 分页控件。
+ * 从 URL searchParams 读取 page + 筛选条件，请求 API 后渲染 CardGrid standard 网格 + 分页控件。
  *
- * Token 消费（spec §12.4）：
- *   网格列数       → 5
- *   网格 gap       → var(--browse-grid-gap)       20px
+ * Token 消费（CARD-SIZE-SYSTEM Phase 2 / ADR-214）：
+ *   网格列数/gap   → CardGrid sizeClass="standard"（DB 注入 --card-cols-standard-desktop /
+ *                    --card-gap-standard，移动/平板按 2/3 契约派生；默认 5 列/16px 与原口径一致）
  *   分页-网格间距  → var(--browse-pagination-mt)  48px
  *   分页项 gap     → var(--browse-pagination-gap) 8px
  *   分页按钮尺寸   → var(--browse-pagination-btn) 36px
@@ -16,7 +17,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { apiClient } from '@/lib/api-client'
-import { BrowseCard } from './BrowseCard'
+import { CardGrid } from '@/components/shared/card-grid/CardGrid'
+import { VideoCard } from '@/components/video/VideoCard'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import { Pagination } from '@/components/primitives/pagination'
 import type { VideoCard as VideoCardType, VideoType, ApiListResponse } from '@resovo/types'
@@ -30,14 +32,7 @@ const SKELETON_COUNT = 10
 
 function BrowseGridSkeleton() {
   return (
-    <div
-      data-testid="browse-grid-skeleton"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(5, 1fr)',
-        gap: 'var(--browse-grid-gap)',
-      }}
-    >
+    <CardGrid sizeClass="standard" data-testid="browse-grid-skeleton">
       {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
         <Skeleton
           key={i}
@@ -46,7 +41,7 @@ function BrowseGridSkeleton() {
           delay={i >= 4 ? 300 : undefined}
         />
       ))}
-    </div>
+    </CardGrid>
   )
 }
 
@@ -120,18 +115,11 @@ export function BrowseGrid({ initialType }: BrowseGridProps) {
 
   return (
     <div>
-      <div
-        data-testid="browse-grid"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(5, 1fr)',
-          gap: 'var(--browse-grid-gap)',
-        }}
-      >
+      <CardGrid sizeClass="standard" data-testid="browse-grid">
         {videos.map((video) => (
-          <BrowseCard key={video.id} video={video} />
+          <VideoCard key={video.id} video={video} interaction="navigate" />
         ))}
-      </div>
+      </CardGrid>
 
       {totalPages > 1 && (
         <Pagination

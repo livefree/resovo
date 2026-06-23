@@ -3,12 +3,28 @@
  * VIDEO-08: BrowseGrid 分页控件渲染与 URL 更新
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { BrowseGrid } from '@/components/browse/BrowseGrid'
 import type { VideoCard as VideoCardType, ApiListResponse } from '@/types'
 
 // ── Mocks ──────────────────────────────────────────────────────────
+
+// CARD-SIZE-BROWSE-MIGRATE：BrowseGrid 改渲 VideoCard(navigate)，其 StackedPosterFrame
+// 在 useEffect 读 window.matchMedia（jsdom 默认无）→ 补 stub（同 VideoCard.test）。
+beforeAll(() => {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  })
+})
 
 const mockPush = vi.fn()
 let mockSearchParams = new URLSearchParams()
@@ -52,6 +68,11 @@ function makeVideoCard(n: number): VideoCardType {
     status: 'completed',
     episodeCount: 1,
     sourceCount: 1,
+    // CARD-SIZE-BROWSE-MIGRATE：BrowseGrid 改渲 VideoCard(navigate)，其 TagLayer 经
+    // videoCardToTagProps 读 subtitleLangs；补全 fixture 为合法 VideoCardType。
+    posterBlurhash: null,
+    posterStatus: 'ok',
+    subtitleLangs: [],
   }
 }
 

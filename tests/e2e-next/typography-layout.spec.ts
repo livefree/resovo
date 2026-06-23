@@ -3,7 +3,7 @@
  * M5-CLEANUP-11 ↔ BLOCKER #7 固化：排版 / 字体 / 布局不堆叠
  *
  * CLEANUP-08 修复：body 启用 font-sans antialiased（系统字体链）；
- * VideoGrid / SearchPage gap-4 lg:gap-6 节流；VideoCard 文字区不与 tag-layer 重叠。
+ * VideoGrid / SearchPage gap 统一 16px（--page-inline-gap）；VideoCard 文字区不与 tag-layer 重叠。
  *
  * ⚠️ BLOCKER-FONT 待决：design_system_plan 未定具体字体族，
  *    本 spec 只断言命中"无 serif 默认"即可（不锁定具体字体）。
@@ -79,7 +79,7 @@ test.describe('排版 / 字体 / 布局（BLOCKER #7 固化）', () => {
     const gridCount = await grid.count()
     test.skip(gridCount === 0, '首页暂无包含真实 video-card 的 grid 容器')
     const gap = await grid.evaluate((el) => window.getComputedStyle(el).gap)
-    // gap 可能是 "16px" 或 "16px 16px" 或 "24px"（lg:gap-6）
+    // gap 统一 16px（CARD-SIZING-B：--page-inline-gap，固定不再响应式）
     const gapPx = parseFloat(gap.split(' ')[0])
     expect(gapPx).toBeGreaterThanOrEqual(16)
   })
@@ -110,7 +110,7 @@ test.describe('排版 / 字体 / 布局（BLOCKER #7 固化）', () => {
     const tagBox = await cardWithTag
       .locator('[data-testid="tag-layer-top-left"]')
       .boundingBox()
-    const titleBox = await cardWithTag.locator('p.line-clamp-1').first().boundingBox()
+    const titleBox = await cardWithTag.locator('p.line-clamp-2').first().boundingBox()
 
     expect(tagBox).not.toBeNull()
     expect(titleBox).not.toBeNull()

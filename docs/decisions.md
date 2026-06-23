@@ -23802,3 +23802,139 @@ ADR-211（refine D-211-2「EXISTS 未解决事件」口径——读端改 event_
 - **R4-HIGH（一次性扫描排在能写 checked_at 的代码之前）→ 吸收**：round-3 把「一次性真实健康扫描」放进 P4-0M，但写 `checked_at` 的 worker 改动在 P4-A，**A 在 0M 之后** → 0M 阶段扫描走旧 worker、写不进 checked_at → 扫描无效 → P4-C 要么 ok 行全 NULL→unknown 泛滥、要么逼一次未文档化的二次扫描，抵消「误报零运维消失」。**修订**：拆分时序改 `0M（仅加列 + client_error_at 回填）→ A（worker 写 checked_at）→ A-SCAN（一次性扫描落真值，C 硬前置门）→ C（unknown 谓词，显式依赖 A-SCAN 完成）`；A-SCAN ≠ P4-S（前者一次性初始排空、后者周期维护）。
 - **过程反思（落 ADR）**：失误模式第 4 次——这次不在数据模型，而在**为修 round-3 新增的「一次性扫描」步骤未追其代码依赖（需 A 的 worker）与卡间时序**。教训升级为：**任何新增补救步骤必须同时定位「它依赖谁、必须排在谁之后、谁依赖它完成」**。**收敛信号**：rounds 1–3（数据模型语义）已封板、round-4 未重开任一条，问题已下沉到实施编排层——这正是 0M/A/B/C/S 拆卡要解决的层级。
 - **Next steps（Codex）**：时序改为 `0M→A→A-SCAN→C` + C 显式依赖门后 re-review（用户触发）。
+
+## ADR-214：DB 驱动、后台可配的前台卡片尺寸体系 — 3 档尺寸模型 + SSR `:root` 注入 + CardGrid 共享契约（SEQ-20260622-03 / CARD-SIZE-ADR-MAIN）
+
+**状态**：**Accepted**（2026-06-22 用户裁定，Phase 0 收口；Codex 对抗审核 round-1〔1 HIGH + 2 MEDIUM〕全数吸收〔CHECK 绑 size_class / 网格 minmax 防溢出 / SSR 新鲜度有界 + del best-effort〕，见文末摘要；**Phase 1 实现解锁，CARD-SIZE-DB 起**）。**设计背书**：规划期 arch-reviewer (claude-opus-4-8) ×2 全栈背书（前端 CardGrid 契约 + schema/SSR/admin 全栈）+ 第二轮对抗复审 6 项修正已纳入（见 SEQ-20260622-03 末尾「复审修正」/ commit `3c6a4ab8`）+ Codex round-1 3 项修正（CHECK 绑 size_class / 网格 minmax 防溢出 / SSR 新鲜度有界 + del best-effort）。**关系**：承接 SEQ-20260622-01「Follow-up ②」（定宽机制 5→1 + 双卡合并），由纯前端 token 治理**升级为 DB 可配体系**；复用 ADR-181/182 `home_section_settings` 配置范式（id UUID PK / audit 锚点 / 公开读·后台写分层）；落在 ADR-037 web-next 核心能力层之上。**🚨 含 schema 变更**（新建 `card_size_settings` 表 + `admin_audit_log` target_kind CHECK 扩展）→ Phase 1 CARD-SIZE-DB 卡须**同 commit 同步 `docs/architecture.md`**。**端点契约**：拆分至 ADR-215（admin-route + 公开 route），本 ADR 仅定数据模型 / SSR / 共享组件契约 / 缓存边界。
+
+**背景/问题**：用户反馈「前台卡片尺寸视觉不统一」——首页特色行（FeaturedRow `1.6fr` 异宽网格）vs 首页横滚推荐行（`--shelf-card-w-portrait/top10` 静态 170px）vs 分类/搜索网格（`lg:grid-cols-5` 等宽）vs 详情侧栏相关推荐（60px 缩略）四套尺寸机制并存。SEQ-20260622-01 卡片尺寸治理仅做了**外观归一**（gap / 列数 / 标题排版统一），未做**尺寸机制统一**——四套定宽机制（grid-cols 枚举 / 1.6fr 异宽 / 静态 px / 侧栏缩略）+ 两处容器 max-width 仍各自为政。本 ADR 解的是**机制层统一 + 可运营配置**：把卡片尺寸从「散落硬编码 + 静态 token」收敛为「DB 单真源 + 后台可配 + SSR 注入 CSS 变量」，使运营无需改码即可调间距/列数/卡宽。
+
+**事实核验（撰写期独立复核，附 file:line）**：① web-next **无卡片尺寸专用 server-only 取数 helper**，但有 `fetchVideoDetail` 等 server fetch 先例〔`apps/web-next/src/app/[locale]/_lib/video-detail.ts:84/96/134`〕→ **非架构空白**，CARD-SIZE-SSR 仿此新建 helper（第二轮复审 P2 措辞下修）；② `home_section_settings`〔migration 095〕已确立同款配置表范式：`id` UUID PK + 业务键 UNIQUE + 动态 SET 部分更新 + audit targetId=row.id〔`db/queries/home-section-settings.ts` / `routes/admin/home.ts:59`〕→ 直接复用；③ `admin_audit_log` target_kind CHECK 当前 **17 种**（最近 bump = migration 097 home_publish 16→17）→ card_size 为 **17→18**；④ migration 最新 **123** → 本表 **124**；ADR 最新 **213** → 本 ADR **214** + route ADR **215**；⑤ migration 为纯 SQL、**不能 import TS 常量** → seed 必须 SQL 字面量、与 `CARD_SIZE_DEFAULTS`（@resovo/types）由一致性单测守同步（第二轮复审 P1）；⑥ 横滚行 `--shelf-card-w-portrait/top10` 当前静态 170px〔Shelf.tsx〕，FeaturedRow `1.6fr` 异宽〔同〕→ 二者均纳入体系（用户裁定，消「网格归 DB、横滚归静态」撕裂）。
+
+### 决策
+
+- **D-214-1（问题定性 = DB 驱动可配优于纯前端 token）**：卡片尺寸真源收敛为 **`card_size_settings` 表（DB 单真源）**，前端经「公开 API→Service→DB 读」、后台经「adminAPI→Service→DB 写」，**前端不直连 DB**（守 Route→Service→DB 分层，CLAUDE.md 架构约束）。为何不停在纯前端 design-token：用户明确要求**运营可在后台调间距/列数/卡宽而无需改码 + 发版**；token 改值仍需前端构建发布，达不到「运营自助」。价值排序依据：可扩展性 #3（配置增量扩展、不写死）+ 一致性 #4（单真源消四套机制漂移）> 改动收敛 #5。
+
+- **D-214-2（3 档尺寸模型·混合单位·可扩展）**：定义封闭枚举 `CardSizeClass = 'standard' | 'compact' | 'scroll'`（可经新增 seed 行 + 类型扩展增量扩，仿 ADR-052 slot / ADR-182 section 扩展约束——**新增档位走本 ADR amendment + migration**）：
+  - **`standard`**（首页特色 + 分类 + 搜索）：**列数 + gap**（网格弹性列，`repeat(N,1fr)`）。
+  - **`compact`**（详情页侧栏相关推荐）：**列数 + gap**（同网格机制，更小列数/gap）。
+  - **`scroll`**（首页横滚推荐行：热门电影/剧集/动漫 + TOP10）：**卡宽 px + gap**（横向滚动定宽卡，本就固定宽度）。
+  - **混合单位是有意的**：网格档存「列数」（弹性列宽由容器派生）、scroll 档存「卡宽 px」（横滚无列概念、必须定宽）。强行统一单位会引入 D-214-4 的弹性列冲突。
+
+- **D-214-3（schema·`card_size_settings`·migration 124）**：
+  ```
+  card_size_settings (
+    id              UUID PK DEFAULT gen_random_uuid(),   -- audit 锚点（targetId=row.id，仿 home_section D-182-5.3）
+    size_class      TEXT NOT NULL UNIQUE                 -- 'standard'|'compact'|'scroll'，CHECK 枚举
+                    CHECK (size_class IN ('standard','compact','scroll')),
+    desktop_columns INT  NULL  CHECK (desktop_columns BETWEEN 2 AND 8),    -- 网格档非空，scroll 档 NULL
+    card_width_px   INT  NULL  CHECK (card_width_px BETWEEN 120 AND 280),  -- scroll 档非空，网格档 NULL
+    gap_px          INT  NOT NULL CHECK (gap_px BETWEEN 0 AND 64),
+    settings        JSONB NOT NULL DEFAULT '{}',         -- 非关键扩展项（禁关键策略字段，仿 ADR-052/182）
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )
+  ```
+  - **档位×单位绑定 CHECK**（防机制混淆 + 防语义倒置，**Codex-R1 HIGH 修订**）：`CHECK ((size_class IN ('standard','compact') AND desktop_columns IS NOT NULL AND card_width_px IS NULL) OR (size_class = 'scroll' AND desktop_columns IS NULL AND card_width_px IS NOT NULL))`——**单位绑定到具体 size_class**（非仅「二选一」）：网格档（standard/compact）必列数非空·卡宽空 / scroll 档必卡宽非空·列数空。**为何不能只「二选一」**：原 CHECK 会放行 `size_class='scroll' + desktop_columns=5`（语义倒置——DB 单真源下，直写/坏 seed/未来 migration 造倒置行，公开 API/SSR 会信任它产出错/缺 CSS 变量）。Phase 1 加 **DB 级倒置行测试**（scroll 带 columns / standard·compact 带 width 均须被 CHECK 拒）。
+  - **seed 3 行（SQL 字面量，`ON CONFLICT (size_class) DO NOTHING`，均后台可调）**：`standard`(desktop_columns=5, gap_px=16) / `compact`(desktop_columns=3, gap_px=12) / `scroll`(card_width_px=170, gap_px=16)。compact/scroll 默认为裁定项（暂定值，后台可调）。
+  - **audit**：`admin_audit_log` target_kind CHECK **17→18**（+`card_size`；migration 124 内 DROP/ADD CONSTRAINT，仿 095 范式），action `card_size.update`，targetId=`card_size_settings.id`。
+  - **同步 `docs/architecture.md`**（新表定义，Phase 1 同 commit；CLAUDE.md 绝对禁止「schema 变更不同步 architecture.md」）。
+
+- **D-214-4（存列数不存卡宽 px·网格弹性列 / scroll 例外）**：网格档（standard/compact）DB **存列数不存卡宽**——网格用弹性列，列宽由容器宽度 ÷ 列数派生；若存死卡宽 px 会与弹性列冲突（容器宽变化时卡宽不自适应、出现溢出或留白）。**scroll 档例外**：横滚卡无列概念、本就固定 px 宽，故存 `card_width_px`。这是 D-214-2 混合单位的正确性根因。
+  - **弹性列防溢出硬约束（Codex-R2 MEDIUM 修订）**：不能裸用 `repeat(N,1fr)`——`1fr` 轨道有 **auto 最小值**，会被 min-content（海报固有宽/长标题）撑破 → 窄桌面容器 + 长标题仍溢出。**CardGrid 必须用 `grid-template-columns: repeat(var(--card-cols-*), minmax(0, 1fr))` + grid item/内容 `min-width: 0`**（写入 D-214-7 契约），否则「存列数避溢出」断言不成立。Phase 1 加**窄容器 + 长标题视觉回归测**。
+
+- **D-214-5（默认值真源 `CARD_SIZE_DEFAULTS` + seed 一致性单测 / 第二轮复审 P1）**：`@resovo/types` 导出 `CardSizeSettings` 接口 + `CARD_SIZE_DEFAULTS`（前端 SSR 失败兜底 / token 兜底唯一真源）。**migration 纯 SQL 不能 import TS 常量** → seed 用 SQL 字面量 + **一致性单测**断言「migration seed 值 == `CARD_SIZE_DEFAULTS`」（防两处漂移）。这一道堵死「改了 TS 默认却忘改 SQL seed（或反之）」的静默不一致。
+
+- **D-214-6（SSR `:root` 注入 + 失败降级·新建 server-only helper）**：消除 FOUC/CLS 的唯一正确位置是 **SSR 阶段注入 `:root` CSS 变量**——`[locale]/layout.tsx` server 组件经新建 `lib/server/card-size-fetch.ts`（server-only 公开取数 helper，仿 video-detail.ts server fetch；**web-next 此前无卡片尺寸专用 helper**，事实核验①）读 `GET /card-sizes`，渲染 `<style>:root{--card-cols-standard-desktop:5;--card-gap-standard:16px;--card-w-scroll:170px;...}</style>`。**取数失败降级**：catch → 用 `CARD_SIZE_DEFAULTS` 注入（**非空 catch，结构化 warn 日志**，CLAUDE.md 禁空 catch）→ 永远有可渲染变量、不裸奔。客户端组件读 `var(--card-*)`，零硬编码（CLAUDE.md 禁硬编码 + ui-rules CSS 变量）。
+
+- **D-214-7（CardGrid 共享组件契约 + VideoCard interaction variant·强制 Opus）**：
+  - 新建共享 `components/shared/card-grid/CardGrid.tsx`：**`sizeClass: CardSizeClass` 封闭枚举 prop**（读 `--card-cols-{class}-desktop` / `--card-gap-{class}`），**禁暴露自由 `gridCols` 数字 prop**（封闭枚举强制全站走档位、杜绝新硬编码）。移动/平板列数由前端按既有 2/3 契约派生（D-214-10）。**网格模板硬约束（D-214-4 / Codex-R2）**：`grid-template-columns: repeat(var(--card-cols-{class}-desktop), minmax(0, 1fr))` + grid item/卡内容 `min-width: 0`（防 1fr auto 最小值被海报/长标题撑破溢出）；CardGrid 单测断言模板含 `minmax(0,1fr)` + 窄容器视觉回归。
+  - `VideoCard` 加 `interaction: 'takeover' | 'navigate'`：外壳分流两内部组件——`takeover`（首页/原 takeover 体验，保留 player store/hook）/ `navigate`（分类·搜索·相关，纯跳转，**严禁 `usePlayerStore`/`router` takeover hook**，第二轮复审 P2，用 StackedPosterFrame 叠层海报）。**过渡期保留 BrowseCard + `browse-card` testid 兼容**（不删，BROWSE-MIGRATE 卡再切）。
+  - **两组件契约变更强制 Opus**（CLAUDE.md §模型路由：新共享组件 API 契约 + VideoCard Props 变更）：CARD-SIZE-CARDGRID / CARD-SIZE-VIDEOCARD-VARIANT 两卡建议模型 opus，commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
+
+- **D-214-8（横滚行纳入体系 + FeaturedRow 归一等宽·用户裁定）**：① 横滚行（Shelf PosterTrack/Top10Track / TopTenRow / DailyAnimeRow）卡宽 `--shelf-card-w-portrait/top10`（静态 170px）改由 DB 注入 `--card-w-scroll`、gap 改 `--card-gap-scroll`——消「网格归 DB、横滚归静态 token」结构撕裂（用户裁定，直接修反馈①）。② FeaturedRow `1.6fr...` 异宽 → CardGrid standard 等宽网格（修反馈①核心）；删 Shelf `featured-grid`/`top10-row` 死路径 + RelatedVideos `grid` 死分支（仅 sidebar 有消费方，CARD-SIZE-FEATURED-NORMALIZE 卡核实后删）。
+
+- **D-214-9（缓存两层边界 + SSR 新鲜度 SLA·第二轮复审 P2 + Codex-R3 MEDIUM 修订）**：
+  - **后端 Redis**：PUT 成功后 del 失效该 key（确定，写入 ADR-215，非只靠 TTL）。**del 失败 = best-effort（Codex-R3 修订，不同于 home-cache-invalidation 的 scheduler 上抛路径）**：DB 写已提交、缓存是派生物 → del 失败**结构化 warn + 返回成功**，不上抛（上抛会让客户端看到「失败但已应用」歧义态 + 留陈旧缓存），陈旧由 TTL 自愈。
+  - **前端 SSR 新鲜度有界（Codex-R3 修订核心）**：原「仅 `max-age` 自然过期」会让 SSR 渲染页注入的 CSS 变量在 admin 改后**陈旧无界**（公开 API 已新但 SSR HTML 滞后）→ **改为短 `revalidate`（建议 60s）**作 SSR 取数缓存（或 admin PUT 触发 tag revalidation），新鲜度上界 ≤ 60s（卡片尺寸低频改 + API 侧 Redis 缓存，短 revalidate 压力可忽略）。
+  - **e2e 验渲染页新鲜度（非仅后端链路）**：CARD-SIZE-E2E 须验 admin PUT → **渲染页（SSR）实际拿到新 CSS 变量**，不止 admin PUT→公开 API GET（后者漏掉用户实际脏读路径）。
+
+- **D-214-10（响应式派生 + 校验破布局双层）**：**不做响应式分档**——后台只配桌面级（desktop_columns / card_width_px）；移动/平板由前端按既有 2/3 列契约从桌面档派生（避免后台配置爆炸 + 既有响应式断点契约不破）。**校验破布局双层**：DB CHECK（D-214-3）+ zod min/max（ADR-215 镜像）双层守边界（列 2–8 / 卡宽 120–280 / gap 0–64），任一层挡住越界写。
+
+### 实施拆分（Phase 0→4，详见 SEQ-20260622-03 任务列表）
+
+| Phase | 卡 | 范围 | 建议模型 | 强制 Opus 依据 |
+|---|---|---|---|---|
+| **0** | CARD-SIZE-ADR-MAIN / -ROUTE | 本 ADR-214 + ADR-215（docs） | opus（主循环） | 撰写 ADR |
+| **1** | CARD-SIZE-DB | migration 124 + seed + audit CHECK + architecture.md | sonnet | — |
+| **1** | CARD-SIZE-TYPES-QUERIES | types + queries + seed 一致性单测 | sonnet | — |
+| **1** | CARD-SIZE-SERVICE-ADMIN / -PUBLIC-CACHE | Service + admin/公开 route + Redis 失效 | sonnet | — |
+| **2** | CARD-SIZE-SSR | server-only helper + layout `:root` 注入 + 降级 | sonnet | — |
+| **2** | CARD-SIZE-CARDGRID | 共享 CardGrid 契约 | **opus** | 新共享组件契约 |
+| **2** | CARD-SIZE-VIDEOCARD-VARIANT | VideoCard interaction 分流 | **opus** | VideoCard Props 契约变更 |
+| **2** | CARD-SIZE-BROWSE-MIGRATE / -SCROLL / -FEATURED-NORMALIZE | 消费方迁移 + 死路径删除 | sonnet | — |
+| **3** | CARD-SIZE-ADMIN-UI | server-next「前台展示」Tab | sonnet | — |
+| **4** | CARD-SIZE-E2E | SSR 注入链路 + admin→public 失效链路 + 全栈回归 | sonnet | — |
+
+### 关联 ADR
+
+复用 **ADR-181/182**（`home_section_settings` 配置表范式：id UUID PK + 业务键 UNIQUE + 公开读·后台写分层 + audit targetId=row.id + JSONB 非关键扩展守则）/ **ADR-037**（web-next 核心能力层：SSR 安全注入、CSS 变量零硬编码落在此层）/ **ADR-052·182**（封闭枚举扩展约束：新增档位/section 走新 ADR + migration，不可裸扩）/ design-tokens（`CARD_SIZE_DEFAULTS` 为 SSR/token 双兜底真源，与 DB seed 一致性单测同步）/ **ADR-215**（admin-route + 公开 route 端点契约，本 ADR 数据模型的写/读通道）。
+
+### 端点契约（verify:endpoint-adr）
+
+**新增 admin route**（`GET /admin/card-sizes` + `PUT /admin/card-sizes/:sizeClass`）→ **契约定义于 ADR-215**（CLAUDE.md 红线：新增 admin route 须先起独立 ADR + Opus PASS，`verify:endpoint-adr` 自动核验）。公开 `GET /card-sizes`（无鉴权只读）同定义于 ADR-215。本 ADR 不含端点细节，仅声明数据模型为其底座。
+
+### BLOCKER / 前置
+
+**🚨 一个硬 BLOCKER**：migration 124 = schema 变更（新表 + audit CHECK 扩展）→ **必须同步 `docs/architecture.md`**（CLAUDE.md 绝对禁止项），CARD-SIZE-DB 卡内同 commit。软护栏：① 新增 admin route 须先有 ADR-215 Accepted（红线）；② CardGrid + VideoCard 契约变更强制 Opus + trailer；③ seed 一致性单测守 SQL↔TS 同步（D-214-5）；④ SSR 失败降级非空 catch（D-214-6）；⑤ **定稿前 Codex 对抗性 review（已完成 round-1，3 项全吸收，见文末摘要）**。**Codex round-1 追加护栏（全吸收）**：⑥ **CHECK 绑 size_class**（非仅二选一，D-214-3）+ Phase 1 **DB 级倒置行测试**（scroll 带 columns / 网格档带 width 须被拒）+ zod 倒置 body 测（R1-HIGH）；⑦ **CardGrid 网格模板 `minmax(0,1fr)` + item `min-width:0`**（D-214-4/7）+ **窄容器 + 长标题视觉回归测**（R2-MEDIUM）；⑧ **SSR 新鲜度有界**（短 revalidate ≤60s，D-214-9）+ **del 失败 best-effort 不上抛**（D-214-9/D-215-6）+ CARD-SIZE-E2E **渲染页新鲜度 e2e**（admin PUT→SSR 实拿新 CSS 变量，非仅公开 API GET，R3-MEDIUM）。**待用户裁 Accepted → 转 Accepted 后方解锁 Phase 1。**
+
+## ADR-215：卡片尺寸体系 admin-route + 公开 route 端点契约 — `/admin/card-sizes` 读写 + `/card-sizes` 公开读 + Redis del 失效（SEQ-20260622-03 / CARD-SIZE-ADR-ROUTE）
+
+**状态**：**Accepted**（2026-06-22 用户裁定，与 ADR-214 同步收口；Codex round-1 相关 2 项〔zod 绑 size_class / del best-effort + SSR 新鲜度〕已吸收）。**关系**：实现 ADR-214 数据模型的**写通道（admin）+ 读通道（公开）**；端点契约从 ADR-214 析出独立成 ADR 以满足 CLAUDE.md 红线（新增 admin route 须先起独立 ADR + Opus PASS，`verify:endpoint-adr` 核验）。**设计背书**：同 ADR-214（规划期 arch-reviewer ×2 + 第二轮复审 P2 缓存失效确定化 + Codex round-1）。
+
+**背景/问题**：ADR-214 把卡片尺寸入 `card_size_settings` 表，需定义：① 后台读写 3 档配置的 admin 端点（含校验/错误码/audit）；② 前台 SSR 取数的公开只读端点（含 Redis 缓存 + admin 写后的确定性失效）。第二轮复审 P2 指出原 `CARD-SIZE-SERVICE-API` 单卡过载 → 预拆 `SERVICE-ADMIN`（写端 + audit）/ `PUBLIC-CACHE`（公开读 + 缓存失效），本 ADR 同步把端点契约分两组定义。
+
+**事实核验**：① admin 写端范式见 `routes/admin/home.ts:59`（`PATCH /admin/home/sections/:section/settings`，`adminOnly` preHandler + zod body + 422 VALIDATION_ERROR / 404 NOT_FOUND + audit `home_section.settings_update` targetId=row.id）→ 直接镜像；② 公开读 + Redis 见 `HomeService(db, redis)` + `home-cache-invalidation.ts`（scanKeys + unlink，redis 故障上抛）→ 失效协议复用；③ audit 真源 `AuditLogService` `TARGET_KINDS` + `ACTION_TYPES` 数组须同步加 `card_size` / `card_size.update`。
+
+### 决策
+
+- **D-215-1（admin 读·`GET /admin/card-sizes`）**：`adminOnly` preHandler，返回 3 档全量 `CardSizeSettings[]`（Service→`listCardSizeSettings` 仿 `listHomeSectionSettings`，按 size_class 字典序 / Service 层按枚举序）。无分页（恒 3 行）。
+
+- **D-215-2（admin 写·`PUT /admin/card-sizes/:sizeClass`·为何 PUT 非 PATCH）**：路径参数 `sizeClass ∈ {standard,compact,scroll}`，body = 该档**可编辑字段全集**（网格档：`{desktop_columns, gap_px}` / scroll 档：`{card_width_px, gap_px}`）。**选 PUT 非 PATCH 的依据**：卡片尺寸行可编辑字段是**小封闭集、后台表单恒整体提交**，PUT（幂等全替换该档可编辑投影）语义清晰；home_section 用 PATCH 是因其字段多、常部分更新。一致性 #4 让位于「payload 恒完整」的本质差异（在 ADR 内显式记录此偏离，非随意）。
+
+- **D-215-3（zod 校验·镜像 size_class 绑定的 DB CHECK / Codex-R1）**：body zod 镜像 D-214-3 的**档位×单位绑定 CHECK**（非仅范围 + 二选一）——`desktop_columns: z.number().int().min(2).max(8)` / `card_width_px: z.number().int().min(120).max(280)` / `gap_px: z.number().int().min(0).max(64)` + **按 `sizeClass` 判别式 refine**：`standard`/`compact` 须 `desktop_columns` 非空且 `card_width_px` 缺省、`scroll` 须 `card_width_px` 非空且 `desktop_columns` 缺省（与 CHECK 逐字对应，拒倒置 body）。双层校验（zod + DB CHECK）任一挡越界/倒置（D-214-10）；zod 单测覆盖倒置 body（scroll 带 columns / 网格档带 width 均 422）。
+
+- **D-215-4（错误码）**：`sizeClass` 不在枚举 → **422 VALIDATION_ERROR**；body 校验失败 → **422 VALIDATION_ERROR**（`issues[0].message`）；`sizeClass` 合法但行不存在（理论上 seed 恒在，防御性）→ **404 NOT_FOUND**。沿用项目统一错误响应框架 `{ error: { code, message, status } }`。
+
+- **D-215-5（audit·`card_size.update`）**：PUT 成功后写 `admin_audit_log`——target_kind `card_size`（CHECK 17→18，migration 124 内扩展）/ action `card_size.update` / **targetId = `card_size_settings.id`**（行 UUID，第二轮复审 P1 锚点）/ 记 before-after diff（仿 home_section settings_update）。`AuditLogService` `TARGET_KINDS` + `ACTION_TYPES` 真源数组同步加值。
+
+- **D-215-6（公开读 + Redis 缓存 + PUT→del 失效·第二轮复审 P2 确定化）**：
+  - **公开 `GET /card-sizes`**（**无鉴权只读**，供前台 SSR 取数）：返回 3 档 `CardSizeSettings[]`，Redis 读缓存（key 如 `card-sizes:v1`，TTL 兜底）。
+  - **失效协议（确定，非只靠 TTL）**：admin `PUT` 的 **DB 写提交后** Redis `del`/`unlink` 失效该 key → 下次公开读 miss 回源 DB 重建。**del 失败 = best-effort（Codex-R3 修订，区别于 home-cache-invalidation scheduler 上抛路径）**：写已生效、缓存派生物 → del 失败**结构化 warn + 返回 PUT 成功**，**不上抛**（避免「失败但已应用」歧义 + 留陈旧缓存），陈旧由 TTL 自愈。
+  - **前端 SSR 取数新鲜度有界（D-214-9 / Codex-R3）**：card-size SSR fetch 用**短 `revalidate`（建议 60s）**（或 admin PUT tag revalidation），SSR 注入的 CSS 变量新鲜度上界 ≤ 60s，非「max-age 无界滞后」。
+  - **e2e（CARD-SIZE-E2E）双链路验**：① admin PUT → 公开 `GET /card-sizes` 立即反映新值（后端 Redis del 链路）；② admin PUT → **渲染页（SSR）实际拿到新 CSS 变量**（用户脏读路径，Codex-R3）。
+
+### 端点契约（verify:endpoint-adr）
+
+| # | 方法 | 路径 | 鉴权 | 入参 | 成功 | 错误 | audit |
+|---|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/card-sizes` | adminOnly | — | 200 `CardSizeSettings[]`（3 档） | — | — |
+| 2 | PUT | `/admin/card-sizes/:sizeClass` | adminOnly | path `sizeClass` + body（档位可编辑全集，zod） | 200 更新后 `CardSizeSettings` | 422 VALIDATION_ERROR / 404 NOT_FOUND | `card_size.update`，targetId=row.id |
+| 3 | GET | `/card-sizes` | 无（公开只读） | — | 200 `CardSizeSettings[]`（3 档，Redis 缓存） | — | — |
+
+**新增 2 个 admin route**（GET + PUT）→ 本 ADR 即满足红线前置（`verify:endpoint-adr` 核验 ADR-215 存在 + Opus 背书）。公开 `GET /card-sizes` 非 admin route、不触红线。
+
+### 关联 ADR
+
+实现 **ADR-214** 数据模型读写通道 / 复用 **ADR-182**（admin route + audit 范式：`routes/admin/home.ts` PATCH settings 镜像）/ 复用 home-cache-invalidation Redis 失效范式（scanKeys + unlink，故障上抛）/ **ADR-135**（audit 记录约束：card_size.update 为 admin 显式动作须记 audit）。
+
+### BLOCKER / 前置
+
+**前置**：① ADR-214 Accepted（数据模型底座）；② Service 层 `CardSizeService`（CARD-SIZE-SERVICE-ADMIN）封装读写 + audit，route 层零业务逻辑（守 Route→Service→DB 分层）；③ **Codex 对抗性 review 已完成 round-1**（PUT vs PATCH 选型未被质疑 → 站得住；zod↔CHECK 镜像收紧为绑 size_class〔R1〕；Redis 失效改 del best-effort + SSR 新鲜度有界〔R3〕；公开端点无鉴权只读安全面未列 finding）。**待用户裁 Accepted → 与 ADR-214 同步转 Accepted。**
+
+### Codex 对抗审核摘要 round-1 2026-06-22（codex adversarial-review / threadId 019ef2ce-967a-7e73·覆盖 ADR-214+215）
+
+**NEEDS-ATTENTION（1 HIGH + 2 MEDIUM，逐条吸收，全部已写入上文决策）。** 核心判断：方向不被质疑（DB 驱动可配 / 3 档模型 / PUT 选型 / 公开只读安全面均未列 finding），但**核心不变式未在 DB 强制 + 缓存/SSR 保证被高估**。
+- **R1-HIGH（CHECK 未把单位绑定到 size_class）→ 吸收**：原 CHECK 仅「两列恰一非空」，放行 `scroll+desktop_columns=5` / `standard+card_width_px=170` 倒置行；DB 既是单真源，直写/坏 seed/未来 migration 造倒置行 → 公开 API/SSR 信任产出错/缺 CSS 变量。**修订**：D-214-3 CHECK 按 size_class 绑定（standard/compact 须 columns 非空·width 空；scroll 反之）+ D-215-3 zod 同款判别式 refine + Phase 1 DB 级 + zod 倒置行测试。
+- **R2-MEDIUM（网格正确性断言漏 minmax）→ 吸收**：`repeat(N,1fr)` 的 1fr 轨道有 auto 最小值，海报固有宽/长标题 min-content 仍溢出 → 原「存列数避溢出」断言在常见场景为假（FeaturedRow/相关卡并入 CardGrid 后更甚）。**修订**：D-214-4/7 CardGrid 契约强制 `repeat(var(...), minmax(0,1fr))` + item `min-width:0` + 窄容器/长标题视觉回归测。
+- **R3-MEDIUM（缓存测后端不测用户可见 SSR 新鲜度 + del 失败欠定义）→ 吸收**：PUT→Redis del 确定失效，但前端 max-age 让 SSR 页在缓存窗内仍陈旧；原 e2e 只验 admin PUT→公开 API GET、漏用户脏读路径。且 DB 提交后 del 上抛 → 客户端见「失败但已应用」+ 留陈旧缓存。**修订**：D-214-9/D-215-6 SSR fetch 短 revalidate（≤60s）有界新鲜度 + del 失败 best-effort（warn + 返回成功，不上抛）+ CARD-SIZE-E2E 加渲染页新鲜度 e2e。
+- **Next steps（Codex）**：3 项修订后可接受进 Phase 1；Phase 1 加 DB CHECK 倒置 / 网格溢出 / SSR 新鲜度三测。**修订已全部落盘，待用户裁 Accepted。**

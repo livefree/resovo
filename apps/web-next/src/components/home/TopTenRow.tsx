@@ -4,7 +4,7 @@
  * TopTenRow — 首页 TOP10 排行区块（HANDOFF-22）
  *
  * 数据源：GET /home/top10 → Top10Response
- * 布局：水平滚动竖版卡片（2:3 比例，var(--shelf-card-w-portrait) 170px）
+ * 布局：水平滚动竖版卡片（2:3 比例，var(--card-w-scroll) 170px）
  * Rank badge：图片右下角叠加，1–3 号 32px/700，4–10 号 20px/600，颜色 var(--fg-muted)
  *   badge 通过 aspectRatio:2/3 的绝对定位层固定在图片范围内，不遮挡标题文字
  * 副标题：由 sortStrategy 字段驱动 i18n key
@@ -175,7 +175,7 @@ function TrackSkeleton() {
     <div
       style={{
         display: 'flex',
-        gap: 'var(--shelf-gap)',
+        gap: 'var(--card-gap-scroll)',
         paddingBottom: 'var(--shelf-bottom-padding)',
         overflowX: 'hidden',
       }}
@@ -184,7 +184,7 @@ function TrackSkeleton() {
         <Skeleton
           key={i}
           shape="rect"
-          style={{ width: 'var(--shelf-card-w-portrait)', flexShrink: 0, aspectRatio: '2/3' }}
+          style={{ width: 'var(--card-w-scroll)', flexShrink: 0, aspectRatio: '2/3' }}
           delay={i >= 2 ? 300 : undefined}
         />
       ))}
@@ -205,7 +205,7 @@ function Top10Track({ items }: { readonly items: Top10Item[] }) {
         data-testid="top10-track"
         style={{
           display: 'flex',
-          gap: 'var(--shelf-gap)',
+          gap: 'var(--card-gap-scroll)',
           overflowX: 'auto',
           scrollSnapType: 'x mandatory',
           scrollbarWidth: 'none',
@@ -216,7 +216,7 @@ function Top10Track({ items }: { readonly items: Top10Item[] }) {
           <div
             key={item.video.id}
             style={{
-              width: 'var(--shelf-card-w-portrait)',
+              width: 'var(--card-w-scroll)',
               flexShrink: 0,
               scrollSnapAlign: 'start',
               position: 'relative',
@@ -255,7 +255,7 @@ function Top10Track({ items }: { readonly items: Top10Item[] }) {
           </div>
         ))}
         {Array.from({ length: empties }).map((_, i) => (
-          <EmptyPlaceholderCard key={`empty-${i}`} width="var(--shelf-card-w-portrait)" />
+          <EmptyPlaceholderCard key={`empty-${i}`} width="var(--card-w-scroll)" />
         ))}
       </div>
       {canRight && <TrackNavButton direction="next" onClick={scrollNext} />}
