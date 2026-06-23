@@ -619,6 +619,46 @@
   }
 }
 
+/* ───────────────────────────────────────────────────────────────────────────
+ * CardGrid（CARD-SIZE-CARDGRID / ADR-214 D-214-4/7/10）— DB 驱动桌面列数 + 弹性列防溢出
+ *
+ * 列数级联（D-214-10 既有 2/3 列契约）：mobile=2 / ≥640px=3 / ≥1024px=DB 注入 per-class 值。
+ * `--cg-cols` = 组件私有派生计数（与 SSR 全局真源 `--card-cols-{class}-desktop` 命名拉开）；
+ *   桌面 var 缺失（CardGrid 用于非 [locale] 注入子树）→ `var(--cg-cols, 2)` 兜底退 2 列、
+ *   不整条 grid 失效坍塌。`2/3` 为 D-214-10 移动/平板布局基线常量，非 CARD_SIZE_DEFAULTS 配置值（守 D-214-5）。
+ * `minmax(0,1fr)` + `> * { min-width:0 }`：1fr 轨道 auto 最小值会被海报固有宽/长标题 min-content
+ *   撑破溢出 → 强制收缩下限（D-214-4 / Codex-R2）。真实生效由 CARD-SIZE-E2E 窄容器+长标题视觉回归锁。
+ * ─────────────────────────────────────────────────────────────────────────── */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cg-cols, 2), minmax(0, 1fr));
+}
+.card-grid > * {
+  min-width: 0;
+}
+.card-grid--standard {
+  --cg-cols: 2;
+  gap: var(--card-gap-standard);
+}
+.card-grid--compact {
+  --cg-cols: 2;
+  gap: var(--card-gap-compact);
+}
+@media (min-width: 640px) {
+  .card-grid--standard,
+  .card-grid--compact {
+    --cg-cols: 3;
+  }
+}
+@media (min-width: 1024px) {
+  .card-grid--standard {
+    --cg-cols: var(--card-cols-standard-desktop);
+  }
+  .card-grid--compact {
+    --cg-cols: var(--card-cols-compact-desktop);
+  }
+}
+
 /* HANDOFF-18 — Player 布局响应式工具类 */
 /* 主布局：mobile=列，≥1024=行（flex 1fr + panel） */
 .player-layout {
