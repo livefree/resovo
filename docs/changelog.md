@@ -2668,3 +2668,26 @@
 - **数据库变更**：无（纯前端 CSS 变量 wiring；消费 CARD-SIZE-SSR 注入的 :root 变量）
 - **门禁**：typecheck=0 / lint=0（4 successful）/ test:changed〔`vitest run --changed HEAD` 13 passed：ShelfRow/DailyAnimeRow/HomeBrandFiltering 横滚回归全过、零破〕/ verify:adr-contracts=0。**视觉中性**：`--card-w-scroll` 默认 170px = 原 `--shelf-card-w-*` 170px、`--card-gap-scroll` 默认 16px = 原 `--shelf-gap` 16px → 渲染像素无变化、仅从静态 token 转为 DB 后台可配。
 - **注意事项**：① **无兜底依赖 SSR 恒注入**：横滚行专属 [locale] 首页子树（CARD-SIZE-SSR 在 [locale]/layout 恒注入 + 取数失败降级 CARD_SIZE_DEFAULTS），故 `var(--card-w-scroll)`/`var(--card-gap-scroll)` 不加字面兜底（避免重复 D-214-5 单一真源）。② **未触 VideoGrid `layout='scroll'` 死路径**（line 64 `--shelf-card-w-portrait`，零消费方，SEQ-20260622-01 follow-up① 登记的待删段）—— 非本卡范围、保持原样。③ globals.css `--shelf-card-w-portrait`/`--shelf-card-w-top10`/`--shelf-gap` 定义保留（仍由 VideoGrid 死路径 + Shelf FeaturedGrid 引用，清理待 follow-up）。④ 视觉真实验证（横滚卡宽响应 DB 改值）靠 CARD-SIZE-E2E。⑤ Phase 2 剩 3 卡：VIDEOCARD-VARIANT(opus) / BROWSE-MIGRATE(sonnet) / FEATURED-NORMALIZE(sonnet)。
+
+## [CARD-SIZE-VIDEOCARD-VARIANT] Phase 2：VideoCard 加 interaction:'takeover'|'navigate' 外壳分流（ADR-214 D-214-7，SEQ-20260622-03）
+- **完成时间**：2026-06-23
+- **记录时间**：2026-06-23 11:55
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8)（VideoCard Props 契约变更强制 Opus，D-214-7 / CLAUDE.md §模型路由"共享组件 API 契约强制 Opus"）
+- **问题理解**：VideoCard 此前仅 takeover 单一交互（海报点击 Fast Takeover 直达播放器 + usePlayerStore），分类/搜索/相关页需要的"纯跳转详情页"语义靠独立 BrowseCard 重复实现 → 卡片交互模式撕裂、海报视觉不统一（StackedPosterFrame vs 裸 SafeImage）。
+- **根因判断**：缺少声明式的交互意图维度。D-214-7 裁定给 VideoCard 加 `interaction` 变体、navigate 分支纯跳转，为 BROWSE-MIGRATE（BrowseGrid→VideoCard navigate）与 FEATURED-NORMALIZE 铺路。
+- **方案**：VideoCard 加 `interaction?: 'takeover' | 'navigate'`（默认 `'takeover'`），外壳变薄分发器按值分流两**独立内部组件**（非条件分支同一函数——保证 navigate 渲染路径根本不调用 `usePlayerStore`，不建立 store 订阅，满足 P2 硬约束）。
+- **修改文件**：
+  - `apps/web-next/src/components/video/VideoCard.tsx` — ① 加 `export type VideoCardInteraction` + `interaction?` prop（默认 takeover）；② `VideoCard` 变薄分发器；③ `VideoCardTakeover`（保留 usePlayerStore/useRouter/useParams/FloatingPlayButton/poster button overlay/handlePosterClick，**DOM 逐字保留**，根 `data-interaction="takeover"`）；④ `VideoCardNavigate`（整卡 `<Link href={detailHref}>` 纯跳转，`style={{textDecoration:'none'}}` 对齐 BrowseCard，**不 import/调用 usePlayerStore/useRouter/useParams、不渲染 FloatingPlayButton**，根 `data-interaction="navigate"`）；⑤ 提取共享子件 `VideoCardCover`（StackedPosterFrame 基底）/ `VideoCardMeta`（标题+年份，`titleLinksToDetail` 控制标题是否自带 Link）/ `PosterHoverDim`（hover 暗化遮罩，两分支共用）消重。两分支根均 `data-testid="video-card"`（选择器兼容）。
+  - `tests/unit/web-next/VideoCard.test.tsx` — 扩 `describe('interaction 变体')` 8 测：默认=takeover〔article+data-interaction+播放按钮〕/ 显式 takeover 行为一致〔enter+push〕/ navigate 根 `<a>`+href 详情 / **navigate 恰 1 link**〔HIGH-1 防标题嵌套 Link〕/ navigate 无 button+无 FloatingPlayButton〔P2〕/ navigate 点击不调 enter·push〔P2 严禁 takeover hook〕/ navigate text-decoration:none〔HIGH-2〕/ navigate 内容对等〔标题+年份〕。原 11 测（双出口/Tab 顺序/Skeleton/内容）默认渲染即 takeover、全过零回归。
+- **新增依赖**：无
+- **数据库变更**：无（纯前端组件 API 契约变更）
+- **arch-reviewer 结论（CONDITIONAL PASS，全吸收）**：
+  - **HIGH-1**：navigate 标题必须 `titleLinksToDetail={false}`（裸 `<p>`），防整卡 `<Link>` 内嵌套第二 `<Link>` 非法 + 双可点区 → 补"navigate 恰 1 link"断言守卫 + VideoCardMeta JSDoc 钉死前提。
+  - **HIGH-2**：navigate 根 `<Link>` 显式 `textDecoration:'none'` 对齐 BrowseCard 一致性（否则 meta 文本带下划线）；裁定**不设 aria-label**（依赖内部标题文本作可访问名，无读屏冗余）。
+  - **HIGH-3**：navigate 严禁 player store/router takeover hook → 拆**独立组件**（非单函数条件调 hook，React Hooks 规则禁条件调用；无条件调用又会建立订阅）是唯一正确形态，已采纳。
+  - **MEDIUM**：① `group/poster` hover 作用域容器归属——VideoCardCover 不吞 group/poster，由各分支 poster div 持有，FloatingPlayButton `group-hover/poster` 触发链不断裂（takeover DOM 逐字一致）；② navigate 渲染 TagLayer（信息对等，分类页标签与首页同等重要，TagLayer 全 pointer-events-none 可安全置 Link 内）+ 保留 hover dim（纯视觉）、不渲染 FloatingPlayButton（避免误导"播放"可供性）；③ `bg-black/40` 为既有逐字复刻非本卡新增，登记技术债（PosterHoverDim 注释 + 本条），token 化留待后续 token 卡，本卡不顺手改色。
+- **偏离检测（D-214-7 字面 3 处增量，均经 arch-reviewer 裁定合理并登记）**：① `interaction` 设为可选 `?` 且默认 `'takeover'`（ADR 字面无默认）——向后兼容 5 处现存消费方零 diff；② 导出 `VideoCardInteraction` type 别名（ADR 未提）——消费方 prop 透传需要，就近 VideoCard.tsx 导出、不进 @resovo/types（web-next 内组件 API 非跨 app 契约）；③ 加 `data-interaction` 属性（ADR 未提）——便于 E2E/单测断言分支。
+- **门禁**：typecheck=0 / lint=0 / test:changed〔`vitest run --changed HEAD` 4 文件 43 passed，VideoCard.test 19〕/ verify:adr-contracts=0（enum SSOT 为既有 advisory 非本卡）。**关键路径**：首页/搜索卡片 takeover 海报直达播放器——默认 takeover + DOM 逐字保留 + 原 11 测全过，零回归。
+- **六问自检**：① 契约/边界：interaction 封闭二值、navigate 独立组件断 store 订阅 ✓；② 复用：提取 Cover/Meta/PosterHoverDim 三子件消重 ✓；③ 分层：纯前台组件不涉后端分层 ✓；④ 类型：无 any、新增 VideoCardInteraction 导出 ✓；⑤ 测试：两分支契约 + 向后兼容均覆盖 ✓；⑥ 沉淀：navigate 变体即沉淀（替代 BrowseCard 的统一卡片），BROWSE-MIGRATE 接入。
+- **注意事项**：① navigate 分支**本卡仅建不接**——当前无消费方，BrowseGrid→VideoCard navigate 切换 + 删 BrowseCard + 改 spec testid 归 CARD-SIZE-BROWSE-MIGRATE；过渡期 BrowseCard + `browse-card` testid 保持。② FeaturedRow（line 112 `<VideoCard className="min-w-0"/>`）仍默认 takeover 不变，归一等宽归 FEATURED-NORMALIZE。③ navigate 是相对旧 BrowseCard 的正向升级（StackedPosterFrame 叠层海报 + TagLayer 信息对等）。④ worktree 无本地 `node_modules/.bin` → `npm run test:changed` spawn 失败，用等价 `npx vitest run --changed HEAD`（脚本已判定 2 非文档改动、无升全量触发）。⑤ Phase 2 剩 2 卡：BROWSE-MIGRATE(sonnet，依赖本卡) / FEATURED-NORMALIZE(sonnet，仅依赖 CARDGRID)。

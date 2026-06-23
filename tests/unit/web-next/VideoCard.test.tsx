@@ -155,4 +155,60 @@ describe('VideoCard', () => {
       expect(screen.queryByText(/★/)).toBeNull()
     })
   })
+
+  // ── interaction 变体（ADR-214 D-214-7）─────────────────────────────────────
+  describe('interaction 变体', () => {
+    it('默认（不传 interaction）= takeover：根 article data-interaction=takeover + 有播放按钮', () => {
+      render(<VideoCard video={makeVideo()} />)
+      const root = screen.getByTestId('video-card')
+      expect(root.tagName).toBe('ARTICLE')
+      expect(root.getAttribute('data-interaction')).toBe('takeover')
+      expect(screen.getByRole('button', { name: '播放《演示视频》第 1 集' })).toBeTruthy()
+    })
+
+    it('显式 interaction=takeover 与默认行为一致（海报点击调 enter + push）', () => {
+      render(<VideoCard video={makeVideo()} interaction="takeover" />)
+      fireEvent.click(screen.getByRole('button', { name: '播放《演示视频》第 1 集' }))
+      expect(mockEnter).toHaveBeenCalledOnce()
+      expect(mockPush).toHaveBeenCalledWith('/en/watch/demo-title-ab12cd34?ep=1')
+    })
+
+    it('navigate：根为 <a> 链接、data-interaction=navigate、href 指向详情页', () => {
+      render(<VideoCard video={makeVideo()} interaction="navigate" />)
+      const root = screen.getByTestId('video-card') as HTMLAnchorElement
+      expect(root.tagName).toBe('A')
+      expect(root.getAttribute('data-interaction')).toBe('navigate')
+      expect(root.getAttribute('href')).toBe('/movie/demo-title-ab12cd34')
+    })
+
+    it('navigate：整卡恰 1 个 link（HIGH-1 防标题嵌套 <Link>）', () => {
+      render(<VideoCard video={makeVideo()} interaction="navigate" />)
+      expect(screen.getAllByRole('link')).toHaveLength(1)
+    })
+
+    it('navigate：无播放按钮 / 无 FloatingPlayButton 误导可供性（P2）', () => {
+      render(<VideoCard video={makeVideo()} interaction="navigate" />)
+      expect(screen.queryByRole('button')).toBeNull()
+      expect(screen.queryByRole('button', { name: /播放/ })).toBeNull()
+    })
+
+    it('navigate：纯跳转——点击不调用 playerStore.enter / router.push（P2 严禁 takeover hook）', () => {
+      render(<VideoCard video={makeVideo()} interaction="navigate" />)
+      fireEvent.click(screen.getByTestId('video-card'))
+      expect(mockEnter).not.toHaveBeenCalled()
+      expect(mockPush).not.toHaveBeenCalled()
+    })
+
+    it('navigate：根 <Link> 显式 text-decoration:none（HIGH-2 对齐 BrowseCard 一致性）', () => {
+      render(<VideoCard video={makeVideo()} interaction="navigate" />)
+      const root = screen.getByTestId('video-card') as HTMLAnchorElement
+      expect(root.style.textDecoration).toBe('none')
+    })
+
+    it('navigate：内容对等——仍渲染标题与年份', () => {
+      render(<VideoCard video={makeVideo()} interaction="navigate" />)
+      expect(screen.getByText('演示视频')).toBeTruthy()
+      expect(screen.getByText('2025')).toBeTruthy()
+    })
+  })
 })
