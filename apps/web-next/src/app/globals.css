@@ -124,8 +124,6 @@
   --detail-hero-gap:       40px;              /* 双栏 Hero 列间距          */
   --detail-cover-w:        280px;             /* 封面列固定宽              */
   --detail-section-gap:    var(--space-12);   /* sections 间距 48px        */
-  --detail-sidebar-w:      320px;             /* 侧栏宽度                  */
-  --detail-sidebar-gap:    40px;              /* 主内容与侧栏间距          */
   --detail-ep-h:           42px;              /* 选集按钮高度              */
   --detail-ep-gap:         var(--space-2);    /* 选集网格间距 8px          */
   --detail-ep-range-gap:   var(--space-4);    /* 标题与范围切换间距 16px   */
@@ -607,17 +605,8 @@
   }
 }
 
-/* 下方区域：mobile=单列，≥1024px=1fr + 侧栏 */
-.detail-lower-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--detail-sidebar-gap);
-}
-@media (min-width: 1024px) {
-  .detail-lower-grid {
-    grid-template-columns: 1fr var(--detail-sidebar-w);
-  }
-}
+/* 下方区域布局：Amendment A1 D-214-A1-6 拆原 1fr+320px 侧栏 → 主内容全宽 + 相关视频全宽横滚行
+ * （.detail-lower-grid + --detail-sidebar-* 已随拆侧栏删除，VideoDetailClient 直接垂直排列）。 */
 
 /* ───────────────────────────────────────────────────────────────────────────
  * CardGrid（CARD-SIZE-CARDGRID / ADR-214 D-214-7/10 + Amendment A1 D-214-A1-1/2/3）

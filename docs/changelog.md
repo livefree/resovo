@@ -2830,3 +2830,11 @@
 - **arch-reviewer CONDITIONAL PASS（2 HIGH + 2 MEDIUM + 1 LOW 全吸收）**：H1 可达性（`tabIndex=0` + `role="region"` + 必填 `aria-label`——隐藏滚动条 + 无 nav 下键盘/纯鼠标可达，WCAG 2.1.1）/ H2 Fragment 边界（注释禁顶层 Fragment 聚合多卡 + 单测锁"Fragment→单 item"行为）/ M3 注入作用域论证修正（全局 `:root` 注入 + helper `CARD_SIZE_DEFAULTS` 降级，非"scroll 专属子树"）/ M4 `__item` 渲染韧性兜底 `var(--card-w-scroll, 170px)`（对齐 CardGrid `var(--cg-cols,2)`）/ L5 空槽补足非职责声明。
 - **门禁**：typecheck=0 / lint=0 / ScrollRow 测 9/9（组件契约 + a11y role/tabindex/aria-label + Fragment 边界 + globals.css 源快照）。
 - **注意事项**：① 本卡仅建组件，详情/播放消费在 #5/#6。② nav 左右翻页按钮 + 首页 Shelf/TopTenRow/DailyAnimeRow 迁移消重为可选后续 #8（提取 Shelf useScrollTrack/TrackNavButton）。③ children 契约：传 element 数组或并列 element，禁顶层 Fragment 聚合多卡。
+
+## [CARD-SIZE-A1-DETAIL] Phase 5：详情页拆 320px 侧栏 → 全宽相关视频横滚（ADR-214 Amendment A1 D-214-A1-6 / Codex-R4，SEQ-20260623-01）
+
+- **日期**：2026-06-23 ｜ **类型**：前端页面布局迁移（详情页大改）｜ **执行模型**：claude-opus-4-8（主循环）｜ **子代理**：无（按 D-214-A1-6 + Codex-R4 实施，ScrollRow 契约已在 #2 经 arch-reviewer 评审）。
+- **依据**：ADR-214 Amendment A1 D-214-A1-6（详情拆侧栏 + 横滚）+ Codex-R4（**当完整布局迁移**，非 surgical 组件替换）。
+- **改动**：① `VideoDetailClient` 拆下方 `1fr + 320px` 双栏（`.detail-lower-grid` + `<aside>` 侧栏）→ 主内容全宽 + 相关视频全宽横滚（`detail-cascade-3` 入场动画保留）；② `RelatedVideos` 退役 `SidebarList`（60px 硬编码竖列表 + 自绘 Link）→ `<ScrollRow aria-label="相关推荐">` + `VideoCard interaction="navigate"`，数据 `trending?type=&exclude=` limit 8→12（D-214-A1-6 仅相关、无加载更多）；③ `globals.css` 删 `.detail-lower-grid` 段 + `--detail-sidebar-w`/`--detail-sidebar-gap` 死 CSS/token（拆后零消费方）；④ 新增 `tests/unit/web-next/related-videos.test.tsx` 4 测。
+- **门禁**：typecheck=0 / lint=0 / test:changed（related-videos 4〔URL limit=12 / items navigate / empty / 失败降级〕+ 详情 fetch-sources 7 + ScrollRow 9 全过）。**VIDEO e2e 详情布局回归须主 checkout/CI 跑**（worktree 受限，登记 #7）。
+- **注意事项**：① 相关卡 `navigate` 整卡纯跳详情、不耦合 GlobalPlayerHost 状态机。② 数据仅相关、无筛选/排序/加载更多。③ 详情页下半部视觉大改（侧栏竖列表 → 全宽横滚行），真实视觉验证靠 #7 e2e。

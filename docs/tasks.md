@@ -60,15 +60,15 @@ _（**SEQ-20260610-02 source-health v2 落地 🔄 15/17 — Phase 1 ✅ + Phase
 
 ---
 
-### 🔄 CARD-SIZE-A1-DETAIL — 详情页拆 320px 侧栏 → 全宽横滚相关视频（SEQ-20260623-01 Phase 5，完整布局迁移）
+### 🔄 CARD-SIZE-A1-WATCH — 播放页新增一行相关视频横滚（SEQ-20260623-01 Phase 6）
 
-- **状态**：🔄 进行中 ｜ **创建/开始**：2026-06-23 ｜ **执行模型**：claude-opus-4-8（主循环；卡建议 sonnet）｜ **子代理**：无（按 ADR-214 Amendment A1 D-214-A1-6 + Codex-R4 实施）。
-- **依据**：ADR-214 Amendment A1 D-214-A1-6（详情拆侧栏 + 横滚）+ Codex-R4（**当完整布局迁移**，非 surgical 组件替换）。
-- **问题理解**：详情页下方双栏 1fr + 320px 侧栏（RelatedVideos 60px SidebarList 竖向列表，次要入口）→ hero 全宽 + 下方全宽 ScrollRow 相关横滚（VideoCard navigate），相关视频成可浏览内容。已核实侧栏仅含 RelatedVideos、拆除干净。
-- **方案**：① `VideoDetailClient` 拆下方双栏布局（去 320px `aside` 侧栏，相关行移主区下方全宽）；② `RelatedVideos` 退役 SidebarList（60px 硬编码竖列表）→ `<ScrollRow aria-label="相关视频">` + `VideoCard interaction="navigate"`，数据仍 `trending?type=&exclude=&limit=12`（无筛选/排序/加载更多）；③ `globals.css` `.detail-lower-grid` 模板调整 + 删 `--detail-sidebar-w`/`--detail-sidebar-gap` 死 token + 详情桌面/移动响应式断点；④ 详情相关测/e2e 断言更新。
-- **涉及文件**：`apps/web-next/src/components/video/VideoDetailClient.tsx`、`apps/web-next/src/components/detail/RelatedVideos.tsx`、`apps/web-next/src/app/globals.css`、详情相关单测/e2e。
-- **门禁**：typecheck/lint/test:changed + **VIDEO e2e**（详情布局回归，worktree 受限 → 登记主 checkout/CI）。**关键路径**：详情页布局大改。
-- **备注**：完整布局迁移（Codex-R4）须同步 `.detail-lower-grid` + `--detail-sidebar-*` + 响应式 + e2e；相关卡 navigate 纯跳转、不耦合播放器状态机。
+- **状态**：🔄 进行中 ｜ **创建/开始**：2026-06-23 ｜ **执行模型**：claude-opus-4-8（主循环；卡建议 sonnet）｜ **子代理**：无（按 ADR-214 Amendment A1 D-214-A1-6 实施，复用 #2 ScrollRow）。
+- **依据**：ADR-214 Amendment A1 D-214-A1-6（播放页新增相关视频横滚行，与详情页统一）。
+- **问题理解**：播放页此前无相关视频区 → 播放器下方新增一行相关视频横滚（ScrollRow + VideoCard navigate），与详情页 RelatedVideos 同款体验；不耦合播放器状态机。
+- **方案**：播放页（`WatchPageClient` 或 watch `page.tsx` 布局）播放器下方新增相关行——复用 `<ScrollRow aria-label="相关视频">` + `VideoCard interaction="navigate"`，数据 `trending?type=&exclude=&limit=12`（无筛选/排序/加载更多）；可新建 `WatchRelatedRow` 组件或复用 RelatedVideos（评估 props 通用性）。
+- **涉及文件**：`apps/web-next/src/app/[locale]/watch/[slug]/WatchPageClient.tsx` 或 `page.tsx`、可能新 `WatchRelatedRow` 组件、相关测。
+- **门禁**：typecheck/lint/test:changed + **PLAYER e2e**（不动状态机，worktree 受限 → 登记 #7）。**关键路径**：播放页新增区域，**严禁触 GlobalPlayerHost full/mini/pip 状态机**。
+- **备注**：相关卡 navigate 纯跳转新视频详情、不耦合播放器；滚动吸顶 mini 播放器为可选后续（D-214-A1-6 ⑤，本卡不做）。
 
 ---
 

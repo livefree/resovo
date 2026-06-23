@@ -3048,7 +3048,7 @@
 
 ## [SEQ-20260623-01] CARD-SIZE-A1 — 详情/播放页相关视频横滚化 + standard 网格「设列数→设卡宽 px」+ compact 档废弃（ADR-214 Amendment A1）
 
-- **状态**：🔄 执行中（**Phase 0 ✅** ADR Amendment A1 Accepted + Codex 审 → **卡片尺寸线批次 ✅** #1A SCHEMA + #1B API + #3 GRID-CSS + #4 TAB〔类型耦合批次：types 删 compact + 单位翻转破坏全栈测试，作一个批次统一 commit；typecheck=0/lint=0/全量单测 602 文件 8221 测/verify=0 全绿，commit 见 changelog [CARD-SIZE-A1-SCHEMA/API/GRID-CSS/TAB]〕 → **横滚线** #2 ScrollRow ✅〔arch-reviewer (claude-opus-4-8) CONDITIONAL PASS：2 HIGH〔a11y role/tabindex/aria-label + Fragment 边界〕+ 2 MEDIUM + 1 LOW 全吸收，commit 见 changelog [CARD-SIZE-A1-SCROLLROW]〕 → **#5 详情拆侧栏进行中**）
+- **状态**：🔄 执行中（**Phase 0 ✅** ADR Amendment A1 Accepted + Codex 审 → **卡片尺寸线批次 ✅** #1A SCHEMA + #1B API + #3 GRID-CSS + #4 TAB〔类型耦合批次：types 删 compact + 单位翻转破坏全栈测试，作一个批次统一 commit；typecheck=0/lint=0/全量单测 602 文件 8221 测/verify=0 全绿，commit 见 changelog [CARD-SIZE-A1-SCHEMA/API/GRID-CSS/TAB]〕 → **横滚线** #2 ScrollRow ✅〔arch-reviewer (claude-opus-4-8) CONDITIONAL PASS：2 HIGH〔a11y role/tabindex/aria-label + Fragment 边界〕+ 2 MEDIUM + 1 LOW 全吸收，commit 见 changelog [CARD-SIZE-A1-SCROLLROW]〕 → #5 详情拆侧栏 ✅〔拆 320px 双栏→全宽横滚 + RelatedVideos 退役 SidebarList→ScrollRow+VideoCard(navigate) + 删 detail-sidebar 死 CSS，typecheck/lint=0 + related-videos 4 测，commit 见 changelog [CARD-SIZE-A1-DETAIL]〕 → **#6 播放页横滚进行中**）
 - **创建时间**：2026-06-23
 - **最后更新时间**：2026-06-23
 - **目标**：兑现「统一客户端卡片尺寸」**原义**——运营直接设定卡片**容器宽度（px）**而非列数（原 ADR-214 把「卡片尺寸」实现成「列数」是对原义的误解）；详情/播放页相关视频统一为「**一行横滚**」作为可浏览内容（复用首页横滚 + VideoCard），退役详情页 60px 侧栏竖列表 + 废弃零消费的 compact 档。
