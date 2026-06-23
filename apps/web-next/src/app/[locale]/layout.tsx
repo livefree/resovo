@@ -12,6 +12,7 @@ import { MobileTabBar } from '@/components/layout/MobileTabBar'
 import { ScrollRestoration } from '@/components/primitives/scroll-restoration/ScrollRestoration'
 import { RouteStack } from '@/components/primitives/route-stack/RouteStack'
 import GlobalPlayerHost from './_lib/player/GlobalPlayerHost'
+import { fetchCardSizeSettings, buildCardSizeRootCss } from '@/lib/server/card-size-fetch'
 import type { Brand } from '@/types/brand'
 
 export function generateStaticParams() {
@@ -50,9 +51,15 @@ export default async function LocaleLayout({
 
   const initialBrand: Brand = { ...DEFAULT_BRAND, slug: brandSlug }
 
+  // CARD-SIZE-SSR（ADR-214 D-214-6）：DB 卡片尺寸 → :root CSS 变量 SSR 注入，
+  // 在 children 之前渲染消除 FOUC/CLS；取数失败已在 helper 内降级 CARD_SIZE_DEFAULTS。
+  const cardSizeCss = buildCardSizeRootCss(await fetchCardSizeSettings())
+
   return (
     <NextIntlClientProvider locale={locale} messages={messages}>
       <BrandProvider initialBrand={initialBrand} initialTheme={initialTheme}>
+        {/* eslint-disable-next-line react/no-danger */}
+        <style data-card-size-vars dangerouslySetInnerHTML={{ __html: cardSizeCss }} />
         <div className="app-shell">
           <Nav />
           <ScrollRestoration />
