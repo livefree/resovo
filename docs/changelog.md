@@ -2557,3 +2557,19 @@
 - **数据库变更**：无（ADR 仅定 schema 契约；migration 124 落地属 Phase 1 CARD-SIZE-DB）
 - **门禁**：Codex 对抗审核 round-1 = needs-attention（1 HIGH + 2 MEDIUM）三项全数吸收：① R1-HIGH CHECK 绑 size_class（拒倒置行）；② R2-MEDIUM CardGrid `minmax(0,1fr)` + `min-width:0` 防溢出；③ R3-MEDIUM SSR 短 revalidate 有界新鲜度 + del best-effort 不上抛 + 渲染页新鲜度 e2e。docs-only，无代码门禁。
 - **注意事项**：① 两 ADR 已 Accepted，**Phase 1（CARD-SIZE-DB migration 124）解锁可起**，建议模型 sonnet（cost 信号，可另起 sonnet 会话执行）。② Phase 1 门禁较 SEQ 原登记 +3 测：DB 级倒置行 CHECK 测 / 网格窄容器+长标题视觉回归 / admin PUT→SSR 渲染页新鲜度 e2e。③ ADR-215 新增 2 admin route（GET+PUT）→ `verify:endpoint-adr` 红线已由本 ADR 满足。④ commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer（撰写 ADR + 共享组件契约 + 跨消费方 schema 强制 Opus 审计）。
+
+---
+
+## [CARD-SIZE-DB] Phase 1：migration 124 建表 card_size_settings + seed 3 行 + audit target_kind 17→18 + architecture.md §5.19（SEQ-20260622-03）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22
+- **执行模型**：claude-opus-4-8（主循环；本卡建议模型 sonnet，用户裁定本 Opus 会话执行——不违规仅偏贵）
+- **子代理**：无（schema 落地按 ADR-214 D-214-3 既定口径，非新架构决策；schema 设计背书 = 规划期 arch-reviewer (claude-opus-4-8) ×2 + Codex round-1，已记入 [CARD-SIZE-ADR] / ADR-214）
+- **修改文件**：
+  - `apps/api/src/db/migrations/124_card_size_settings.sql`（新）— 建表 `card_size_settings`（id UUID PK / size_class TEXT UNIQUE CHECK 3 值 / desktop_columns INT NULL CHECK 2–8 / card_width_px INT NULL CHECK 120–280 / gap_px INT NOT NULL CHECK 0–64 / settings JSONB / updated_at）+ **档位×单位绑定 CHECK** `card_size_settings_unit_by_class_check`（Codex-R1：网格档列数非空·width 空 / scroll 反之）+ updated_at 触发器（仿 095）+ seed 3 行（SQL 字面量 standard 5/16·compact 3/12·scroll 170/16，`ON CONFLICT DO NOTHING`）+ audit target_kind CHECK 17→18（+`card_size`，DROP/ADD 仿 095/097）。
+  - `docs/architecture.md`（§5.19 新增）— `card_size_settings` 表定义 + 单位绑定 CHECK + audit 扩展 + 端点/SSR/types/queries 契约位登记（CLAUDE.md schema 变更必同步硬约束）。
+  - `tests/integration/api/card-size-settings-schema.test.ts`（新）— DB 级倒置行测（Codex-R1）：seed 3 行值 + 倒置行被 CHECK 拒（scroll+columns / 网格档+width / compact 双列）+ 范围越界拒（列 9/1·卡宽 300·gap 65）+ 枚举外拒（huge）+ 正向控制（范围内通过），事务 ROLLBACK 不污染 dev DB，SQLSTATE 23514 断言。
+- **新增依赖**：无
+- **数据库变更**：migration 124（新表 `card_size_settings` + seed 3 行 + `admin_audit_log.target_kind` CHECK 17→18）；已 `npm run migrate` 应用至 dev DB（resovo_dev）无错。
+- **门禁**：typecheck=0 / lint=0 / test:changed=0（2 非文档改动；集成测在 integration scope）/ verify:adr-contracts=0 / **migrate 冷启动 124 应用成功** / **集成测 12/12 passed**（card-size-settings-schema：倒置行+范围+枚举+正向控制）。
+- **注意事项**：① 本卡仅扩 DB CHECK，`AuditLogService` TARGET_KINDS/ACTION_TYPES TS 枚举扩展归 CARD-SIZE-SERVICE-ADMIN（DB CHECK ⊇ TS 枚举方向安全，TS 此时不写 card_size）。② 默认值真源 `CARD_SIZE_DEFAULTS`（@resovo/types）+ seed 一致性单测归下一卡 CARD-SIZE-TYPES-QUERIES（D-214-5 防 SQL↔TS 漂移）。③ 倒置行测用 UPDATE 既有行避 UNIQUE 干扰、ROLLBACK 不污染（integration-pg 约定）。④ 下一卡：CARD-SIZE-TYPES-QUERIES（types + queries + seed 一致性单测），建议模型 sonnet。

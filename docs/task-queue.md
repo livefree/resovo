@@ -2999,7 +2999,7 @@
 
 ## [SEQ-20260622-03] CARD-SIZE-SYSTEM — DB 驱动、后台可配的前台卡片尺寸体系
 
-- **状态**：🔄 Phase 0 ✅（2026-06-22 ADR-214 + ADR-215 **Accepted**〔用户裁定〕，Codex round-1 3 项全吸收 / commit 见 changelog [CARD-SIZE-ADR]）→ **Phase 1 解锁可起**（CARD-SIZE-DB migration 124，建议模型 sonnet，可另起 sonnet 会话）。Phase 1 门禁较原登记 +3 测（DB 倒置行 / 网格溢出视觉回归 / SSR 渲染页新鲜度 e2e）。｜ **创建时间**：2026-06-22 ｜ **最后更新时间**：2026-06-22｜ **当前无活跃卡**（Phase 1 取卡时写入 tasks.md）
+- **状态**：🔄 Phase 0 ✅（commit `4f748b47`）→ Phase 1 进行中：**CARD-SIZE-DB ✅**（2026-06-22 migration 124 建表 + seed 3 行 + audit 17→18 + architecture.md §5.19 + DB 级倒置行集成测 12/12；门禁 typecheck/lint/test:changed/verify:adr-contracts=0 + migrate 冷启动 + 集成测全绿 / commit 见 changelog [CARD-SIZE-DB]）→ **下一卡 CARD-SIZE-TYPES-QUERIES 可起**（@resovo/types CardSizeSettings + CARD_SIZE_DEFAULTS + db/queries/card-size-settings.ts + seed 一致性单测，建议模型 sonnet）。Phase 1 门禁较原登记 +3 测（DB 倒置行〔CARD-SIZE-DB ✅〕/ 网格溢出视觉回归〔CARDGRID〕/ SSR 渲染页新鲜度 e2e〔E2E〕）。｜ **创建时间**：2026-06-22 ｜ **最后更新时间**：2026-06-22｜ **当前无活跃卡**（下一卡取卡时写入 tasks.md）
 - **依赖**：无 BLOCKER。承接 SEQ-20260622-01「Follow-up ②」（定宽机制 5→1 + 双卡合并）并升级为 DB 可配体系。与 SEQ-20260622-02（BUGFIX-WATCH-EP-URL，已交付 `ba5a9255`）无文件域冲突。
 - **来源**：用户反馈「前台卡片尺寸视觉不统一」（首页推荐 vs 特色 vs 分类/搜索 vs 详情相关）。两轮 Opus `arch-reviewer (claude-opus-4-8)` 设计背书（前端 CardGrid 契约 + 全栈 schema/SSR/admin）。
 - **用户已锁定决策（硬约束）**：
