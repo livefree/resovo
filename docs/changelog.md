@@ -2541,3 +2541,19 @@
 - **数据库变更**：无
 - **门禁**：typecheck=0 / lint=0 / test:changed=36 passed；web-next 全量 414 passed 零回归。e2e 未跑（合并 main 前补；详情源选择器 testid `source-btn-N` 实为播放页 SourceBar，未受影响）。
 - **注意事项**：① 线路未写入 URL（详情无 per-line 深链，超反馈范围不做）；init-effect 收敛集的 URL 回写未做（幂等、低风险）。② 详情页线路选择器仍为装饰性（不深链播放，仍 `?ep` 走默认线路）。③ `VideoDetailHero` 为未引用遗留组件（仅 media/types.ts 注释提及），本次未动。④ 刷新后 hostMode 不持久 full（hydrateFromSession 仅恢复 mini/pip），靠 URL `?ep` 重建集号。
+
+---
+
+## [CARD-SIZE-ADR] Phase 0：ADR-214（卡片尺寸体系）+ ADR-215（admin-route 端点契约）起草 + Codex 对抗审核 + Accepted（SEQ-20260622-03）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22
+- **执行模型**：claude-opus-4-8（主循环；撰写即将成为 ADR 的决策文档 + 新共享组件契约 + 跨消费方 schema，CLAUDE.md 强制 Opus）
+- **子代理**：无（本卡未 spawn Task 工具子代理；设计背书 = 规划期 arch-reviewer (claude-opus-4-8) ×2，已记入 SEQ-20260622-03；Phase 0 门禁 = Codex `adversarial-review` round-1 threadId `019ef2ce-967a-7e73`，非 Task 工具 spawn）
+- **修改文件**：
+  - `docs/decisions.md` — 追加 ADR-214（3 档尺寸模型 standard/compact/scroll·混合单位 / `card_size_settings` schema migration 124·id UUID PK·size_class 绑定单位 CHECK / 存列数不存卡宽·CardGrid `minmax(0,1fr)` / SSR `:root` 注入+降级 / 缓存两层边界+SSR 短 revalidate / `CARD_SIZE_DEFAULTS` 一致性）+ ADR-215（`GET/PUT /admin/card-sizes` + 公开 `GET /card-sizes` 端点契约表 / zod 镜像绑 size_class / 错误码 / audit card_size.update·target_kind 17→18 / Redis del best-effort 失效）；两 ADR 状态 Draft→**Accepted**（用户裁定）+ Codex round-1 摘要。
+  - `docs/tasks.md` — Phase 0 卡 `CARD-SIZE-ADR` 删除（完成）。
+  - `docs/task-queue.md` — SEQ-20260622-03 状态 Phase 0 ✅ / Phase 1 解锁 + Codex round-1 3 项修正登记。
+- **新增依赖**：无
+- **数据库变更**：无（ADR 仅定 schema 契约；migration 124 落地属 Phase 1 CARD-SIZE-DB）
+- **门禁**：Codex 对抗审核 round-1 = needs-attention（1 HIGH + 2 MEDIUM）三项全数吸收：① R1-HIGH CHECK 绑 size_class（拒倒置行）；② R2-MEDIUM CardGrid `minmax(0,1fr)` + `min-width:0` 防溢出；③ R3-MEDIUM SSR 短 revalidate 有界新鲜度 + del best-effort 不上抛 + 渲染页新鲜度 e2e。docs-only，无代码门禁。
+- **注意事项**：① 两 ADR 已 Accepted，**Phase 1（CARD-SIZE-DB migration 124）解锁可起**，建议模型 sonnet（cost 信号，可另起 sonnet 会话执行）。② Phase 1 门禁较 SEQ 原登记 +3 测：DB 级倒置行 CHECK 测 / 网格窄容器+长标题视觉回归 / admin PUT→SSR 渲染页新鲜度 e2e。③ ADR-215 新增 2 admin route（GET+PUT）→ `verify:endpoint-adr` 红线已由本 ADR 满足。④ commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer（撰写 ADR + 共享组件契约 + 跨消费方 schema 强制 Opus 审计）。

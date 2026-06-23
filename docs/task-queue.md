@@ -2999,7 +2999,7 @@
 
 ## [SEQ-20260622-03] CARD-SIZE-SYSTEM — DB 驱动、后台可配的前台卡片尺寸体系
 
-- **状态**：📝 规划草案（**待 ADR-214/215 Accepted 后启动**；2026-06-22 第二轮对抗复审 6 项修正已纳入，见末尾「复审修正」。未修正前仅启 Phase 0，不进 DB/组件实现）｜ **创建时间**：2026-06-22 ｜ **最后更新时间**：2026-06-22
+- **状态**：🔄 Phase 0 ✅（2026-06-22 ADR-214 + ADR-215 **Accepted**〔用户裁定〕，Codex round-1 3 项全吸收 / commit 见 changelog [CARD-SIZE-ADR]）→ **Phase 1 解锁可起**（CARD-SIZE-DB migration 124，建议模型 sonnet，可另起 sonnet 会话）。Phase 1 门禁较原登记 +3 测（DB 倒置行 / 网格溢出视觉回归 / SSR 渲染页新鲜度 e2e）。｜ **创建时间**：2026-06-22 ｜ **最后更新时间**：2026-06-22｜ **当前无活跃卡**（Phase 1 取卡时写入 tasks.md）
 - **依赖**：无 BLOCKER。承接 SEQ-20260622-01「Follow-up ②」（定宽机制 5→1 + 双卡合并）并升级为 DB 可配体系。与 SEQ-20260622-02（BUGFIX-WATCH-EP-URL，已交付 `ba5a9255`）无文件域冲突。
 - **来源**：用户反馈「前台卡片尺寸视觉不统一」（首页推荐 vs 特色 vs 分类/搜索 vs 详情相关）。两轮 Opus `arch-reviewer (claude-opus-4-8)` 设计背书（前端 CardGrid 契约 + 全栈 schema/SSR/admin）。
 - **用户已锁定决策（硬约束）**：
@@ -3042,3 +3042,4 @@
 - **裁定项（实施时确认）**：compact/scroll seed 默认（暂定 3列/12px、170px/16px，后台可调）。
 - **模型路由审计**：本序列「新共享组件契约（CardGrid）+ 跨消费方 schema + 撰写 ADR」三项强制 Opus；ADR-214/215 + CardGrid + VideoCard 契约 commit 须带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
 - **第二轮对抗复审修正（2026-06-22，6 项已纳入）**：① P1 schema 加 `id` UUID PK + `size_class` UNIQUE + audit `targetId=row.id`；② P1 `CARD_SIZE_DEFAULTS` migration 不能 import TS → SQL 字面量 seed + 一致性单测；③ P2 `CARD-SIZE-SERVICE-API` 预拆 `SERVICE-ADMIN`/`PUBLIC-CACHE`；④ P2 风险1 措辞下修（有 server fetch 先例）；⑤ P2 VideoCard 合并预拆 `VIDEOCARD-VARIANT`（testid 兼容 + 禁 navigate 加 player hook）/`BROWSE-MIGRATE`；⑥ P2 缓存失效确定化（后端 PUT→Redis del）。卡数 12→14。
+- **Phase 0 ADR Codex 对抗审核 round-1 修正（2026-06-22，3 项已吸收入 ADR-214/215）**：① **R1-HIGH** schema CHECK 按 size_class 绑定单位（非仅二选一，拒 `scroll+columns`/`网格档+width` 倒置行）→ CARD-SIZE-DB 门禁 +DB 级倒置行测、CARD-SIZE-TYPES-QUERIES/SERVICE-ADMIN 门禁 +zod 倒置 body 测；② **R2-MEDIUM** CardGrid 网格模板强制 `repeat(var,minmax(0,1fr))` + item `min-width:0`（防 1fr auto 最小值溢出）→ CARD-SIZE-CARDGRID 门禁 +窄容器/长标题视觉回归；③ **R3-MEDIUM** SSR 新鲜度有界（短 revalidate ≤60s）+ Redis del 失败 best-effort（warn 不上抛）→ CARD-SIZE-SSR/PUBLIC-CACHE 落实、CARD-SIZE-E2E 门禁 +渲染页新鲜度 e2e（admin PUT→SSR 实拿新 CSS 变量）。**Phase 0 两 ADR 状态 = Draft，待用户裁 Accepted → 转 Accepted 解锁 Phase 1。**
