@@ -79,8 +79,8 @@ test.describe('分类卡片 href 使用 /tvshow/ 前缀', () => {
     })
 
     await page.goto('/en/tvshow')
-    // BrowseCard 的 testid 直接挂在 <Link>(<a>) 根节点
-    const card = page.getByTestId('browse-card').first()
+    // CARD-SIZE-BROWSE-MIGRATE：VideoCard navigate 分支根 <Link>(<a>) 挂 data-testid="video-card"
+    const card = page.getByTestId('video-card').first()
     await expect(card).toBeVisible({ timeout: 10000 })
 
     const href = await card.getAttribute('href')

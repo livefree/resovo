@@ -10,7 +10,7 @@
  *     useRouter takeover hook、不渲染 FloatingPlayButton（避免误导"播放"可供性）**（D-214-7 P2）。
  *
  * 默认 `takeover` → 现有消费方（TopTenRow / FeaturedRow / Shelf / VideoGrid）零行为变更。
- * navigate 本卡仅建不接；BrowseGrid 切换归 CARD-SIZE-BROWSE-MIGRATE（过渡期 BrowseCard / browse-card testid 保持）。
+ * `navigate` 消费方：BrowseGrid（CARD-SIZE-BROWSE-MIGRATE 已切，旧 BrowseCard 退役删除）。
  */
 
 import Link from 'next/link'

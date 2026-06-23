@@ -2691,3 +2691,27 @@
 - **门禁**：typecheck=0 / lint=0 / test:changed〔`vitest run --changed HEAD` 4 文件 43 passed，VideoCard.test 19〕/ verify:adr-contracts=0（enum SSOT 为既有 advisory 非本卡）。**关键路径**：首页/搜索卡片 takeover 海报直达播放器——默认 takeover + DOM 逐字保留 + 原 11 测全过，零回归。
 - **六问自检**：① 契约/边界：interaction 封闭二值、navigate 独立组件断 store 订阅 ✓；② 复用：提取 Cover/Meta/PosterHoverDim 三子件消重 ✓；③ 分层：纯前台组件不涉后端分层 ✓；④ 类型：无 any、新增 VideoCardInteraction 导出 ✓；⑤ 测试：两分支契约 + 向后兼容均覆盖 ✓；⑥ 沉淀：navigate 变体即沉淀（替代 BrowseCard 的统一卡片），BROWSE-MIGRATE 接入。
 - **注意事项**：① navigate 分支**本卡仅建不接**——当前无消费方，BrowseGrid→VideoCard navigate 切换 + 删 BrowseCard + 改 spec testid 归 CARD-SIZE-BROWSE-MIGRATE；过渡期 BrowseCard + `browse-card` testid 保持。② FeaturedRow（line 112 `<VideoCard className="min-w-0"/>`）仍默认 takeover 不变，归一等宽归 FEATURED-NORMALIZE。③ navigate 是相对旧 BrowseCard 的正向升级（StackedPosterFrame 叠层海报 + TagLayer 信息对等）。④ worktree 无本地 `node_modules/.bin` → `npm run test:changed` spawn 失败，用等价 `npx vitest run --changed HEAD`（脚本已判定 2 非文档改动、无升全量触发）。⑤ Phase 2 剩 2 卡：BROWSE-MIGRATE(sonnet，依赖本卡) / FEATURED-NORMALIZE(sonnet，仅依赖 CARDGRID)。
+
+## [CARD-SIZE-BROWSE-MIGRATE] Phase 2：BrowseGrid 切 CardGrid + 卡切 VideoCard navigate + 删 BrowseCard（ADR-214 D-214-7/8，SEQ-20260622-03）
+- **完成时间**：2026-06-23
+- **记录时间**：2026-06-23 12:20
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（消费既有 CardGrid〔CARD-SIZE-CARDGRID〕+ VideoCard navigate〔CARD-SIZE-VIDEOCARD-VARIANT〕契约，非新共享组件契约 / 非架构决策）
+- **问题理解**：BrowseGrid 用硬编码 `grid grid-cols-2 sm:3 lg:5` + gap `--page-inline-gap` + 独立 BrowseCard（裸 SafeImage、无 TagLayer），与 CardGrid standard 档（DB 可配）+ VideoCard 统一卡片撕裂。
+- **根因判断**：分类浏览页是 D-214-7 navigate 变体的目标消费方之一；CARDGRID + VIDEOCARD-VARIANT 已就绪，本卡把 BrowseGrid 切到统一组件并退役 BrowseCard。
+- **方案**：BrowseGrid 网格容器换 `<CardGrid sizeClass="standard">`（standard 档默认 5 列/16px gap == 原 lg:5 + `--page-inline-gap` 16px → 渲染像素无变、转 DB 可配）；卡换 `<VideoCard interaction="navigate">`（整卡 Link 纯跳转、href 经 getVideoDetailHref 与旧 BrowseCard 完全一致）；删零消费方 BrowseCard.tsx；e2e spec testid `browse-card`→`video-card`。
+- **修改文件**：
+  - `apps/web-next/src/components/browse/BrowseGrid.tsx` — import CardGrid + VideoCard（移除 BrowseCard）；主网格 + skeleton 网格 `div.grid grid-cols-2 sm:3 lg:5` → `<CardGrid sizeClass="standard" data-testid="browse-grid"/skeleton>`；`<BrowseCard>` → `<VideoCard interaction="navigate">`；docstring Token 消费区改述（网格列数/gap → CardGrid standard DB 注入）。
+  - `apps/web-next/src/components/browse/BrowseCard.tsx` — **删除**（迁移后零消费方；功能由 VideoCard navigate 变体取代）。
+  - `apps/web-next/src/components/video/VideoCard.tsx` — docstring 更新（navigate 消费方 = BrowseGrid 已切，旧 BrowseCard 退役）。
+  - `tests/e2e-next/browse-category-routes.spec.ts` — testid `browse-card`→`video-card`（locator + 测试名 + 失败消息 + 注释/文件头）。
+  - `tests/e2e-next/browse-tvshow.spec.ts` — `getByTestId('browse-card')`→`('video-card')` + 注释（href `/tvshow/` 非 `/variety/` 断言依赖 getVideoDetailHref 不变、迁移后仍成立）。
+  - `tests/unit/components/browse/BrowseGrid.test.tsx` — fixture 补 `subtitleLangs:[]`/`posterStatus:'ok'`/`posterBlurhash:null`（VideoCard→videoCardToTagProps 读 subtitleLangs）+ `beforeAll` 加 `window.matchMedia` stub（StackedPosterFrame useEffect 读 matchMedia）。
+  - `vitest.config.ts` — `@/components/shared/*` 别名改 **importer-aware**（见下）。
+- **vitest.config.ts 别名修复（范围外但必要的根因修复）**：原 `@/components/shared/*` 被**无条件**硬路由到 `apps/server-next/src/components/shared`（CHG-CUTOVER-EXECUTE 遗留，早于 web-next 有 shared 目录）。CARD-SIZE-CARDGRID 起 web-next 新增 `components/shared/`（CardGrid 等真实共享层），BrowseGrid 经 `@/components/shared/card-grid/CardGrid` 导入在 vitest 解析失败。**核实当前零 server-next 消费方**经此别名（grep apps/tests/packages 仅 BrowseGrid + card-grid.test 命中），故改为 importer-aware（与 `@/stores`/`@/` 同款：server-next importer→server-next、默认→web-next），源码保持 `@/` 一致性、不塞相对路径破坏约定。**触动 config → 按 ADR-180 升全量单测验证**（601 文件 8210 测全过、零回归）。
+- **新增依赖**：无
+- **数据库变更**：无（纯前端组件迁移）
+- **删除**：`apps/web-next/src/components/browse/BrowseCard.tsx`（92 行，零消费方）。
+- **门禁**：typecheck=0 / lint=0 / **全量单测 601 文件 8210 passed**（vitest.config.ts 改动按 ADR-180 升全量）/ verify:adr-contracts=0。**关键路径**：分类/浏览页卡片渲染——视觉中性（列数/gap 默认值同原口径）+ href 经 getVideoDetailHref 不变；BrowseGrid.test 7 测 + VideoCard.test 19 测全过。
+- **六问自检**：① 契约/边界：消费既有 CardGrid/VideoCard navigate 封闭契约，未扩公开 API ✓；② 复用：BrowseCard 死重复实现退役、归一到 VideoCard ✓；③ 分层：纯前台组件 ✓；④ 类型：无 any、fixture 补全为合法 VideoCardType ✓；⑤ 测试：单测全量 + e2e testid 对齐 ✓；⑥ 沉淀：BrowseCard→VideoCard 收敛即本卡核心沉淀。
+- **注意事项**：① **playwright e2e 未实跑本卡**——spec testid 已对齐源码改动（browse-card→video-card），但 playwright 需 live dev server（web-next + api）；按 SEQ 计划全 e2e 回归 + 视觉回归归 CARD-SIZE-E2E（Phase 4），与 CARDGRID/SCROLL 口径一致。② browse-tvshow href 断言（`/tvshow/` 非 `/variety/`）是 getVideoDetailHref 属性、与卡组件无关，迁移后不变。③ skeleton 保持 poster-rect 外观（未掺入 VideoCard.Skeleton 重设计），仅换 CardGrid 包裹保持视觉中性。④ `--page-inline-gap` 真源仍被其他模块引用、未清理（非本卡范围）。⑤ Phase 2 剩 1 卡：CARD-SIZE-FEATURED-NORMALIZE（sonnet，仅依赖 CARDGRID）。

@@ -91,7 +91,7 @@ export default defineConfig({
   resolve: {
     alias: [
       { find: '@/api',              replacement: path.resolve(__dirname, './apps/api/src') },
-      // @/components/admin|shared → server-next（CUTOVER CHG-CUTOVER-EXECUTE：apps/server v1 退役，
+      // @/components/admin → server-next（CUTOVER CHG-CUTOVER-EXECUTE：apps/server v1 退役，
       // 原 v1 importer 分支 + tests/unit/components/admin 老 admin 单测随退役删除，统一走 server-next）。
       {
         find: /^@\/components\/admin(\/.*)?$/,
@@ -102,11 +102,18 @@ export default defineConfig({
           return resolveWithExtensions(path.resolve(base, subPath))
         },
       },
+      // @/components/shared 是 importer-aware（CARD-SIZE-BROWSE-MIGRATE：web-next 自 CARD-SIZE-CARDGRID
+      // 起新增 components/shared/ 真实共享层〔CardGrid 等〕；原 CUTOVER 无条件硬路由 server-next 已不成立、
+      // 且当前零 server-next 消费方）：server-next importer → server-next/components/shared；默认 → web-next。
       {
         find: /^@\/components\/shared(\/.*)?$/,
         replacement: '$1',
-        customResolver(replacedId: string) {
-          const base = path.resolve(__dirname, './apps/server-next/src/components/shared')
+        customResolver(replacedId: string, importer: string | undefined) {
+          const isServerNext =
+            importer?.includes('/apps/server-next/') || importer?.includes('/tests/unit/components/server-next/') || importer?.includes('/tests/unit/admin-moderation/')
+          const base = isServerNext
+            ? path.resolve(__dirname, './apps/server-next/src/components/shared')
+            : path.resolve(__dirname, './apps/web-next/src/components/shared')
           const subPath = replacedId.replace(/^\//, '') || 'index'
           return resolveWithExtensions(path.resolve(base, subPath))
         },
