@@ -2519,3 +2519,25 @@
 - **门禁**：typecheck=0 / lint=0 / test:changed=42（VideoCard/BrowseGrid/ShelfRow/Skeleton/HomeBrandFiltering）；**e2e=48 passed / 0 失败 / 1 flaky（browse /series 冷构建首跑超时，retry 通过）/ 3 skipped**（typography-layout VideoGrid gap≥16 + title vs tag-layer / card-dual-exit / search / browse / detail / homepage / smoke，PLAYWRIGHT_SERVERS=web）。
 - **e2e 环境插曲（与改动无关）**：首两轮 e2e 全盘失败（含 smoke/主题/banner），诊断为 `apps/web-next/.next` 构建缓存损坏（webpack `invalid block type` + 503 次 SSR `JSON.parse` 500，连不取数据的 next-placeholder 静态页都 500）；`rm -rf apps/web-next/.next` 清缓存后全绿。视觉回归对改动有效。
 - **注意事项**：① 本卡复用 `--page-inline-gap`，design-tokens 真源**未改**（区别于草拟的新增 token）。② browse/search/detail 其余别名「镜像超集」遗留债未收口 → 独立「token 真源回填」卡。③ 高力度选项（定宽机制 5→1 CardGrid + VideoCard/BrowseCard 合并）+ VideoGrid scroll 死路径删除仍在 task-queue follow-up。④ 标题排版 3 处 inline 重复触及提取信号，本卡按口径只统一值未提取（arch-reviewer 非阻塞 CONCERN）。⑤ e2e 期间清了 web-next `.next` 缓存且用户 :3000 dev server 已被用户终止——下次 `npm run dev` 会全新重建（顺带修复原损坏）。
+
+## [BUGFIX-WATCH-EP-URL] 播放页选集/线路 URL 同步 + 详情页进播放页集号丢失 + 详情/播放线路名统一（用户反馈，SEQ-20260622-02）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 18:30
+- **执行模型**：claude-opus-4-8
+- **子代理**：无
+- **背景（用户反馈 3 个前台 bug）**：① 详情页选集点击进播放页总是「默认线路第一集」；② 播放页切换选集地址栏不变、刷新后集号重置；③ 详情页线路名与播放页线路名不一致。
+- **根因**：
+  - ①②：watch 页双 `initPlayer` 所有权竞争——`useWatchSlugSync` 写死 `initPlayer(slug, 1)`（集号恒 1 + 传完整 slug 当 shortId），hydration 后晚于 PlayerShell init 执行 → 覆盖已按 URL `?ep` 对齐的 `currentEpisode`（→1）+ 重置 `activeLineKey`（→matrix[0]）；且选集为纯 store 操作未与 URL 双向同步 → 刷新按旧 `?ep` 回退。附带：完整 slug 当 shortId 落 store → mini player `/videos/${shortId}` 端点拼错。
+  - ③：播放页主题化线路名（`buildThemedLines` + `useRouteTheme`，按线路索引）vs 详情页原始 `siteDisplayName/sourceName` 逐源；且详情页用第 1 集源、播放页用全集源 → 索引对不齐。命名唯一真源 = `line-display-name.ts` 主题系统。
+- **修改文件**：
+  - `apps/web-next/src/lib/episode-url.ts`（新）— `parseEpisodeParam` + `buildEpisodeUrl` 纯函数（选集↔URL `?ep` 同步）。
+  - `apps/web-next/src/app/[locale]/watch/[slug]/_hooks/use-watch-slug-sync.ts` — `initPlayer(slug,1)` → `initPlayer(extractShortId(slug), parseEpisodeParam(?ep))`（两处），sameSlug（mini→full 交接）路径不变。
+  - `apps/web-next/src/components/player/PlayerShell.tsx` — 新增 `syncEpisodeToUrl`（`history.replaceState` 写 `?ep` + portalMode/SSR 守卫），接入 `handleEpisodeSelect` + `handleLineChange` 收敛改集；移除死代码 `void portalMode`。
+  - `apps/web-next/src/app/[locale]/_lib/detail-page-factory.tsx` — `fetchVideoSources(slug,1)` → `fetchVideoSources(slug)`（全集源，与播放页同源）。
+  - `apps/web-next/src/components/video/VideoDetailClient.tsx` — 线路选择器消费全集源（episode 无关），移除按集重取 + `activeSourceId` plumbing。
+  - `apps/web-next/src/components/detail/DetailHero.tsx` — `useRouteTheme(locale).theme` + `buildLineMatrix` + `buildThemedLines` 渲染主题化线路名（`themeLabel · quality` + dead/pending，与 SourceBar 口径一致）；段标题「播放源」→「线路」；活跃线路改内部 state；移除 `activeSourceId`/`onSourceChange` props。
+  - `tests/unit/web-next/{episode-url,use-watch-slug-sync,player-episode-url-sync,detail-hero-line-names}.test.*`（新，4 文件）。
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：typecheck=0 / lint=0 / test:changed=36 passed；web-next 全量 414 passed 零回归。e2e 未跑（合并 main 前补；详情源选择器 testid `source-btn-N` 实为播放页 SourceBar，未受影响）。
+- **注意事项**：① 线路未写入 URL（详情无 per-line 深链，超反馈范围不做）；init-effect 收敛集的 URL 回写未做（幂等、低风险）。② 详情页线路选择器仍为装饰性（不深链播放，仍 `?ep` 走默认线路）。③ `VideoDetailHero` 为未引用遗留组件（仅 media/types.ts 注释提及），本次未动。④ 刷新后 hostMode 不持久 full（hydrateFromSession 仅恢复 mini/pip），靠 URL `?ep` 重建集号。

@@ -1,7 +1,11 @@
 'use client'
 
+import { useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { useLocale } from 'next-intl'
 import { MetaChip } from '@/components/search/MetaChip'
+import { buildLineMatrix, buildThemedLines } from '@/lib/line-matrix'
+import { useRouteTheme } from '@/lib/route-theme-storage'
 import { carryAdminPreview } from '@/lib/admin-preview-query'
 import { SafeImage } from '@/components/media'
 import { SharedElement as SharedElementBase } from '@/components/primitives/shared-element/SharedElement'
@@ -99,15 +103,25 @@ interface DetailHeroProps {
   video: Video
   /** 当前选中集，用于 standard-takeover 播放 */
   episode?: number
+  /**
+   * 视频**全集源**（episode 无关）。DetailHero 内 buildLineMatrix + buildThemedLines 派生
+   * 主题化线路名，与播放页 PlayerShell 同一流水线 → 线路名逐字一致（BUGFIX-WATCH-EP-URL ③）。
+   */
   sources?: VideoSource[]
-  activeSourceId?: string | null
-  onSourceChange?: (id: string) => void
 }
 
-export function DetailHero({ video, episode = 1, sources = [], activeSourceId, onSourceChange }: DetailHeroProps) {
+export function DetailHero({ video, episode = 1, sources = [] }: DetailHeroProps) {
   const enter = usePlayerStore((s) => s.enter)
   const router = useRouter()
   const searchParams = useSearchParams()
+
+  // 线路名与播放页一致：同源全集 → 线路矩阵 → 用户主题派生（theme 已解析含自定义主题）
+  const locale = useLocale()
+  const { theme: routeTheme } = useRouteTheme(locale)
+  const lineMatrix = useMemo(() => buildLineMatrix(sources), [sources])
+  const themedLines = useMemo(() => buildThemedLines(lineMatrix, routeTheme), [lineMatrix, routeTheme])
+  // 详情线路选择器为装饰性（不深链播放）；默认高亮最优线路（matrix[0]，与播放页默认一致）
+  const [activeLineIndex, setActiveLineIndex] = useState(0)
 
   function handlePlay() {
     const base = video.slug
@@ -316,8 +330,8 @@ export function DetailHero({ video, episode = 1, sources = [], activeSourceId, o
             立即播放
           </button>
 
-          {/* 播放源选择器 */}
-          {sources.length > 0 && (
+          {/* 线路选择器（主题化线路名，与播放页 SourceBar 同口径：themeLabel · quality + dead/pending） */}
+          {themedLines.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', flexWrap: 'wrap' }}>
               <span
                 style={{
@@ -327,18 +341,25 @@ export function DetailHero({ video, episode = 1, sources = [], activeSourceId, o
                   paddingTop: '5px',
                 }}
               >
-                播放源
+                线路
               </span>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                {sources.map((source) => {
-                  const isActive = source.id === activeSourceId
-                  const label = source.siteDisplayName ?? source.sourceName
+                {themedLines.map((line, i) => {
+                  const isActive = i === activeLineIndex
+                  const isDead = line.isDead === true
+                  const single = themedLines.length === 1
+                  // 与 SourceBar 渲染口径一致：单线路只显画质 / 多线路 "themeLabel · quality"
+                  const base = single ? (line.quality ?? line.label ?? '播放') : (line.label ?? `线路${i + 1}`)
+                  const label = !single && line.quality ? `${base} · ${line.quality}` : base
                   return (
                     <button
-                      key={source.id}
+                      key={lineMatrix[i]?.key ?? i}
                       type="button"
-                      onClick={() => onSourceChange?.(source.id)}
-                      data-testid={`source-btn-${source.id}`}
+                      onClick={() => setActiveLineIndex(i)}
+                      data-testid={`detail-line-btn-${i}`}
+                      data-dead={isDead || undefined}
+                      data-pending={line.isPending || undefined}
+                      title={isDead ? `${label}（线路失效）` : line.isPending ? `${label}（检测中）` : label}
                       style={{
                         padding: '4px 10px',
                         borderRadius: '6px',
@@ -359,6 +380,7 @@ export function DetailHero({ video, episode = 1, sources = [], activeSourceId, o
                               background: 'var(--bg-surface-sunken)',
                               color: 'var(--fg-muted)',
                               borderColor: 'var(--border-default)',
+                              ...(isDead ? { opacity: 0.5 } : {}),
                             }),
                       }}
                     >

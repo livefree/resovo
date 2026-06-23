@@ -242,10 +242,9 @@ export function VideoDetailClient({ slug, showEpisodes, initialVideo, initialSou
     const ep = Number(searchParams.get('ep'))
     return ep >= 1 ? ep : 1
   })
-  // ADR-160 AMENDMENT 2 D-160-AMD2-3：initial sources 过滤 isActive（与既有 client fetch 行为一致）
-  const initialActiveSources = (initialSources ?? []).filter((s) => s.isActive)
-  const [sources, setSources] = useState<VideoSource[]>(initialActiveSources)
-  const [activeSourceId, setActiveSourceId] = useState<string | null>(initialActiveSources[0]?.id ?? null)
+  // BUGFIX-WATCH-EP-URL ③：线路选择器与播放页一致 → 消费**全集源**（episode 无关）；
+  // DetailHero 内 buildLineMatrix + buildThemedLines 派生主题化线路名。
+  const [sources, setSources] = useState<VideoSource[]>(() => (initialSources ?? []).filter((s) => s.isActive))
 
   useEffect(() => {
     // ADR-160 AMENDMENT 2 Y-AMD2-1：server-side hydration 已注入 initialVideo → 跳过初始 client fetch
@@ -259,24 +258,13 @@ export function VideoDetailClient({ slug, showEpisodes, initialVideo, initialSou
 
   useEffect(() => {
     if (!video) return
-    // ADR-160 AMENDMENT 2 Y-AMD2-1：第 1 集 + 有 initialSources → 跳过初始 client fetch
-    // 切到其他集 → 走 client fetch（Y-AMD2-2 internal 视频此处可能 404 / 接受为已知限制）
-    if (initialSources && activeEpisode === 1) return
+    // server 已注入全集 initialSources → 跳过 client 重取；否则一次拉**全集源**（无 ?episode）
+    if (initialSources) return
     apiClient
-      .get<ApiListResponse<VideoSource>>(
-        `/videos/${video.shortId}/sources?episode=${activeEpisode}`,
-        { skipAuth: true },
-      )
-      .then((res) => {
-        const active = res.data.filter((s) => s.isActive)
-        setSources(active)
-        setActiveSourceId((prev) => {
-          const stillExists = active.some((s) => s.id === prev)
-          return stillExists ? prev : (active[0]?.id ?? null)
-        })
-      })
+      .get<ApiListResponse<VideoSource>>(`/videos/${video.shortId}/sources`, { skipAuth: true })
+      .then((res) => setSources(res.data.filter((s) => s.isActive)))
       .catch(() => setSources([]))
-  }, [video?.shortId, activeEpisode, initialSources])
+  }, [video?.shortId, initialSources])
 
   if (notFound) {
     return (
@@ -298,8 +286,6 @@ export function VideoDetailClient({ slug, showEpisodes, initialVideo, initialSou
           video={video}
           episode={activeEpisode}
           sources={sources}
-          activeSourceId={activeSourceId}
-          onSourceChange={setActiveSourceId}
         />
       </div>
 
