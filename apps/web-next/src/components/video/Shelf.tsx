@@ -9,10 +9,10 @@
  *   featured-grid  — 5 列网格，portrait 卡
  *
  * Token 消费：
- *   card gap       → var(--shelf-gap)              16px
+ *   横滚 gap       → var(--card-gap-scroll)        16px（CARD-SIZE-SCROLL：DB 注入；featured-grid 网格仍 var(--shelf-gap)）
  *   bottom padding → var(--shelf-bottom-padding)   8px
- *   portrait 宽    → var(--shelf-card-w-portrait)  170px
- *   top10 宽       → var(--shelf-card-w-top10)     170px
+ *   portrait 宽    → var(--card-w-scroll)  170px
+ *   top10 宽       → var(--card-w-scroll)     170px
  *   empty opacity  → var(--shelf-empty-opacity)    0.32
  *
  * 不变量：
@@ -239,7 +239,7 @@ function HorizontalTrackSkeleton({ cardWidth, aspectRatio, testId }: {
       data-testid={testId}
       style={{
         display: 'flex',
-        gap: 'var(--shelf-gap)',
+        gap: 'var(--card-gap-scroll)',
         paddingBottom: 'var(--shelf-bottom-padding)',
         overflowX: 'hidden',
       }}
@@ -271,7 +271,7 @@ function PosterTrack({ videos, testId }: { readonly videos: VideoCardType[]; rea
         data-testid={testId}
         style={{
           display: 'flex',
-          gap: 'var(--shelf-gap)',
+          gap: 'var(--card-gap-scroll)',
           overflowX: 'auto',
           scrollSnapType: 'x mandatory',
           scrollbarWidth: 'none',
@@ -281,13 +281,13 @@ function PosterTrack({ videos, testId }: { readonly videos: VideoCardType[]; rea
         {videos.map((video) => (
           <div
             key={video.id}
-            style={{ width: 'var(--shelf-card-w-portrait)', flexShrink: 0, scrollSnapAlign: 'start' }}
+            style={{ width: 'var(--card-w-scroll)', flexShrink: 0, scrollSnapAlign: 'start' }}
           >
             <VideoCard video={video} />
           </div>
         ))}
         {Array.from({ length: empties }).map((_, i) => (
-          <EmptyPlaceholderCard key={`empty-${i}`} width="var(--shelf-card-w-portrait)" aspectRatio="2/3" />
+          <EmptyPlaceholderCard key={`empty-${i}`} width="var(--card-w-scroll)" aspectRatio="2/3" />
         ))}
       </div>
       {canRight && <TrackNavButton direction="next" onClick={scrollNext} />}
@@ -310,7 +310,7 @@ function Top10Track({ videos, testId }: { readonly videos: VideoCardType[]; read
         data-testid={testId}
         style={{
           display: 'flex',
-          gap: 'var(--shelf-gap)',
+          gap: 'var(--card-gap-scroll)',
           overflowX: 'auto',
           scrollSnapType: 'x mandatory',
           scrollbarWidth: 'none',
@@ -321,7 +321,7 @@ function Top10Track({ videos, testId }: { readonly videos: VideoCardType[]; read
           <div
             key={video.id}
             className="relative"
-            style={{ width: 'var(--shelf-card-w-top10)', flexShrink: 0, scrollSnapAlign: 'start' }}
+            style={{ width: 'var(--card-w-scroll)', flexShrink: 0, scrollSnapAlign: 'start' }}
           >
             <span
               aria-hidden="true"
@@ -348,7 +348,7 @@ function Top10Track({ videos, testId }: { readonly videos: VideoCardType[]; read
           </div>
         ))}
         {Array.from({ length: empties }).map((_, i) => (
-          <EmptyPlaceholderCard key={`empty-${i}`} width="var(--shelf-card-w-top10)" aspectRatio="2/3" />
+          <EmptyPlaceholderCard key={`empty-${i}`} width="var(--card-w-scroll)" aspectRatio="2/3" />
         ))}
       </div>
       {canRight && <TrackNavButton direction="next" onClick={scrollNext} />}
@@ -430,7 +430,7 @@ export function ShelfRow({
     return () => { cancelled = true }
   }, [query, shelfSection, brand.slug])
 
-  const cardWidth = 'var(--shelf-card-w-portrait)'
+  const cardWidth = 'var(--card-w-scroll)'
   const aspectRatio = '2/3'
 
   return (

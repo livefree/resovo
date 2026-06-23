@@ -76,7 +76,7 @@ function DailyAnimeCard({
       data-daily-anime-card={item.bangumiSubjectId}
       data-linked={linked ? 'true' : 'false'}
       style={{
-        width: 'var(--shelf-card-w-portrait)',
+        width: 'var(--card-w-scroll)',
         flexShrink: 0,
         scrollSnapAlign: 'start',
         textDecoration: 'none',
@@ -172,7 +172,7 @@ export function DailyAnimeRow({ title, availableLabel, wishLabel }: DailyAnimeRo
         data-daily-anime-track
         style={{
           display: 'flex',
-          gap: 'var(--shelf-gap)',
+          gap: 'var(--card-gap-scroll)',
           overflowX: 'auto',
           scrollSnapType: 'x mandatory',
           scrollbarWidth: 'none',
@@ -181,7 +181,7 @@ export function DailyAnimeRow({ title, availableLabel, wishLabel }: DailyAnimeRo
       >
         {loading
           ? Array.from({ length: MIN_SLOTS }).map((_, i) => (
-              <Skeleton key={i} shape="rect" style={{ width: 'var(--shelf-card-w-portrait)', flexShrink: 0, aspectRatio: '2/3' }} delay={i >= 2 ? 300 : undefined} />
+              <Skeleton key={i} shape="rect" style={{ width: 'var(--card-w-scroll)', flexShrink: 0, aspectRatio: '2/3' }} delay={i >= 2 ? 300 : undefined} />
             ))
           : items.map((item) => (
               <DailyAnimeCard key={item.bangumiSubjectId} item={item} locale={locale} availableLabel={availableLabel} wishLabel={wishLabel} />
