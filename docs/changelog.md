@@ -2757,3 +2757,25 @@
 - **门禁**：typecheck=0 / lint=0（4 successful，本卡零告警；既有 ProblemImageCard/SourcesClient/TabImages 告警与本卡无关）/ test:changed〔`vitest run --changed HEAD` → CardSizeTab.test 6 passed〕/ verify:adr-contracts=0（endpoint-adr 对齐，**无新 admin route**）。**关键路径**：admin 设置面板新增 tab——纯增量、既有 tab 分支不变。
 - **六问自检**：① 契约/边界：消费既有 ADR-215 端点 + admin-ui 封闭原语，未扩任何公开 API ✓；② 复用：API client 仿 home-curation、tab 仿 LoginSessionsTab、组件全复用 admin-ui ✓；③ 可扩展：档位经 CardSizeClass 封闭枚举 + CLASS_META 驱动，新档走 ADR amendment + migration ✓；④ 一致性：样式/交互（dirty/save/reset/reload+toast）对齐 sibling tab ✓；⑤ 类型：无 any、无空 catch（catch 均 toast/setError）、无硬编码颜色（CSS 变量 --fg-danger/--fg-muted）✓；⑥ 沉淀：NumberField/CardSizeClassCard 仅本 tab 消重未达提取阈值，page-local 即可 ✓。
 - **注意事项**：① **ADMIN e2e playwright 未实跑本卡**——纯增量 tab 不动既有路由；按 SEQ 计划全栈 e2e（含 admin PUT→公开读新鲜度链路 + 网格视觉回归 + test:e2e 4 projects）归 Phase 4 CARD-SIZE-E2E，与 Phase 2 各卡口径一致。② tab 位置追加在「登录会话」之后（TABS 末位），additive 不扰既有 tab 顺序。③ scroll 档保存后约 ≤60s（SSR revalidate / 公开缓存 TTL，D-214-9）前台渲染新尺寸——tab 顶部 advisory 已向运营说明该新鲜度边界。④ **Phase 3 交付 ✅**；SEQ-20260622-03 剩最后 1 卡 Phase 4 CARD-SIZE-E2E（全栈 e2e + 视觉回归 + 新鲜度链路 + 全量门禁，sonnet）。⑤ 后台编辑能力就绪后，「运营无需改码自助调卡片尺寸」目标在代码层闭环；端到端可用仍待 Phase 4 验证 + 合并 main + 部署。
+
+## [CARD-SIZE-E2E] Phase 4 收官：卡片尺寸体系 e2e spec + 全量回归门禁（ADR-214 D-214-4/7/9，SEQ-20260622-03）
+- **完成时间**：2026-06-23（spec 交付 + 可跑门禁全绿）
+- **记录时间**：2026-06-23
+- **执行模型**：claude-opus-4-8（主循环；卡建议 sonnet）
+- **子代理**：无（e2e spec 编写 + 跑门禁，非新架构决策 / 非新契约）
+- **问题理解**：卡片尺寸体系全栈代码已就绪（Phase 0–3），缺端到端 e2e 验证「SSR 注入 CSS 变量 → 前台真实页面渲染 → CardGrid 消费」链路 + 网格窄容器/长标题视觉防溢出（D-214-4/7）。
+- **根因判断**：前序卡单测覆盖各契约单元（card-size-fetch / CardGrid / VideoCard / service / public-cache / admin-ui），但跨 SSR→浏览器渲染的整链路 + computed `grid-template-columns` 防溢出仅 e2e 可验。
+- **方案**：新建 e2e spec 覆盖 SSR→视觉链路 + 防溢出 + 响应式；跑全量回归门禁。
+- **修改文件**：
+  - `tests/e2e-next/card-size-grid.spec.ts`（新）— 4 测，严格仿 `typography-layout.spec.ts` / `featured-row-sparse.spec.ts` 既证范式（同 `_fixtures` SSR 500 守门 + `page.route` mock `/banners`·`/videos/trending` + 选择器约定）：
+    - ① **SSR 注入**（D-214-6/9）：`<style data-card-size-vars>` 存在 + `:root` computed 6 变量（`--card-cols-standard-desktop`=5 / `--card-gap-standard`=16px / `--card-cols-compact-desktop`=3 / `--card-gap-compact`=12px / `--card-w-scroll`=170px / `--card-gap-scroll`=16px）+ 无倒置变量（`--card-w-standard`/`--card-cols-scroll-desktop` 为空，D-214-10）。
+    - ② **CardGrid 消费 DB 列数**（D-214-7）：桌面视口（1280≥1024）`featured-grid` computed `grid-template-columns` 轨道数=5 + `columnGap`=16px。
+    - ③ **防溢出**（D-214-4 / Codex-R2）：含超长标题首卡，`minmax(0,1fr)` + `> *{min-width:0}` → grid `scrollWidth ≤ clientWidth`（无水平溢出）+ 首卡宽 ≤ 单列宽上界（gridWidth/5+容差）。
+    - ④ **响应式级联**：窄视口（375<640）`--cg-cols` 默认退 2 列、仍不溢出。
+  - 取值稳定性设计：SSR `fetchCardSizeSettings` 取数失败（apps/api 无表 / 不可达）降级 `CARD_SIZE_DEFAULTS`，与 migration 124 seed 同值（standard 5/16）→ 无论后端 DB 状态如何注入值恒为 5/16，断言稳定，仅需 web dev server。
+- **新增依赖**：无
+- **数据库变更**：无（纯测试新增）
+- **门禁（可跑全绿）**：typecheck=0 / lint=0（4 successful，本卡零告警）/ **全量单测 `npx vitest run` 602 文件 8216 测全过**（PHASE COMPLETE 兜底节点；602 = Phase 3 后 601+本卡 e2e spec 被 vitest 默认 config 排除、不计入）/ verify:adr-contracts=0（verify-endpoint-adr 250 路由对齐、**无新 route**；verify-error-message advisory 为既有路由、与本卡无关）。
+- **⚠️ e2e 实跑环境阻塞（关键，须他处补跑）**：worktree 隔离副本**缺 `.env.local`**（gitignore 本地文件、不随 git worktree 复制）→ dev server 命令 `node --env-file=../../.env.local` 解析失败 → apps/api(:4000) / web-next(:3000) / server-next(:3003) dev server **均无法启动** → playwright e2e（还需 DB migration 124 + Redis + globalSetup seed）**在本 worktree 背景会话不可实跑**。`npm run test:e2e`（4 projects 含本 spec）+ admin PUT→公开读新鲜度端到端（D-214-9 R3 mutation 侧）**须在具备 `.env.local`+DB+Redis 的主 checkout / CI 跑 = 合并 main 前的 e2e gate 节点**（CLAUDE.md「合并 main 前必跑 test:e2e」）。mutation 侧契约已由 `card-size-admin.test.ts`（PUT→Redis unlink）+ `card-size-public.test.ts`（miss→setex 重读）单测覆盖，端到端实跑随该 gate。
+- **六问自检**：① 契约/边界：消费既有 SSR 注入 + CardGrid 契约，断言对齐 ADR-214 D-214-4/7/9/10，未扩任何代码契约 ✓；② 复用：spec 仿既证范式（_fixtures + route mock + 选择器）零新基建 ✓；③ 分层：纯测试层 ✓；④ 类型：无 any、TS 严格（trackCount helper + 显式类型）✓；⑤ 测试：本卡即测试收口；全量单测全绿 ✓；⑥ 沉淀：spec 落 e2e-next 标准目录、复用统一 fixture ✓。
+- **注意事项**：① **e2e 实跑非本 worktree 能力范围**——Phase 4 性质 = 测试收口 + 门禁，e2e 实跑是合并 gate 节点（环境依赖），与「写 spec + 跑全量单测」分离；spec 已就绪、在正确环境可直接跑（建议 `PLAYWRIGHT_SERVERS=web npx playwright test --project=web-chromium tests/e2e-next/card-size-grid.spec.ts`）。② **🎉 SEQ-20260622-03 代码全交付**（Phase 0–4 全部代码 + spec）；DB 驱动可配卡片尺寸体系 + 后台编辑 UI + 前台统一 CardGrid/VideoCard 全栈闭环。③ **唯一剩余前置门** = 合并 main 前 `npm run test:e2e` 全量 4 projects + 视觉回归实跑（具完整环境处）；通过后即可合并 + 部署，用户端见统一卡片尺寸 + 运营后台自助调尺寸生效。④ 视觉回归（admin-visual project）须 `PLAYWRIGHT_VISUAL=1` + baseline 入库，按 SEQ 与 test:e2e 同 gate 跑。
