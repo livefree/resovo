@@ -2573,3 +2573,18 @@
 - **数据库变更**：migration 124（新表 `card_size_settings` + seed 3 行 + `admin_audit_log.target_kind` CHECK 17→18）；已 `npm run migrate` 应用至 dev DB（resovo_dev）无错。
 - **门禁**：typecheck=0 / lint=0 / test:changed=0（2 非文档改动；集成测在 integration scope）/ verify:adr-contracts=0 / **migrate 冷启动 124 应用成功** / **集成测 12/12 passed**（card-size-settings-schema：倒置行+范围+枚举+正向控制）。
 - **注意事项**：① 本卡仅扩 DB CHECK，`AuditLogService` TARGET_KINDS/ACTION_TYPES TS 枚举扩展归 CARD-SIZE-SERVICE-ADMIN（DB CHECK ⊇ TS 枚举方向安全，TS 此时不写 card_size）。② 默认值真源 `CARD_SIZE_DEFAULTS`（@resovo/types）+ seed 一致性单测归下一卡 CARD-SIZE-TYPES-QUERIES（D-214-5 防 SQL↔TS 漂移）。③ 倒置行测用 UPDATE 既有行避 UNIQUE 干扰、ROLLBACK 不污染（integration-pg 约定）。④ 下一卡：CARD-SIZE-TYPES-QUERIES（types + queries + seed 一致性单测），建议模型 sonnet。
+
+## [CARD-SIZE-TYPES-QUERIES] Phase 1：`@resovo/types` 卡片尺寸契约 + db/queries + seed 一致性单测（SEQ-20260622-03）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22
+- **执行模型**：claude-opus-4-8（主循环；本卡建议模型 sonnet，用户裁定本 Opus 会话执行——不违规仅偏贵）
+- **子代理**：无（契约镜像 home-section-settings 既有范式 + ADR-214 既定 schema 口径，非新架构决策；设计背书 = 规划期 arch-reviewer ×2 + Codex round-1，已记入 [CARD-SIZE-ADR] / ADR-214）
+- **修改文件**：
+  - `packages/types/src/card-size.types.ts`（新）— `CardSizeClass` 封闭枚举 3 值（standard/compact/scroll）+ `CARD_SIZE_CLASSES` 常量数组 + `CardSizeSettings` 接口（id/sizeClass/desktopColumns/cardWidthPx/gapPx/settings/updatedAt）+ `UpdateCardSizeSettingsInput`（部分更新，queries 消费）+ `CardSizeDefault` + **`CARD_SIZE_DEFAULTS`**（Record<CardSizeClass,{desktopColumns/cardWidthPx/gapPx}>，前端 SSR 降级 + token 兜底真源，D-214-5）。混合单位注释（网格档存列数·scroll 存卡宽，D-214-4）。
+  - `packages/types/src/index.ts`（+1）— `export * from './card-size.types'`（value re-export，含运行时常量 `CARD_SIZE_CLASSES`/`CARD_SIZE_DEFAULTS`，非 `export type *`）。
+  - `apps/api/src/db/queries/card-size-settings.ts`（新，仿 home-section-settings.ts）— `listCardSizeSettings`（全量 3 行）/ `findCardSizeSettings`（按 sizeClass）/ `updateCardSizeSettings`（动态 SET 参数化，settings JSONB 整体替换语义），全 SQL 参数化、`updated_at::TEXT` 投影、`mapRow` snake→camel。
+  - `tests/unit/db/migrations/124_card_size_settings_seed.test.ts`（新）— 读 migration 124 SQL 解析 INSERT seed → 逐档断言 == `CARD_SIZE_DEFAULTS`（档位集合 1 测 + 逐档值 3 测，双向守 SQL↔TS 漂移，D-214-5）。
+- **新增依赖**：无
+- **数据库变更**：无（纯 TS 契约 + 查询 + 单测；表已由 CARD-SIZE-DB migration 124 落地）→ architecture.md 零同步（§5.19 已含 types/queries 契约位登记）。
+- **门禁**：typecheck=0 / lint=0 / test:changed=0（597 文件 / 8167 测全过——`packages/types` 基础包改动按 ADR-180 自动升全量，零回归）/ verify:adr-contracts=0（advisory baseline 提示与本卡无关）/ seed 一致性单测 4/4 passed。
+- **注意事项**：① 偏离登记——额外纳入 `UpdateCardSizeSettingsInput`：`updateCardSizeSettings`（在范围内的 queries 镜像）必须消费其入参类型，属 queries 契约必要组成，非越界。② 严守边界——CardSizeService / admin route / zod / audit ACTION_TYPES 扩展归 CARD-SIZE-SERVICE-ADMIN；公开 route / 缓存归 PUBLIC-CACHE；SSR 注入归 CARD-SIZE-SSR。③ 下一卡：CARD-SIZE-SERVICE-ADMIN（CardSizeService + admin GET/PUT 端点〔ADR-215〕 + audit card_size.update + AuditLogService TS 枚举扩展 + zod 倒置 body 测），建议模型 sonnet。
