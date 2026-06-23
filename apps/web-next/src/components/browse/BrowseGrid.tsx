@@ -3,11 +3,11 @@
 /**
  * BrowseGrid — HANDOFF-15 对齐 docs/frontend_design_spec_20260423.md §12.4
  *
- * 从 URL searchParams 读取 page + 筛选条件，请求 API 后渲染 5 列网格 + 分页控件。
+ * 从 URL searchParams 读取 page + 筛选条件，请求 API 后渲染 2/3/5 响应式网格 + 分页控件。
  *
- * Token 消费（spec §12.4）：
- *   网格列数       → 5
- *   网格 gap       → var(--browse-grid-gap)       20px
+ * Token 消费（spec §12.4 / CARD-SIZING-B 归一）：
+ *   网格列数       → 2/3/5 响应式（grid-cols-2 sm:3 lg:5，与 VideoGrid 一致）
+ *   网格 gap       → var(--page-inline-gap)       16px
  *   分页-网格间距  → var(--browse-pagination-mt)  48px
  *   分页项 gap     → var(--browse-pagination-gap) 8px
  *   分页按钮尺寸   → var(--browse-pagination-btn) 36px
@@ -32,11 +32,8 @@ function BrowseGridSkeleton() {
   return (
     <div
       data-testid="browse-grid-skeleton"
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(5, 1fr)',
-        gap: 'var(--browse-grid-gap)',
-      }}
+      className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5"
+      style={{ gap: 'var(--page-inline-gap)' }}
     >
       {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
         <Skeleton
@@ -122,11 +119,8 @@ export function BrowseGrid({ initialType }: BrowseGridProps) {
     <div>
       <div
         data-testid="browse-grid"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(5, 1fr)',
-          gap: 'var(--browse-grid-gap)',
-        }}
+        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5"
+        style={{ gap: 'var(--page-inline-gap)' }}
       >
         {videos.map((video) => (
           <BrowseCard key={video.id} video={video} />

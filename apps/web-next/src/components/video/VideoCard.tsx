@@ -26,8 +26,8 @@ function VideoCardSkeleton({ className }: { className?: string }) {
       {/* Cover — matches StackedPosterFrame 2:3 aspect-ratio + rounded-lg */}
       <Skeleton shape="rect" className="rounded-lg w-full" style={{ aspectRatio: '2/3' }} />
       <div className="mt-2 space-y-1.5">
-        {/* Title — text-sm line-height ~14px */}
-        <Skeleton shape="text" height={14} delay={300} />
+        {/* Title — 13px line-height 1.4（CARD-SIZING-B 归一） */}
+        <Skeleton shape="text" height={13} delay={300} />
         {/* Subtitle — text-xs, 2/3 width */}
         <Skeleton shape="text" height={12} className="w-2/3" delay={300} />
       </div>
@@ -97,8 +97,8 @@ export function VideoCard({ video, className }: VideoCardProps) {
           className="block group-hover:text-[var(--accent-default)] transition-colors"
         >
           <p
-            className="text-sm font-medium line-clamp-1"
-            style={{ color: 'var(--fg-default)' }}
+            className="line-clamp-2"
+            style={{ color: 'var(--fg-default)', fontSize: '13px', fontWeight: 500, lineHeight: '1.4' }}
           >
             {video.title}
           </p>

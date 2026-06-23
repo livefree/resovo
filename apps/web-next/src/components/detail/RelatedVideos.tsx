@@ -139,7 +139,6 @@ export function RelatedVideos({ video, variant = 'grid' }: RelatedVideosProps) {
           </h2>
           <VideoGrid
             query={query}
-            gridCols="grid-cols-3 sm:grid-cols-4 md:grid-cols-6"
             stagger
             data-testid="related-videos-grid"
           />
@@ -169,10 +168,7 @@ function RelatedVideosSkeleton() {
     >
       <div className="max-w-feature mx-auto px-6 py-8">
         <Skeleton shape="text" width={96} height={20} className="mb-4" />
-        <VideoGrid.Skeleton
-          gridCols="grid-cols-3 sm:grid-cols-4 md:grid-cols-6"
-          testId="related-videos-skeleton"
-        />
+        <VideoGrid.Skeleton testId="related-videos-skeleton" />
       </div>
     </div>
   )

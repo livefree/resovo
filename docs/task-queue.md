@@ -2975,9 +2975,9 @@
 
 ---
 
-## SEQ-20260622-01 — 前台视频卡片尺寸碎片化治理（清理 + 规范统一，中力度）🔄
+## SEQ-20260622-01 — 前台视频卡片尺寸碎片化治理（清理 + 规范统一，中力度）✅
 
-- **状态**：🔄 进行中（**CARD-SIZING-A ✅ 已交付** `cd78e527`+`d68dbbc8`〔补完 landscape token 真源 design-tokens + SearchEmptyState variant 残留〕；**B 口径已冻结**〔见下〕，待实施〔需 Opus arch-reviewer token 方案 PASS〕）｜ **创建时间**：2026-06-22
+- **状态**：✅ **全序列交付**（**A** `cd78e527`+`d68dbbc8`〔补完 landscape token 真源 + SearchEmptyState variant〕 + **B** 规范统一〔arch-reviewer claude-opus-4-8 PASS-WITH-CONCERNS；gap→`--page-inline-gap` 16 复用 / 列数全站 2/3/5 / 标题 13·clamp-2；门禁全绿 + e2e 48 passed〕）｜ **创建时间**：2026-06-22 ｜ **完成**：2026-06-22
 - **来源**：调查报告 `docs/designs/client-video-card-sizing-audit_20260622.md`（前台卡片尺寸三层分离结构 + 7 条碎片化问题清单）。用户裁定**中力度**治理：清理死代码/死配置 + 规范统一（gap token / 响应式列数 / 标题字号）；**不含**高风险的定宽机制重构与 VideoCard/BrowseCard 组件合并。
 - **依赖**：无 BLOCKER；调查报告已落盘。
 - **原子化判据**：中力度合计 8 项（清理 5 + 规范统一 3）> 5 → 拆 **A/B 子卡**；A（纯死代码收敛、零视觉、无需 Opus）与 B（token 结构设计、轻微视觉对齐、强制 Opus arch-reviewer）性质不同 → 强制拆。A→B 串行（A 先清掉 landscape token，B 处理 gap token 更干净）。
@@ -2985,12 +2985,12 @@
 | 卡 | 内容 | 范围项 | 建议模型 | 依赖 | 门禁 |
 |---|---|---|---|---|---|
 | **CARD-SIZING-A**（清理）✅ | 删 `VideoCardWide`（零引用）/ 删 `--shelf-card-w-landscape` token + 注释 / 删 `ShelfRow` `landscape-row` template + `LandscapeTrack`（零调用）/ 删 `VideoGrid` 死 `variant` prop（含 `RelatedVideos` 传值）/ 修 `VideoGrid` scroll `cardWidth` 160px→`--shelf-card-w-portrait`。**零视觉变化**（全为零消费死路径）。**补完**：landscape token 真源在 `design-tokens/src/semantic/layout.ts`（调查报告 §3 漏盘，仅记 globals.css）+ `SearchEmptyState.tsx` variant 残留。 | 5 | sonnet（主循环本会话 opus） | 无 | ✅ typecheck=0/lint=0/test:changed=142 |
-| **CARD-SIZING-B**（规范统一） | 统一 gap token（收敛 `--shelf-gap` 16 / `--browse-grid-gap` 20 / VideoGrid `gap-4 lg:gap-6` 三值）+ 统一响应式列数断点体系（search 2/3/5 与 related 3/4/6 与 browse 固定 5 归一）+ VideoCard/BrowseCard 标题字号/截断归一（14·clamp-1 vs 13·clamp-2）。**轻微视觉对齐**。 | 3 | **opus** | CARD-SIZING-A | **arch-reviewer (claude-opus-*) token 方案 PASS**（CLAUDE.md 强制升 Opus 第 5 条：Token 层字段结构与引用规则）+ typecheck/lint/test:changed + 逐页视觉回归（首页/搜索/详情/分类） |
+| **CARD-SIZING-B**（规范统一）✅ | 统一 gap（**复用 `--page-inline-gap` 16**，arch-reviewer 推翻草拟的新增 `--grid-gap`；删 orphan `--browse-grid-gap`）+ 列数全站 2/3/5（browse 固定5 / related 3/4/6 归一）+ VideoCard 标题 14·clamp-1 → 13·clamp-2 对齐 BrowseCard。**轻微视觉对齐**。 | 3 | **opus** | CARD-SIZING-A | ✅ **arch-reviewer (claude-opus-4-8) PASS-WITH-CONCERNS** + typecheck=0/lint=0/test:changed=42 + e2e 48 passed（逐页：首页/搜索/详情/分类） |
 
 - **B 口径冻结（2026-06-22，用户裁定）**——B 实施的固化输入，arch-reviewer 只裁 token 结构/命名/引用，不再翻案以下取值：
-  - **① gap → 网格统一 16px 固定**：新增 `--grid-gap = 16px` 供 BrowseGrid（20→16）/ VideoGrid（去 `gap-4 lg:gap-6` 响应式 → 固定 16）/ 详情相关共用；shelf 横向轨道保留 `--shelf-gap = 16px`（语义不同：轨道 vs 网格）。VideoGrid scroll 内联 `gap:'16px'` 一并 token 化。**消除 20px 与 16→24 两处漂移。**
+  - **① gap → 网格统一 16px 固定**：~~新增 `--grid-gap`~~ **实施改为复用既有 `--page-inline-gap`=16px**（arch-reviewer 裁决 (a)：真源单一性，避免第三个 16px 同义 token）供 BrowseGrid（20→16）/ VideoGrid（去 `gap-4 lg:gap-6` 响应式 → 固定 16）/ 详情相关共用；shelf 横向轨道保留 `--shelf-gap = 16px`（语义不同：轨道 vs 网格）。VideoGrid scroll 内联 `gap:'16px'` 一并 token 化。**消除 20px 与 16→24 两处漂移**；删 orphan `--browse-grid-gap`。
   - **② 列数 → 全站单一 2/3/5**：`grid-cols-2 sm:grid-cols-3 lg:grid-cols-5` 统一到 search（不变）/ browse（固定5→2/3/5，修移动端拥挤）/ related（3/4/6→2/3/5，详情相关卡变大）。
   - **③ 标题 → 统一 13px / line-clamp-2 / lineHeight 1.4 / weight 500**：VideoCard（14·clamp-1 → 13·clamp-2）对齐 BrowseCard（不变）。年份副标题维持 12px。
   - **视觉影响**（轻微对齐，逐页回归覆盖）：分类页 gap 收窄 + 移动端列数改善；搜索/详情大屏 gap 24→16；详情相关卡放大（6→5 列）；首页主力 VideoCard 标题单行→双行（卡高微增）。
 - **范围红线**：颜色 N/A（仅尺寸/间距 token，前台 `globals.css` 体系）；不新增 admin route；不动定宽机制重构与组件合并（高力度，本序列不含）；B 的 token 结构与断点体系为裁决点，**必须先过 arch-reviewer**（取值已冻结，仅裁结构）。
-- **Follow-up 登记**：① `VideoGrid` `layout="scroll"` 路径零消费方（含 `scrollContainerStyle` + cardWidth），A 卡仅 token 化未删；建议后续小卡评估整段删除（API 收窄需确认）。② 高力度选项（定宽机制 5→1 共享 CardGrid + VideoCard/BrowseCard 合并）未采纳，如需另起序列。
+- **Follow-up 登记**：① `VideoGrid` `layout="scroll"` 路径零消费方（含 `scrollContainerStyle` + cardWidth），A 卡仅 token 化未删；建议后续小卡评估整段删除（API 收窄需确认）。② 高力度选项（定宽机制 5→1 共享 CardGrid + VideoCard/BrowseCard 合并）未采纳，如需另起序列。③ **（B 衍生）token 真源回填卡**：`--browse-pagination-*` / `--search-*` / `--detail-*` 别名仅在 `globals.css` 手写镜像区、未进 design-tokens 真源（「镜像超集」遗留债，arch-reviewer 裁定 B 不收口）；建议独立卡把这批别名补回 `layout.ts` 真源。④ **（B 衍生）标题排版提取**：VideoCard / BrowseCard / RelatedVideos-SidebarList 三处 inline `13px/500/1.4/clamp-2` 重复（触及「3 处提取」信号），B 按口径只统一值未提取共享；如需提取 sonnet 小卡。⑤ **（运维）** e2e 期间清了 `apps/web-next/.next`（缓存损坏）+ 用户 :3000 dev server 已终止 → 下次 `npm run dev` 全新重建。

@@ -2499,3 +2499,23 @@
 - **补完（Codex stop-gate 续）**：原 commit `cd78e527` 两处漏网，`d68dbbc8` 补齐——①landscape 死 token 真源在 `design-tokens/src/semantic/layout.ts`（调查报告 §3 仅盘点 `globals.css`，漏 design-tokens 真源链 → `build-css` 生成 `tokens.css` → 手工镜像 globals.css；只删 globals.css 脆，重生成会回灌），删真源 + 重新生成 + 同步三处（`dist/` gitignore 随 build 重生）；②`SearchEmptyState.tsx:32` 残留 `variant="portrait"`（早于 A 引入，致原 commit 声称 typecheck 8/8 实际不成立）。
 - **门禁**：typecheck=0 / lint=0 / test:changed=142（含 `design-tokens/alias-coverage` 23 测，确认删 token 未破坏别名覆盖校验）。**零视觉变化**（landscape-row/variant/scroll/landscape token 均零消费，静态可证）。
 - **注意事项**：① `VideoGrid` `layout="scroll"` 路径仍零消费方（本卡仅 token 化未删整段，follow-up 登记 task-queue）。② CARD-SIZING-B（gap/列数/标题归一，口径已冻结于 task-queue）实施前须过 arch-reviewer token 结构方案 PASS。③ 调查报告 §3「token 层」盘点不完整（漏 design-tokens 真源），后续若据此再治理需以 `packages/design-tokens/src/semantic/` 为真源。
+
+## [CARD-SIZING-B] 前台视频卡片尺寸规范统一（gap / 列数 / 标题归一，SEQ-20260622-01）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22 17:15
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8) — token 结构方案，**PASS-WITH-CONCERNS**（CLAUDE.md 强制升 Opus 第 5 条：Token 层结构与引用规则）
+- **来源**：调查报告问题清单 1/2/3/7；口径用户冻结（commit `e0cd28fc`）。CARD-SIZING-A ✅（`cd78e527`+`d68dbbc8`）。
+- **arch-reviewer 关键裁决（采纳，覆盖 task-queue 草拟）**：(a) **复用既有 `--page-inline-gap`=16px**（真源 layout.ts 已有），**不新增 `--grid-gap`**——真源单一性，避免第三个 16px 同义 token；连带 (e) **零真源改动、无需跑 build-css**。(b) 删 orphan `--browse-grid-gap`，其余 browse/search 别名「镜像超集」遗留债本卡不收口（独立回填卡）。(c) 不抽列数共享常量，RelatedVideos 删 override 落回 VideoGrid 默认、BrowseGrid inline grid→Tailwind 类。(d) 标题不 token 化，VideoCard inline 对齐 BrowseCard 基准。
+- **修改文件**：
+  - `apps/web-next/src/components/video/VideoGrid.tsx` — 去 `gap-4 lg:gap-6`（grid 3 处）→ 模块常量 `GRID_GAP_STYLE` inline `var(--page-inline-gap)`；scroll 内联 `gap:'16px'` → 同 token（grid/scroll 表达统一）。
+  - `apps/web-next/src/components/browse/BrowseGrid.tsx` — inline `repeat(5,1fr)` → Tailwind `grid-cols-2 sm:3 lg:5`（skeleton + grid 两处）；gap → `var(--page-inline-gap)`；docstring 同步。
+  - `apps/web-next/src/components/detail/RelatedVideos.tsx` — 删 `gridCols="...3/4/6"` override（grid + Skeleton 两处）→ 落回 VideoGrid 默认 2/3/5。
+  - `apps/web-next/src/components/video/VideoCard.tsx` — 标题 `text-sm line-clamp-1` → `line-clamp-2` + inline `fontSize:13px/fontWeight:500/lineHeight:1.4`（对齐 BrowseCard）；VideoCardSkeleton title height 14→13 同步。
+  - `apps/web-next/src/app/globals.css` — 删 orphan `--browse-grid-gap: 20px`。
+  - `tests/e2e-next/typography-layout.spec.ts` + `tests/e2e-next/card-dual-exit.spec.ts` — VideoCard 标题 locator `p.line-clamp-1` → `p.line-clamp-2`（共 3 处，Codex stop-gate 第一轮捕获 card-dual-exit 2 处）+ gap 注释同步。
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：typecheck=0 / lint=0 / test:changed=42（VideoCard/BrowseGrid/ShelfRow/Skeleton/HomeBrandFiltering）；**e2e=48 passed / 0 失败 / 1 flaky（browse /series 冷构建首跑超时，retry 通过）/ 3 skipped**（typography-layout VideoGrid gap≥16 + title vs tag-layer / card-dual-exit / search / browse / detail / homepage / smoke，PLAYWRIGHT_SERVERS=web）。
+- **e2e 环境插曲（与改动无关）**：首两轮 e2e 全盘失败（含 smoke/主题/banner），诊断为 `apps/web-next/.next` 构建缓存损坏（webpack `invalid block type` + 503 次 SSR `JSON.parse` 500，连不取数据的 next-placeholder 静态页都 500）；`rm -rf apps/web-next/.next` 清缓存后全绿。视觉回归对改动有效。
+- **注意事项**：① 本卡复用 `--page-inline-gap`，design-tokens 真源**未改**（区别于草拟的新增 token）。② browse/search/detail 其余别名「镜像超集」遗留债未收口 → 独立「token 真源回填」卡。③ 高力度选项（定宽机制 5→1 CardGrid + VideoCard/BrowseCard 合并）+ VideoGrid scroll 死路径删除仍在 task-queue follow-up。④ 标题排版 3 处 inline 重复触及提取信号，本卡按口径只统一值未提取（arch-reviewer 非阻塞 CONCERN）。⑤ e2e 期间清了 web-next `.next` 缓存且用户 :3000 dev server 已被用户终止——下次 `npm run dev` 会全新重建（顺带修复原损坏）。

@@ -83,7 +83,7 @@ test.describe('VideoCard 双出口 + Tag 不溢出', () => {
     const card = page.locator('[data-testid="video-card"]').first()
     const floatingBtn = card.locator('span[aria-hidden="true"] > span').first()
     const poster = card.locator('div.group\\/poster').first()
-    const titleText = card.locator('p.line-clamp-1').first()
+    const titleText = card.locator('p.line-clamp-2').first()
 
     // 悬浮文字区：按钮应保持 opacity=0
     await titleText.hover()
@@ -128,7 +128,7 @@ test.describe('VideoCard 双出口 + Tag 不溢出', () => {
     const tagBox = await cardWithTag
       .locator('[data-testid="tag-layer-top-left"]')
       .boundingBox()
-    const titleBox = await cardWithTag.locator('p.line-clamp-1').first().boundingBox()
+    const titleBox = await cardWithTag.locator('p.line-clamp-2').first().boundingBox()
 
     expect(tagBox).not.toBeNull()
     expect(titleBox).not.toBeNull()
