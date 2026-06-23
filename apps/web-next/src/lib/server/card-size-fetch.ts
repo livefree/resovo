@@ -10,10 +10,11 @@
  * 失败降级（D-214-6）：取数异常 / 非 2xx / 空 data → CARD_SIZE_DEFAULTS 兜底
  *   （**非空 catch + 结构化 warn**，CLAUDE.md 禁空 catch），首屏永远有可渲染变量、不裸奔。
  *
- * CSS 变量契约（按档位单位派生，可扩展）：
- *   - 网格档（standard/compact，desktopColumns 非空）：`--card-cols-{class}-desktop` + `--card-gap-{class}`
- *   - scroll 档（cardWidthPx 非空）：`--card-w-{class}`（即 `--card-w-scroll`）+ `--card-gap-{class}`
- * 下游 CardGrid（CARD-SIZE-CARDGRID）/ 横滚行（CARD-SIZE-SCROLL）消费这些变量。
+ * CSS 变量契约（Amendment A1 单位统一为卡宽，按字段非空派生）：
+ *   - cardWidthPx 非空（standard size-driven 卡宽 / scroll 横滚定宽）：`--card-w-{class}`（--card-w-standard / --card-w-scroll）
+ *   - desktopColumns 非空（可选最大列数护栏，本轮全 null 故不注入）：`--card-cols-{class}-desktop`
+ *   - gap：`--card-gap-{class}`
+ * 下游 CardGrid（standard ≥1024 auto-fill 消费 --card-w-standard）/ 横滚行消费 --card-w-scroll。
  */
 
 import {

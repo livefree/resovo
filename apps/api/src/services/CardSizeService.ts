@@ -2,12 +2,12 @@
  * CardSizeService.ts — 前台卡片尺寸体系后台读写 Service（ADR-215 D-215-1/2，仿 HomeCurationService）
  *
  * 端点真源：ADR-215 端点契约表
- *   - GET /admin/card-sizes          → listCardSizes（3 档全量，枚举序）
+ *   - GET /admin/card-sizes          → listCardSizes（2 档全量，枚举序）
  *   - PUT /admin/card-sizes/:sizeClass → updateCardSize（全替换该档可编辑投影 + audit card_size.update）
  *
- * 校验双层（D-214-10）：DB CHECK（migration 124）+ 本文件 zod min/max。
- * 档位×单位绑定 zod 守卫（Codex-R1 HIGH）：按 sizeClass 派发 body schema，
- *   .strict() 令倒置 body（grid 档带 cardWidthPx / scroll 档带 desktopColumns）的 unknown key → 422。
+ * 校验双层（D-214-10）：DB CHECK（migration 124+125）+ 本文件 zod min/max。
+ * 统一 body schema（Amendment A1 D-214-A1-1/5）：单位统一为卡宽 → 全档同构 { cardWidthPx [120,400], gapPx }，
+ *   .strict() 令未知字段（含本轮不暴露编辑的 desktopColumns 护栏）→ 422（严格 body 守卫）。
  */
 
 import { z } from 'zod'
@@ -41,31 +41,21 @@ export const CardSizeClassParamSchema = z.enum(
 const GapSchema = z.number().int().min(0).max(64)
 
 /**
- * 网格档（standard/compact）PUT body：可编辑投影 = { desktopColumns, gapPx }（D-215-2）。
- * .strict() → 带 cardWidthPx（scroll 档单位）= unknown key → 422（倒置 body 守卫，Codex-R1）。
+ * PUT body：统一可编辑投影 = { cardWidthPx, gapPx }（D-215-2 + Amendment A1 D-214-A1-1/5）。
+ * 单位统一为卡宽后 standard（size-driven）/ scroll（横滚）body 同构；范围 [120,400] 镜像 migration 125
+ * size_unit_check + DB CHECK 双层（D-214-10）。.strict() → 未知字段（含本轮不暴露编辑的 desktopColumns
+ * 列数护栏，D-214-A1-4）→ 422。
  */
-export const GridCardSizeBodySchema = z.object({
-  desktopColumns: z.number().int().min(2).max(8),
+export const CardSizeBodySchema = z.object({
+  cardWidthPx: z.number().int().min(120).max(400),
   gapPx: GapSchema,
 }).strict()
 
-/**
- * scroll 档 PUT body：可编辑投影 = { cardWidthPx, gapPx }（D-215-2）。
- * .strict() → 带 desktopColumns（网格档单位）= unknown key → 422（倒置 body 守卫）。
- */
-export const ScrollCardSizeBodySchema = z.object({
-  cardWidthPx: z.number().int().min(120).max(280),
-  gapPx: GapSchema,
-}).strict()
+export type CardSizeBody = z.infer<typeof CardSizeBodySchema>
 
-export type GridCardSizeBody = z.infer<typeof GridCardSizeBodySchema>
-export type ScrollCardSizeBody = z.infer<typeof ScrollCardSizeBodySchema>
-
-/** 据 sizeClass 取对应 body schema（档位×单位绑定 zod 派发，R1-HIGH 倒置 body 守卫） */
-export function bodySchemaFor(
-  sizeClass: CardSizeClass,
-): typeof GridCardSizeBodySchema | typeof ScrollCardSizeBodySchema {
-  return sizeClass === 'scroll' ? ScrollCardSizeBodySchema : GridCardSizeBodySchema
+/** 据 sizeClass 取 body schema（A1 单位统一为卡宽 → 全档同构；保留派发签名兼容 route/未来扩展） */
+export function bodySchemaFor(_sizeClass: CardSizeClass): typeof CardSizeBodySchema {
+  return CardSizeBodySchema
 }
 
 // ── Service ───────────────────────────────────────────────────────────────────
@@ -80,7 +70,7 @@ export class CardSizeService {
     this.auditSvc = new AuditLogService(db)
   }
 
-  /** admin GET：3 档全量，按 CardSizeClass 枚举序（DB 返字典序 → Service 重排，仿 listSectionSummaries）。直读 DB 不走缓存——后台要实时。 */
+  /** admin GET：2 档全量，按 CardSizeClass 枚举序（DB 返字典序 → Service 重排，仿 listSectionSummaries）。直读 DB 不走缓存——后台要实时。 */
   async listCardSizes(): Promise<CardSizeSettings[]> {
     const rows = await listCardSizeSettings(this.db)
     const bySize = new Map(rows.map((r) => [r.sizeClass, r]))
@@ -120,7 +110,7 @@ export class CardSizeService {
 
   /**
    * PUT：全替换该档可编辑投影 + audit `card_size.update`（before/after 全行快照）。
-   * @returns null = card_size 行缺失（seed 3 行恒存在；缺行 = 迁移漂移兜底 404）
+   * @returns null = card_size 行缺失（seed 2 档恒存在；缺行 = 迁移漂移兜底 404）
    */
   async updateCardSize(
     sizeClass: CardSizeClass,

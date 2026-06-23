@@ -60,15 +60,15 @@ _（**SEQ-20260610-02 source-health v2 落地 🔄 15/17 — Phase 1 ✅ + Phase
 
 ---
 
-### 🔄 CARD-SIZE-A1-SCHEMA — migration 125 schema 放宽（6 步）+ types 单位翻转 + 一致性测重写（SEQ-20260623-01 Phase 1A）
+### 🔄 CARD-SIZE-A1-SCROLLROW — 提取共享 ScrollRow 横滚布局原语（SEQ-20260623-01 Phase 2，强制 Opus）
 
-- **状态**：🔄 进行中 ｜ **创建/开始**：2026-06-23 ｜ **执行模型**：claude-opus-4-8（主循环；卡建议 sonnet）｜ **子代理**：无（按 ADR-214 Amendment A1 D-214-A1-3/4/5 实施，schema 翻转非新架构决策）。
-- **依据**：ADR-214 **Amendment A1 Accepted**（D-214-A1-3 compact 废弃 / A1-4 desktop_columns NULLABLE / A1-5 migration 125 6 步 + schema 放宽）。Codex round-1 R2/R3/R5 已吸收。
-- **问题理解**：standard 从「存列数」翻转为「存卡宽 px」+ 废弃零消费 compact 档 → 须改 DB schema（migration 125）+ `@resovo/types` 契约 + 一致性测，且 standard 现有行 `card_width_px=NULL`，migration 须严格顺序回填防 SET NOT NULL 失败。
-- **方案**：① **migration 125 严格 6 步**（Codex-R3）：(1) DROP `card_size_settings_unit_by_class_check` IF EXISTS →(2) UPDATE standard `card_width_px=200, desktop_columns=NULL` 回填 →(3) DELETE compact 行 →(4) DROP+ADD `size_class` CHECK 删 compact（`IN ('standard','scroll')`，Codex-R2）→(5) DROP 内联匿名 width CHECK（查实际名 `card_size_settings_card_width_px_check`）+ ADD `card_size_settings_size_unit_check`（width 全档非空 [120,400] + columns NULL OR [2,8]）→(6) `ALTER COLUMN card_width_px SET NOT NULL`；down 注释 + IF EXISTS 幂等。② `@resovo/types`：CardSizeClass 删 'compact' / CARD_SIZE_DEFAULTS standard `{desktopColumns:null,cardWidthPx:200,gapPx:16}` + 删 compact（注释/混合单位说明随改）。③ `docs/architecture.md` §5.19 同步。④ **一致性测重写**（Codex-R5）：seed==CARD_SIZE_DEFAULTS / `card-size-settings-schema.test.ts` 倒置行测随 CHECK 重写（倒置语义消解）。
-- **涉及文件**：`apps/api/src/db/migrations/125_*.sql`（新）、`packages/types/src/card-size.types.ts`、`docs/architecture.md`、`tests/integration/api/card-size-settings-schema.test.ts`、`apps/api/src/db/queries/card-size-settings.ts` 的 seed 一致性测、可能 `apps/api/src/db/queries/card-size-settings.ts`（若引用 compact）。
-- **门禁**：seed 一致性测 + 倒置行测（vitest 可跑）/ typecheck/lint。**migrate 冷启动验证**（实跑 migrate 连 DB）须主 checkout/CI 跑——worktree 缺 `.env.local`，登记他处（同 CARD-SIZE-E2E 环境约束）。**关键路径**：DB schema 变更，须同步 architecture.md。
-- **备注**：本卡为 schema/types 基础层；#1B（admin zod body）依赖之。types 基础包改动按 ADR-180 test:changed 自动升全量。
+- **状态**：🔄 进行中 ｜ **创建/开始**：2026-06-23 ｜ **执行模型**：claude-opus-4-8（主循环，新共享组件契约强制 Opus 级）｜ **子代理**：无（按 ADR-214 Amendment A1 D-214-A1-6 实施）。
+- **依据**：ADR-214 Amendment A1 D-214-A1-6（详情/播放页相关视频横滚化 + 共享 ScrollRow 原语，平级 CardGrid）。
+- **问题理解**：详情/播放页相关视频改一行横滚（#5/#6 消费），需共享横滚布局原语；首页三横滚行（Shelf/TopTenRow/DailyAnimeRow）各写各的 flex+overflow-x+scroll-snap 骨架（重复，触「3 处提取」信号）。本卡建组件，首页迁移列可选后续 #8。
+- **方案**：新建 `apps/web-next/src/components/shared/scroll-row/ScrollRow.tsx`（横滚布局原语：flex + overflow-x-auto + scroll-snap，消费 `--card-w-scroll`/`--card-gap-scroll`；children 同构卡片〔VideoCard〕，封闭契约）+ 必要时 globals.css `.scroll-row` 类 + ScrollRow 单测（class/消费变量/children 透传/data-testid）。
+- **涉及文件**：`apps/web-next/src/components/shared/scroll-row/ScrollRow.tsx`（新）、可能 `apps/web-next/src/app/globals.css`（横滚类）、`tests/unit/web-next/scroll-row.test.tsx`（新）。
+- **门禁**：typecheck/lint/test:changed + ScrollRow 单测。**关键路径**：新共享组件契约。
+- **备注**：新共享组件契约 commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer（或 opus 主循环自证）。本卡仅建组件，详情/播放消费在 #5/#6；首页三行迁移 ScrollRow 是可选后续 #8（不进本轮关键路径，避免动首页回归）。
 
 ---
 

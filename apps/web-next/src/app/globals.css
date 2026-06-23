@@ -620,14 +620,18 @@
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
- * CardGrid（CARD-SIZE-CARDGRID / ADR-214 D-214-4/7/10）— DB 驱动桌面列数 + 弹性列防溢出
+ * CardGrid（CARD-SIZE-CARDGRID / ADR-214 D-214-7/10 + Amendment A1 D-214-A1-1/2/3）
+ *   — standard 网格 size-driven（运营设卡宽、列数由容器宽派生）
  *
- * 列数级联（D-214-10 既有 2/3 列契约）：mobile=2 / ≥640px=3 / ≥1024px=DB 注入 per-class 值。
- * `--cg-cols` = 组件私有派生计数（与 SSR 全局真源 `--card-cols-{class}-desktop` 命名拉开）；
- *   桌面 var 缺失（CardGrid 用于非 [locale] 注入子树）→ `var(--cg-cols, 2)` 兜底退 2 列、
- *   不整条 grid 失效坍塌。`2/3` 为 D-214-10 移动/平板布局基线常量，非 CARD_SIZE_DEFAULTS 配置值（守 D-214-5）。
- * `minmax(0,1fr)` + `> * { min-width:0 }`：1fr 轨道 auto 最小值会被海报固有宽/长标题 min-content
- *   撑破溢出 → 强制收缩下限（D-214-4 / Codex-R2）。真实生效由 CARD-SIZE-E2E 窄容器+长标题视觉回归锁。
+ * standard 为唯一网格档（compact 经 Amendment A1 D-214-A1-3 废弃删除）。响应式：
+ *   - mobile=2 / ≥640px=3 列：计数级联（`--cg-cols` + 基础 `.card-grid` 模板，D-214-10 既有 2/3 契约）。
+ *   - ≥1024px：size-driven `auto-fill`（卡宽恒定最小 `--card-w-standard`、列数由容器宽派生，D-214-A1-1）。
+ *     仅桌面 size-driven——窄屏 `auto-fill` 会塌 1 列、破移动 2 列契约（D-214-A1-2）。
+ * `--cg-cols` = 组件私有派生计数（移动/平板用）；缺失 → `var(--cg-cols, 2)` 兜底退 2 列不坍塌。
+ * `minmax(min(--card-w-standard,200px),1fr)` + `> * { min-width:0 }`：
+ *   `min(W,100%)` 防超窄容器单列溢出 + 变量缺失兜底 200px（不塌 1 列）；
+ *   `min-width:0` 防 1fr 轨道被海报固有宽/长标题 min-content 撑破（D-214-4 / Codex-R2）。
+ *   真实生效由 CARD-SIZE-A1-E2E 窄容器+长标题视觉回归锁。
  * ─────────────────────────────────────────────────────────────────────────── */
 .card-grid {
   display: grid;
@@ -640,22 +644,15 @@
   --cg-cols: 2;
   gap: var(--card-gap-standard);
 }
-.card-grid--compact {
-  --cg-cols: 2;
-  gap: var(--card-gap-compact);
-}
 @media (min-width: 640px) {
-  .card-grid--standard,
-  .card-grid--compact {
+  .card-grid--standard {
     --cg-cols: 3;
   }
 }
 @media (min-width: 1024px) {
+  /* size-driven 覆盖基础计数模板：卡宽恒定（最小），列数由容器宽派生（Amendment A1 D-214-A1-1/2） */
   .card-grid--standard {
-    --cg-cols: var(--card-cols-standard-desktop);
-  }
-  .card-grid--compact {
-    --cg-cols: var(--card-cols-compact-desktop);
+    grid-template-columns: repeat(auto-fill, minmax(min(var(--card-w-standard, 200px), 100%), 1fr));
   }
 }
 

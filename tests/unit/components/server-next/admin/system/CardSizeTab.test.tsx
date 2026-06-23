@@ -1,13 +1,15 @@
 /**
- * CardSizeTab.test.tsx — 「前台展示」卡片尺寸 Tab 单元测试（SEQ-20260622-03 Phase 3 / ADR-214/215）
+ * CardSizeTab.test.tsx — 「前台展示」卡片尺寸 Tab 单元测试（ADR-214/215 + Amendment A1 / SEQ-20260623-01）
  *
- * 覆盖：
+ * 覆盖（Amendment A1：2 档、单位统一为卡宽，standard size-driven）：
  *   1. 渲染不崩溃 + testid
- *   2. 三档卡渲染 + 字段初值注入（standard 列数 5 / scroll 卡宽 170）
- *   3. 修改标准列数 → dirty + save 调 updateCardSize（网格档 body：desktopColumns + gapPx）
- *   4. 越界（列数 10 > 8）→ save 禁用 + error 文案，不调 updateCardSize
- *   5. scroll 档渲染卡宽字段（aria-label「卡片宽度」、非列数）
+ *   2. 2 档卡渲染 + 字段初值注入（standard 卡宽 200 / scroll 卡宽 170）
+ *   3. 修改标准卡宽 → dirty + save 调 updateCardSize（统一 body：cardWidthPx + gapPx）
+ *   4. 越界（卡宽 401 > 400）→ save 禁用 + error 文案「范围 120–400」，不调 updateCardSize
+ *   5. standard 档渲染卡宽字段（aria-label「卡片宽度」、非列数）
  *   6. 加载失败 ErrorState
+ *   7. standard 实时预览：size-driven auto-fill grid-template-columns 反映 draft 卡宽
+ *   8. scroll 实时预览：横滚 + 占位卡宽反映 draft
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -53,9 +55,9 @@ vi.mock('../../../../../../apps/server-next/src/lib/api-client', () => {
 
 import { CardSizeTab } from '../../../../../../apps/server-next/src/app/admin/settings/_tabs/CardSizeTab'
 
+// Amendment A1：2 档、单位统一为卡宽（standard size-driven / scroll 横滚）
 const ROWS = [
-  { id: 'id-standard', sizeClass: 'standard', desktopColumns: 5, cardWidthPx: null, gapPx: 16, settings: {}, updatedAt: '2026-06-23T00:00:00Z' },
-  { id: 'id-compact', sizeClass: 'compact', desktopColumns: 3, cardWidthPx: null, gapPx: 12, settings: {}, updatedAt: '2026-06-23T00:00:00Z' },
+  { id: 'id-standard', sizeClass: 'standard', desktopColumns: null, cardWidthPx: 200, gapPx: 16, settings: {}, updatedAt: '2026-06-23T00:00:00Z' },
   { id: 'id-scroll', sizeClass: 'scroll', desktopColumns: null, cardWidthPx: 170, gapPx: 16, settings: {}, updatedAt: '2026-06-23T00:00:00Z' },
 ]
 
@@ -76,60 +78,60 @@ describe('CardSizeTab', () => {
     await waitFor(() => expect(screen.getByTestId('card-size-tab')).not.toBeNull())
   })
 
-  it('2. 三档卡渲染 + 字段初值注入', async () => {
+  it('2. 2 档卡渲染 + 字段初值注入（卡宽）', async () => {
     listCardSizesMock.mockResolvedValueOnce(ROWS)
     const { container } = render(<CardSizeTab />)
     await waitFor(() => {
       expect(screen.getByTestId('card-size-card-standard')).not.toBeNull()
-      expect(screen.getByTestId('card-size-card-compact')).not.toBeNull()
       expect(screen.getByTestId('card-size-card-scroll')).not.toBeNull()
     })
-    expect(inputOf(container, 'card-size-standard-size')?.value).toBe('5')
+    expect(screen.queryByTestId('card-size-card-compact')).toBeNull()
+    expect(inputOf(container, 'card-size-standard-size')?.value).toBe('200')
     expect(inputOf(container, 'card-size-standard-gap')?.value).toBe('16')
     expect(inputOf(container, 'card-size-scroll-size')?.value).toBe('170')
   })
 
-  it('3. 修改标准列数 → dirty + save 调 updateCardSize（网格档 body）', async () => {
+  it('3. 修改标准卡宽 → dirty + save 调 updateCardSize（统一 cardWidthPx body）', async () => {
     listCardSizesMock.mockResolvedValueOnce(ROWS)
-    updateCardSizeMock.mockResolvedValueOnce({ ...ROWS[0], desktopColumns: 6 })
+    updateCardSizeMock.mockResolvedValueOnce({ ...ROWS[0], cardWidthPx: 220 })
     const { container } = render(<CardSizeTab />)
     await waitFor(() => expect(screen.getByTestId('card-size-card-standard')).not.toBeNull())
 
     const sizeInput = inputOf(container, 'card-size-standard-size')!
-    fireEvent.change(sizeInput, { target: { value: '6' } })
+    fireEvent.change(sizeInput, { target: { value: '220' } })
     await waitFor(() =>
       expect(screen.getByTestId('card-size-standard-dirty').textContent).toContain('有未保存的修改'),
     )
 
     fireEvent.click(screen.getByTestId('card-size-standard-save'))
     await waitFor(() =>
-      expect(updateCardSizeMock).toHaveBeenCalledWith('standard', { desktopColumns: 6, gapPx: 16 }),
+      expect(updateCardSizeMock).toHaveBeenCalledWith('standard', { cardWidthPx: 220, gapPx: 16 }),
     )
   })
 
-  it('4. 越界列数（10 > 8）→ save 禁用 + error 文案，不调 updateCardSize', async () => {
+  it('4. 越界卡宽（401 > 400）→ save 禁用 + error 文案，不调 updateCardSize', async () => {
     listCardSizesMock.mockResolvedValueOnce(ROWS)
     const { container } = render(<CardSizeTab />)
     await waitFor(() => expect(screen.getByTestId('card-size-card-standard')).not.toBeNull())
 
     const sizeInput = inputOf(container, 'card-size-standard-size')!
-    fireEvent.change(sizeInput, { target: { value: '10' } })
+    fireEvent.change(sizeInput, { target: { value: '401' } })
 
     const saveBtn = screen.getByTestId('card-size-standard-save') as HTMLButtonElement
     await waitFor(() => expect(saveBtn.disabled).toBe(true))
-    expect(screen.getByText('范围 2–8')).not.toBeNull()
+    expect(screen.getByText('范围 120–400')).not.toBeNull()
 
     fireEvent.click(saveBtn)
     expect(updateCardSizeMock).not.toHaveBeenCalled()
   })
 
-  it('5. scroll 档渲染卡宽字段（非列数）', async () => {
+  it('5. standard 档渲染卡宽字段（aria-label「卡片宽度」、非列数）', async () => {
     listCardSizesMock.mockResolvedValueOnce(ROWS)
     const { container } = render(<CardSizeTab />)
-    await waitFor(() => expect(screen.getByTestId('card-size-card-scroll')).not.toBeNull())
-    const scrollSize = inputOf(container, 'card-size-scroll-size')!
-    expect(scrollSize.getAttribute('aria-label')).toBe('卡片宽度')
-    expect(scrollSize.value).toBe('170')
+    await waitFor(() => expect(screen.getByTestId('card-size-card-standard')).not.toBeNull())
+    const standardSize = inputOf(container, 'card-size-standard-size')!
+    expect(standardSize.getAttribute('aria-label')).toBe('卡片宽度')
+    expect(standardSize.value).toBe('200')
   })
 
   it('6. 加载失败 ErrorState', async () => {
@@ -139,20 +141,21 @@ describe('CardSizeTab', () => {
     expect(screen.queryByTestId('card-size-card-standard')).toBeNull()
   })
 
-  it('7. 标准档实时预览：grid-template-columns 反映 draft 列数', async () => {
+  it('7. 标准档实时预览：size-driven auto-fill grid-template-columns 反映 draft 卡宽', async () => {
     listCardSizesMock.mockResolvedValueOnce(ROWS)
     const { container } = render(<CardSizeTab />)
     await waitFor(() => expect(screen.getByTestId('card-size-standard-preview-track')).not.toBeNull())
 
     const track = screen.getByTestId('card-size-standard-preview-track')
-    // 初值 5 列
-    expect(track.style.gridTemplateColumns).toContain('repeat(5,')
+    // 初值卡宽 200 → auto-fill minmax(min(200px,...))
+    expect(track.style.gridTemplateColumns).toContain('auto-fill')
+    expect(track.style.gridTemplateColumns).toContain('200px')
     expect(track.style.gap).toBe('16px')
 
-    // 改列数 5 → 6，预览实时更新
-    fireEvent.change(inputOf(container, 'card-size-standard-size')!, { target: { value: '6' } })
+    // 改卡宽 200 → 220，预览实时更新
+    fireEvent.change(inputOf(container, 'card-size-standard-size')!, { target: { value: '220' } })
     await waitFor(() =>
-      expect(screen.getByTestId('card-size-standard-preview-track').style.gridTemplateColumns).toContain('repeat(6,'),
+      expect(screen.getByTestId('card-size-standard-preview-track').style.gridTemplateColumns).toContain('220px'),
     )
   })
 
