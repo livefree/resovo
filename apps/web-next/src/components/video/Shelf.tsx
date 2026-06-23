@@ -2,17 +2,16 @@
 
 /**
  * ShelfRow — HANDOFF-14 对齐 docs/frontend_design_spec_20260423.md §11
+ *   （CARD-SIZE-FEATURED-NORMALIZE / ADR-214 D-214-8：top10-row / featured-grid 死模板已删，仅存 poster-row）
  *
- * 3 种 template：
- *   poster-row     — 横向滚动，portrait 卡 170px，2:3 比例
- *   top10-row      — 横向滚动，portrait 卡 170px + 排名数字叠层
- *   featured-grid  — 5 列网格，portrait 卡
+ * template：
+ *   poster-row     — 横向滚动，portrait 卡 var(--card-w-scroll) 170px，2:3 比例
+ *   （注：首页 TOP10 用独立 TopTenRow 组件、精选用 FeaturedRow→CardGrid standard，非本组件模板）
  *
  * Token 消费：
- *   横滚 gap       → var(--card-gap-scroll)        16px（CARD-SIZE-SCROLL：DB 注入；featured-grid 网格仍 var(--shelf-gap)）
+ *   横滚 gap       → var(--card-gap-scroll)        16px（CARD-SIZE-SCROLL：DB 注入）
  *   bottom padding → var(--shelf-bottom-padding)   8px
- *   portrait 宽    → var(--card-w-scroll)  170px
- *   top10 宽       → var(--card-w-scroll)     170px
+ *   portrait 宽    → var(--card-w-scroll)          170px
  *   empty opacity  → var(--shelf-empty-opacity)    0.32
  *
  * 不变量：
@@ -35,7 +34,9 @@ const MIN_SLOTS = 4  // --shelf-empty-min-slots
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type ShelfTemplate = 'featured-grid' | 'top10-row' | 'poster-row'
+// CARD-SIZE-FEATURED-NORMALIZE：模板收敛单值 'poster-row'（top10-row/featured-grid 死路径已删）。
+// prop 保留以兼容现有调用点（page.tsx / ShelfRow.test 显式传 "poster-row"），避免无谓 churn。
+type ShelfTemplate = 'poster-row'
 
 interface ShelfRowProps {
   readonly template: ShelfTemplate
@@ -70,25 +71,6 @@ function EmptyPlaceholderCard({ width, aspectRatio }: EmptyCardProps) {
       style={{
         width,
         flexShrink: 0,
-        aspectRatio,
-        borderRadius: '8px',
-        border: '1px dashed var(--border-default)',
-        background: 'var(--bg-surface-sunken)',
-        opacity: 'var(--shelf-empty-opacity)',
-        pointerEvents: 'none',
-      }}
-    />
-  )
-}
-
-// ── EmptyCardGrid（grid 版本，宽 100%）────────────────────────────────────────
-
-function EmptyPlaceholderCardGrid({ aspectRatio }: { readonly aspectRatio: string }) {
-  return (
-    <div
-      aria-hidden="true"
-      data-testid="shelf-empty-slot"
-      style={{
         aspectRatio,
         borderRadius: '8px',
         border: '1px dashed var(--border-default)',
@@ -295,97 +277,10 @@ function PosterTrack({ videos, testId }: { readonly videos: VideoCardType[]; rea
   )
 }
 
-// ── top10-row track ───────────────────────────────────────────────────────────
-
-function Top10Track({ videos, testId }: { readonly videos: VideoCardType[]; readonly testId?: string }) {
-  const slots = Math.max(videos.length, MIN_SLOTS)
-  const empties = Math.max(0, slots - videos.length)
-  const { trackRef, canLeft, canRight, scrollPrev, scrollNext } = useScrollTrack()
-
-  return (
-    <div className="relative">
-      {canLeft && <TrackNavButton direction="prev" onClick={scrollPrev} />}
-      <div
-        ref={trackRef}
-        data-testid={testId}
-        style={{
-          display: 'flex',
-          gap: 'var(--card-gap-scroll)',
-          overflowX: 'auto',
-          scrollSnapType: 'x mandatory',
-          scrollbarWidth: 'none',
-          paddingBottom: 'var(--shelf-bottom-padding)',
-        }}
-      >
-        {videos.map((video, rank) => (
-          <div
-            key={video.id}
-            className="relative"
-            style={{ width: 'var(--card-w-scroll)', flexShrink: 0, scrollSnapAlign: 'start' }}
-          >
-            <span
-              aria-hidden="true"
-              style={{
-                position: 'absolute',
-                bottom: '-4px',
-                left: '-8px',
-                fontSize: '80px',
-                fontWeight: 900,
-                lineHeight: 1,
-                color: 'var(--fg-default)',
-                letterSpacing: '-0.06em',
-                WebkitTextStroke: '2px var(--bg-canvas)',
-                zIndex: 2,
-                userSelect: 'none',
-                pointerEvents: 'none',
-              }}
-            >
-              {rank + 1}
-            </span>
-            <div style={{ paddingLeft: '24px' }}>
-              <VideoCard video={video} />
-            </div>
-          </div>
-        ))}
-        {Array.from({ length: empties }).map((_, i) => (
-          <EmptyPlaceholderCard key={`empty-${i}`} width="var(--card-w-scroll)" aspectRatio="2/3" />
-        ))}
-      </div>
-      {canRight && <TrackNavButton direction="next" onClick={scrollNext} />}
-    </div>
-  )
-}
-
-// ── featured-grid track ───────────────────────────────────────────────────────
-
-function FeaturedGrid({ videos, testId }: { readonly videos: VideoCardType[]; readonly testId?: string }) {
-  const slots = Math.max(videos.length, MIN_SLOTS)
-  const empties = Math.max(0, slots - videos.length)
-
-  return (
-    <div
-      data-testid={testId}
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(5, 1fr)',
-        gap: 'var(--shelf-gap)',
-        paddingBottom: 'var(--shelf-bottom-padding)',
-      }}
-    >
-      {videos.map((video) => (
-        <VideoCard key={video.id} video={video} />
-      ))}
-      {Array.from({ length: empties }).map((_, i) => (
-        <EmptyPlaceholderCardGrid key={`empty-${i}`} aspectRatio="2/3" />
-      ))}
-    </div>
-  )
-}
-
 // ── ShelfRow ──────────────────────────────────────────────────────────────────
 
 export function ShelfRow({
-  template,
+  // template 收敛单值 'poster-row'（CARD-SIZE-FEATURED-NORMALIZE）→ 不再分支，故不解构使用
   query,
   shelfSection,
   title,
@@ -448,12 +343,8 @@ export function ShelfRow({
           aspectRatio={aspectRatio}
           testId={testId}
         />
-      ) : template === 'poster-row' ? (
-        <PosterTrack videos={videos} testId={testId} />
-      ) : template === 'top10-row' ? (
-        <Top10Track videos={videos} testId={testId} />
       ) : (
-        <FeaturedGrid videos={videos} testId={testId} />
+        <PosterTrack videos={videos} testId={testId} />
       )}
     </section>
   )

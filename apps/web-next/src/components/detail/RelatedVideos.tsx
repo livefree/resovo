@@ -2,14 +2,13 @@
 
 /**
  * RelatedVideos — HANDOFF-17/28 对齐 docs/frontend_design_spec_20260423.md §14
+ *   （CARD-SIZE-FEATURED-NORMALIZE / ADR-214 D-214-8：grid 死分支已删，仅存侧栏纵向列表）
  *
- * variant="grid"   （默认）全宽网格，用于全宽布局（历史兼容）
- * variant="sidebar" 侧栏纵向列表，位于 VideoDetailClient 1fr+320px 侧栏
+ * 侧栏纵向列表，位于 VideoDetailClient 1fr+320px 侧栏（唯一布局，原 variant="grid" 全宽网格零消费方已删）。
  */
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { VideoGrid } from '@/components/video/VideoGrid'
 import { SafeImage } from '@/components/media'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import { apiClient } from '@/lib/api-client'
@@ -18,8 +17,6 @@ import type { Video, VideoCard, ApiListResponse } from '@resovo/types'
 
 interface RelatedVideosProps {
   video: Video
-  /** 'grid'（默认）= 全宽网格；'sidebar' = 侧栏纵向列表 */
-  variant?: 'grid' | 'sidebar'
 }
 
 // ── SidebarList ───────────────────────────────────────────────────────────────
@@ -123,55 +120,16 @@ function SidebarList({ video }: { video: Video }) {
 
 // ── RelatedVideos ─────────────────────────────────────────────────────────────
 
-export function RelatedVideos({ video, variant = 'grid' }: RelatedVideosProps) {
-  const query = `type=${video.type}&limit=12&exclude=${video.id}`
-  const isSidebar = variant === 'sidebar'
-
+export function RelatedVideos({ video }: RelatedVideosProps) {
   return (
     <section data-testid="related-videos">
-      {!isSidebar && (
-        <div
-          className="border-t max-w-feature mx-auto px-6 py-8"
-          style={{ borderColor: 'var(--border-default)' }}
-        >
-          <h2 className="text-base font-semibold mb-4" style={{ color: 'var(--fg-default)' }}>
-            相关推荐
-          </h2>
-          <VideoGrid
-            query={query}
-            stagger
-            data-testid="related-videos-grid"
-          />
-        </div>
-      )}
-
-      {isSidebar && (
-        <>
-          <h2
-            className="text-sm font-semibold"
-            style={{ color: 'var(--fg-default)', marginBottom: '12px' }}
-          >
-            相关推荐
-          </h2>
-          <SidebarList video={video} />
-        </>
-      )}
+      <h2
+        className="text-sm font-semibold"
+        style={{ color: 'var(--fg-default)', marginBottom: '12px' }}
+      >
+        相关推荐
+      </h2>
+      <SidebarList video={video} />
     </section>
   )
 }
-
-function RelatedVideosSkeleton() {
-  return (
-    <div
-      className="border-t"
-      style={{ borderColor: 'var(--border-default)' }}
-    >
-      <div className="max-w-feature mx-auto px-6 py-8">
-        <Skeleton shape="text" width={96} height={20} className="mb-4" />
-        <VideoGrid.Skeleton testId="related-videos-skeleton" />
-      </div>
-    </div>
-  )
-}
-
-RelatedVideos.Skeleton = RelatedVideosSkeleton

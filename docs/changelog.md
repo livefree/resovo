@@ -2715,3 +2715,24 @@
 - **门禁**：typecheck=0 / lint=0 / **全量单测 601 文件 8210 passed**（vitest.config.ts 改动按 ADR-180 升全量）/ verify:adr-contracts=0。**关键路径**：分类/浏览页卡片渲染——视觉中性（列数/gap 默认值同原口径）+ href 经 getVideoDetailHref 不变；BrowseGrid.test 7 测 + VideoCard.test 19 测全过。
 - **六问自检**：① 契约/边界：消费既有 CardGrid/VideoCard navigate 封闭契约，未扩公开 API ✓；② 复用：BrowseCard 死重复实现退役、归一到 VideoCard ✓；③ 分层：纯前台组件 ✓；④ 类型：无 any、fixture 补全为合法 VideoCardType ✓；⑤ 测试：单测全量 + e2e testid 对齐 ✓；⑥ 沉淀：BrowseCard→VideoCard 收敛即本卡核心沉淀。
 - **注意事项**：① **playwright e2e 未实跑本卡**——spec testid 已对齐源码改动（browse-card→video-card），但 playwright 需 live dev server（web-next + api）；按 SEQ 计划全 e2e 回归 + 视觉回归归 CARD-SIZE-E2E（Phase 4），与 CARDGRID/SCROLL 口径一致。② browse-tvshow href 断言（`/tvshow/` 非 `/variety/`）是 getVideoDetailHref 属性、与卡组件无关，迁移后不变。③ skeleton 保持 poster-rect 外观（未掺入 VideoCard.Skeleton 重设计），仅换 CardGrid 包裹保持视觉中性。④ `--page-inline-gap` 真源仍被其他模块引用、未清理（非本卡范围）。⑤ Phase 2 剩 1 卡：CARD-SIZE-FEATURED-NORMALIZE（sonnet，仅依赖 CARDGRID）。
+
+## [CARD-SIZE-FEATURED-NORMALIZE] Phase 2 收官：FeaturedRow 归一 CardGrid standard 等宽 + 删死路径（ADR-214 D-214-8，SEQ-20260622-03）
+- **完成时间**：2026-06-23
+- **记录时间**：2026-06-23 12:45
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（消费既有 CardGrid 契约 + 删零消费方死代码，非新契约 / 非架构决策）
+- **问题理解**：① FeaturedRow `1.6fr 1fr 1fr 1fr` 首列大卡异宽 → 与全站等宽卡片撕裂（用户反馈①核心）；② Shelf `featured-grid`/`top10-row` 模板零消费方（page.tsx 3 处全 `poster-row`，TOP10 用独立 TopTenRow 组件）；③ RelatedVideos `grid` 默认分支零消费方（唯一消费 VideoDetailClient 用 `variant="sidebar"`）。
+- **根因判断**：D-214-8 裁定 FeaturedRow 归一等宽 + 清退三处随体系演进而死的旧路径，收束「卡片尺寸/交互机制」到 CardGrid + VideoCard 单一范式。
+- **方案**：FeaturedRow 异宽 grid → CardGrid standard 等宽；删 Shelf/RelatedVideos 死路径与其专属占位/骨架。
+- **修改文件**：
+  - `apps/web-next/src/components/home/FeaturedRow.tsx` — FeaturedGrid + FeaturedGridSkeleton `gridTemplateColumns:'1.6fr 1fr 1fr 1fr'` + gap `--shelf-gap` → `<CardGrid sizeClass="standard">`（等宽，DB 注入列数/gap）；**删 MIN_SLOTS sparse-fill 空占位逻辑**（等宽 `minmax(0,1fr)` + CardGrid `> *{min-width:0}` 结构上消除「空占位反推挤垮真实卡」问题 → 占位不再必要，且固定槽数与 DB 可配列数不兼容）；新增 `FEATURED_SLOTS=5` 常量，fetch `limit=4`→`limit=5`、骨架 4→5（对齐 standard 默认 5 列）；删 VideoCard `className="min-w-0"`（CardGrid 已统一处理）；docstring 同步。
+  - `apps/web-next/src/components/video/Shelf.tsx` — 删死函数 `Top10Track`/`FeaturedGrid`/`EmptyPlaceholderCardGrid`（零消费）；`ShelfTemplate` 收窄 `'featured-grid'|'top10-row'|'poster-row'` → `'poster-row'`；ShelfRow 不再解构 `template`、render dispatch 三元 → 直 `<PosterTrack>`；docstring 三模板 → 单模板。**保留 `template` prop**（收窄单值，兼容 page.tsx 3 + ShelfRow.test 5 调用点，避免无谓 churn）。
+  - `apps/web-next/src/components/detail/RelatedVideos.tsx` — 删 `grid` 默认分支（VideoGrid 全宽网格 + `related-videos-grid` testid）+ `RelatedVideosSkeleton`/`RelatedVideos.Skeleton`（零消费）+ VideoGrid import；移除 `variant` prop（恒 sidebar 纵向列表）；docstring 同步。
+  - `apps/web-next/src/components/video/VideoDetailClient.tsx` — `<RelatedVideos video={video} variant="sidebar"/>` → 去 `variant`（唯一消费方对齐 prop 移除）。
+  - `tests/e2e-next/featured-row-sparse.spec.ts` — 文件头注释更新为 CardGrid standard 等宽归一背景（断言「稀疏单卡占 1 列等宽、不被挤垮、poster 维持 2:3」对等宽布局〔单卡 ≈ 1/列数 宽〕仍成立，由 CardGrid `min-width:0` 保障；assertions 不变）。
+- **新增依赖**：无
+- **数据库变更**：无（纯前端组件归一 + 死代码清退）
+- **净变更**：6 文件，+62/-223（净删约 161 行死代码）。
+- **门禁**：typecheck=0 / lint=0 / test:changed〔`vitest run --changed HEAD` 改动域绿〕+ 首页/详情相关组件测 ShelfRow/DailyAnimeRow/HomeBrandFiltering 13 测全过 / verify:adr-contracts=0。**关键路径**：首页 FeaturedRow + Shelf poster-row + 详情侧栏相关推荐——改后回归（ShelfRow poster-row 5 测、TopTenRow/DailyAnimeRow 横滚无破）。
+- **六问自检**：① 契约/边界：消费 CardGrid 封闭契约；Shelf/RelatedVideos 公开 prop 收窄/移除均经消费方核实 ✓；② 复用：FeaturedRow 归一到 CardGrid、删三处死重复 ✓；③ 分层：纯前台组件 ✓；④ 类型：无 any、ShelfTemplate 收窄、RelatedVideosProps 去 variant ✓；⑤ 测试：改动域 + 首页组件测全过 ✓；⑥ 沉淀：本卡即「卡片体系归一」沉淀收口。
+- **注意事项**：① **playwright e2e 未实跑本卡**——featured-row-sparse 断言对等宽布局逻辑成立、首页/详情全 e2e + 视觉回归归 CARD-SIZE-E2E（Phase 4，同前序卡口径）。② **sparse 占位行为变更**：归一后稀疏数据（真实卡 < 列数）末行自然留空，不再以 dashed 占位填满——等宽布局下单卡不塌缩（CardGrid min-width:0），与分类/搜索 standard 网格末行留空一致。③ Shelf `template` prop 收窄单值后为「兼容性 vestigial」，彻底移除〔+ 改 8 调用点〕留后续 tidy；RelatedVideos `variant` 因仅 1 消费方已直接移除。④ globals.css `--shelf-gap`（FeaturedGrid/Shelf featured-grid 删后疑似孤儿）/ `--page-inline-gap` 未清理——需全量核引用方可删，留 token 卡。⑤ **🎉 Phase 2 全 6 卡交付**（SSR/CARDGRID/SCROLL/VIDEOCARD-VARIANT/BROWSE-MIGRATE/FEATURED-NORMALIZE）；剩 Phase 3 CARD-SIZE-ADMIN-UI（server-next 后台 Tab）+ Phase 4 CARD-SIZE-E2E（全栈 e2e + 视觉回归 + 新鲜度链路）。

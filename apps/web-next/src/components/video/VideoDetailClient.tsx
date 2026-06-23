@@ -315,7 +315,7 @@ export function VideoDetailClient({ slug, showEpisodes, initialVideo, initialSou
 
           {/* 侧栏：相关推荐 */}
           <aside className="detail-cascade-3">
-            <RelatedVideos video={video} variant="sidebar" />
+            <RelatedVideos video={video} />
           </aside>
         </div>
       </div>
