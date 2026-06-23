@@ -28,6 +28,7 @@ import { MigrationTab } from '../_tabs/MigrationTab'
 import { NotificationsTab } from '../_tabs/NotificationsTab'
 import { ApiWebhookTab } from '../_tabs/ApiWebhookTab'
 import { LoginSessionsTab } from '../_tabs/LoginSessionsTab'
+import { CardSizeTab } from '../_tabs/CardSizeTab'
 
 type TabId =
   | 'settings'
@@ -38,6 +39,7 @@ type TabId =
   | 'notifications'
   | 'api-webhook'
   | 'login-sessions'
+  | 'card-size'
 
 const TABS: ReadonlyArray<{ id: TabId; label: string; description?: string }> = [
   { id: 'settings', label: '站点设置', description: '基础信息 / 豆瓣 / 过滤 / 图片' },
@@ -48,6 +50,7 @@ const TABS: ReadonlyArray<{ id: TabId; label: string; description?: string }> = 
   { id: 'notifications', label: '通知设置', description: '渠道 / 触发事件 / 阈值' },
   { id: 'api-webhook', label: 'API·Webhook', description: 'API Key / Webhook 端点' },
   { id: 'login-sessions', label: '登录会话', description: '会话超时 / 活跃会话' },
+  { id: 'card-size', label: '前台展示', description: '卡片尺寸 / 网格列数 / 横滚卡宽' },
 ]
 
 const PAGE_STYLE: React.CSSProperties = {
@@ -190,6 +193,7 @@ export function SettingsContainer() {
           {activeTab === 'notifications' && <NotificationsTab />}
           {activeTab === 'api-webhook' && <ApiWebhookTab />}
           {activeTab === 'login-sessions' && <LoginSessionsTab />}
+          {activeTab === 'card-size' && <CardSizeTab />}
         </section>
       </div>
     </div>
