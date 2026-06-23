@@ -59,6 +59,8 @@ import { adminImageHealthRoutes } from '@/api/routes/admin/image-health'
 import { bannerRoutes } from '@/api/routes/banners'
 import { adminBannerRoutes } from '@/api/routes/admin/banners'
 import { homeRoutes } from '@/api/routes/home'
+// ADR-214/215 D-215-6 / SEQ-20260622-03：前台卡片尺寸公开只读（SSR 取数 + Redis 读缓存）
+import { cardSizeRoutes } from '@/api/routes/card-sizes'
 import { adminMediaRoutes } from '@/api/routes/admin/media'
 import { adminHomeModulesRoutes } from '@/api/routes/admin/home-modules'
 // CHG-HOME-PREVIEW-API-A / ADR-182：Home Curation 聚合门面
@@ -203,6 +205,7 @@ async function start() {
   await fastify.register(adminBannerRoutes, { prefix: '/v1' })
   await fastify.register(adminMediaRoutes, { prefix: '/v1' })
   await fastify.register(homeRoutes, { prefix: '/v1' })
+  await fastify.register(cardSizeRoutes, { prefix: '/v1' })  // ADR-215 D-215-6：公开卡片尺寸只读
   await fastify.register(adminHomeModulesRoutes, { prefix: '/v1' })
   await fastify.register(adminHomeRoutes, { prefix: '/v1' })
   await fastify.register(adminHomePublishRoutes, { prefix: '/v1' })

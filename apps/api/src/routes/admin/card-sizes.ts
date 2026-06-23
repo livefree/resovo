@@ -11,6 +11,7 @@
 
 import type { FastifyInstance } from 'fastify'
 import { db } from '@/api/lib/postgres'
+import { redis } from '@/api/lib/redis'
 import {
   CardSizeService,
   CardSizeClassParamSchema,
@@ -18,7 +19,7 @@ import {
 } from '@/api/services/CardSizeService'
 
 export async function adminCardSizeRoutes(fastify: FastifyInstance) {
-  const svc = new CardSizeService(db)
+  const svc = new CardSizeService(db, redis)
   const adminOnly = [fastify.authenticate, fastify.requireRole(['admin'])]
 
   // ── GET /admin/card-sizes ───────────────────────────────────────────────────

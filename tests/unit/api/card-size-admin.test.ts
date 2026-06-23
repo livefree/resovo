@@ -21,6 +21,18 @@ import type { CardSizeClass, CardSizeSettings } from '@resovo/types'
 
 vi.mock('@/api/lib/postgres', () => ({ db: {} }))
 
+// PUT 写提交后 best-effort 失效公开缓存（unlink）；admin GET/PUT 经真 CardSizeService 消费 redis
+const mockRedisGet = vi.fn()
+const mockRedisSetex = vi.fn()
+const mockRedisUnlink = vi.fn()
+vi.mock('@/api/lib/redis', () => ({
+  redis: {
+    get: (...args: unknown[]) => mockRedisGet(...args),
+    setex: (...args: unknown[]) => mockRedisSetex(...args),
+    unlink: (...args: unknown[]) => mockRedisUnlink(...args),
+  },
+}))
+
 const mockList = vi.fn()
 const mockFind = vi.fn()
 const mockUpdate = vi.fn()
@@ -100,6 +112,7 @@ describe('PUT /admin/card-sizes/:sizeClass', () => {
     vi.clearAllMocks()
     mockFind.mockResolvedValue(row('standard'))
     mockUpdate.mockResolvedValue(row('standard', { desktopColumns: 6 }))
+    mockRedisUnlink.mockResolvedValue(1)
     app = await buildApp()
   })
 
@@ -130,6 +143,28 @@ describe('PUT /admin/card-sizes/:sizeClass', () => {
       beforeJsonb: expect.objectContaining({ desktopColumns: 5 }),
       afterJsonb: expect.objectContaining({ desktopColumns: 6 }),
     }))
+  })
+
+  it('PUT 成功 → 失效公开缓存（redis.unlink card-sizes:v1，D-215-6）', async () => {
+    await app.inject({
+      method: 'PUT',
+      url: '/v1/admin/card-sizes/standard',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ desktopColumns: 6, gapPx: 16 }),
+    })
+    expect(mockRedisUnlink).toHaveBeenCalledWith('card-sizes:v1')
+  })
+
+  it('redis.unlink 失败 → PUT 仍 200（best-effort 不上抛，D-215-6 / Codex-R3）', async () => {
+    mockRedisUnlink.mockRejectedValueOnce(new Error('redis down'))
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/v1/admin/card-sizes/standard',
+      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
+      body: JSON.stringify({ desktopColumns: 6, gapPx: 16 }),
+    })
+    expect(res.statusCode).toBe(200)
+    expect(res.json().data.desktopColumns).toBe(6)
   })
 
   it('scroll 档更新成功 200（cardWidthPx 单位）', async () => {

@@ -2608,3 +2608,20 @@
 - **数据库变更**：无（audit target_kind CHECK 已由 CARD-SIZE-DB migration 124 落地；action_type 无 DB CHECK，D-182-5.2）→ architecture.md 零同步（§5.19 已含端点契约位 + audit 扩展记录）。
 - **门禁**：typecheck=0 / lint=0 / test:changed=0（598 文件 / 8182 测全过——`packages/types` 基础包升全量，+15 测零回归）/ **verify:endpoint-adr=0**（250 admin 路由对齐，card-sizes GET/PUT 识别）/ verify:adr-contracts=0。
 - **注意事项**：① 偏离登记——修改 `docs/decisions.md` ADR-215 端点表（补 `#` 列），超原"涉及文件"清单，但属满足本卡强制门禁 `verify:endpoint-adr` 的必要格式修复（Phase 0 表缺首列、仅本卡路由落地才暴露解析错位，不改语义）。② audit 4 镜像真源同步：类型 union（admin-moderation.types）/ runtime 数组（AuditLogService）/ coverage 测（REQUIRED + PAYLOAD_ASSERTION_REQUIRED）/ set-equal 测（EXPECTED_*）——任一漏同步即 set-equal 红。③ PUT 非 PATCH（D-215-2：可编辑投影小封闭集恒整体提交）。④ 倒置 body 守卫靠 `.strict()` + 按 sizeClass 派发 schema（DB CHECK ⊇ zod 双层，D-214-10）。⑤ 下一卡：CARD-SIZE-PUBLIC-CACHE（公开 `GET /card-sizes` Redis 读缓存 + PUT→Redis del 失效 best-effort，D-215-6），建议模型 sonnet。
+
+## [CARD-SIZE-PUBLIC-CACHE] Phase 1 收官：公开 GET /card-sizes Redis 读穿缓存 + PUT→del 失效 best-effort（SEQ-20260622-03）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22
+- **执行模型**：claude-opus-4-8（主循环；本卡建议模型 sonnet，用户裁定本 Opus 会话执行——不违规仅偏贵）
+- **子代理**：无（缓存/失效契约已由 ADR-215 D-215-6 锁定；镜像 HomeService 读穿 + home-cache-invalidation 既有范式，非新架构决策）
+- **修改文件**：
+  - `apps/api/src/services/CardSizeService.ts` — 构造加 `redis: Redis`；`getPublicCardSizes()`（读穿：`redis.get` hit→JSON.parse / miss→`listCardSizes` 枚举序 + `setex('card-sizes:v1', 60, …)` TTL 兜底，仿 HomeService.getTop10）；`invalidatePublicCache()`（`redis.unlink('card-sizes:v1')` try/catch `baseLogger.warn` 不上抛——**best-effort**，区别于 home-cache-invalidation scheduler 上抛，Codex-R3 / D-215-6）；`updateCardSize` 末尾 DB 写提交 + audit 后 `await invalidatePublicCache()`。
+  - `apps/api/src/routes/card-sizes.ts`（新）— 公开 `GET /card-sizes`（**无鉴权只读**，SSR 取数）→ `getPublicCardSizes`。
+  - `apps/api/src/routes/admin/card-sizes.ts` — `new CardSizeService(db, redis)` 传 redis（PUT→del 失效需）。
+  - `apps/api/src/server.ts` — import + `register(cardSizeRoutes, { prefix: '/v1' })`。
+  - `tests/unit/api/card-size-public.test.ts`（新）— 3 测：cache hit（不触 DB + 不 setex）/ cache miss（DB 枚举序 + `setex('card-sizes:v1', 60, …)`）/ 无鉴权 200。
+  - `tests/unit/api/card-size-admin.test.ts` — 补 redis mock + 2 测：PUT 成功→`redis.unlink('card-sizes:v1')` / `unlink` 失败 PUT 仍 200（best-effort 不上抛）。
+- **新增依赖**：无
+- **数据库变更**：无（纯 route/service/cache）→ architecture.md 零同步 + `verify:endpoint-adr` 不变（公开 route 非 admin、不触红线；GET/PUT /admin/card-sizes 路径未变）。
+- **门禁**：typecheck=0 / lint=0 / test:changed=0（18 测：public 3 + admin 15；本卡无基础包变更 → ADR-180 仅选 2 测文件，非升全量）/ verify:adr-contracts=0。CardSizeService 构造签名变更经 typecheck=0 确认全调用点对齐。
+- **注意事项**：① del best-effort 不上抛（D-215-6 / Codex-R3）：DB 写已提交、缓存派生物 → unlink 失败结构化 warn + PUT 返成功，避「失败但已应用」歧义，陈旧由 TTL 60s 自愈。② key `card-sizes:v1` 用独立 key 不注册 CACHE_PREFIXES（避免触碰 admin cache-clear `type` 枚举 + 其测，保持原子）。③ admin GET 直读 DB 不走缓存（后台要实时）；仅公开 GET 走读穿缓存。④ **Phase 1 全 4 卡交付**（DB → TYPES-QUERIES → SERVICE-ADMIN → PUBLIC-CACHE）。⑤ 下一卡 Phase 2 CARD-SIZE-SSR（`lib/server/card-size-fetch.ts` server-only 取数〔revalidate ≤60s，D-214-9〕 + `[locale]/layout.tsx` 注入 `:root` `<style>` + 失败降级 CARD_SIZE_DEFAULTS），建议模型 sonnet。

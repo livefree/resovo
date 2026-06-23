@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-06-23T06:16:23.757Z",
+  "generatedAt": "2026-06-23T06:27:53.199Z",
   "summary": {
-    "closedTotal": 583,
-    "pendingTotal": 91
+    "closedTotal": 586,
+    "pendingTotal": 88
   },
   "perAdr": [
     {
@@ -653,10 +653,9 @@
     {
       "adrId": "ADR-214",
       "total": 10,
-      "closed": 3,
+      "closed": 4,
       "pending": [
         "D-214-1",
-        "D-214-10",
         "D-214-2",
         "D-214-6",
         "D-214-7",
@@ -667,14 +666,12 @@
     {
       "adrId": "ADR-215",
       "total": 6,
-      "closed": 0,
+      "closed": 2,
       "pending": [
         "D-215-1",
-        "D-215-2",
         "D-215-3",
         "D-215-4",
-        "D-215-5",
-        "D-215-6"
+        "D-215-5"
       ]
     }
   ]
