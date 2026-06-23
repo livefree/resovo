@@ -2779,3 +2779,24 @@
 - **⚠️ e2e 实跑环境阻塞（关键，须他处补跑）**：worktree 隔离副本**缺 `.env.local`**（gitignore 本地文件、不随 git worktree 复制）→ dev server 命令 `node --env-file=../../.env.local` 解析失败 → apps/api(:4000) / web-next(:3000) / server-next(:3003) dev server **均无法启动** → playwright e2e（还需 DB migration 124 + Redis + globalSetup seed）**在本 worktree 背景会话不可实跑**。`npm run test:e2e`（4 projects 含本 spec）+ admin PUT→公开读新鲜度端到端（D-214-9 R3 mutation 侧）**须在具备 `.env.local`+DB+Redis 的主 checkout / CI 跑 = 合并 main 前的 e2e gate 节点**（CLAUDE.md「合并 main 前必跑 test:e2e」）。mutation 侧契约已由 `card-size-admin.test.ts`（PUT→Redis unlink）+ `card-size-public.test.ts`（miss→setex 重读）单测覆盖，端到端实跑随该 gate。
 - **六问自检**：① 契约/边界：消费既有 SSR 注入 + CardGrid 契约，断言对齐 ADR-214 D-214-4/7/9/10，未扩任何代码契约 ✓；② 复用：spec 仿既证范式（_fixtures + route mock + 选择器）零新基建 ✓；③ 分层：纯测试层 ✓；④ 类型：无 any、TS 严格（trackCount helper + 显式类型）✓；⑤ 测试：本卡即测试收口；全量单测全绿 ✓；⑥ 沉淀：spec 落 e2e-next 标准目录、复用统一 fixture ✓。
 - **注意事项**：① **e2e 实跑非本 worktree 能力范围**——Phase 4 性质 = 测试收口 + 门禁，e2e 实跑是合并 gate 节点（环境依赖），与「写 spec + 跑全量单测」分离；spec 已就绪、在正确环境可直接跑（建议 `PLAYWRIGHT_SERVERS=web npx playwright test --project=web-chromium tests/e2e-next/card-size-grid.spec.ts`）。② **🎉 SEQ-20260622-03 代码全交付**（Phase 0–4 全部代码 + spec）；DB 驱动可配卡片尺寸体系 + 后台编辑 UI + 前台统一 CardGrid/VideoCard 全栈闭环。③ **唯一剩余前置门** = 合并 main 前 `npm run test:e2e` 全量 4 projects + 视觉回归实跑（具完整环境处）；通过后即可合并 + 部署，用户端见统一卡片尺寸 + 运营后台自助调尺寸生效。④ 视觉回归（admin-visual project）须 `PLAYWRIGHT_VISUAL=1` + baseline 入库，按 SEQ 与 test:e2e 同 gate 跑。
+
+## [CARD-SIZE-ADMIN-PREVIEW] Phase 3 增强：「前台展示」Tab 实时 WYSIWYG 预览（用户反馈，SEQ-20260622-03）
+- **完成时间**：2026-06-23
+- **记录时间**：2026-06-23
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（page-local 预览组件，非新共享契约 / schema / route）
+- **问题理解**：用户反馈——CARD-SIZE-ADMIN-UI 的「前台展示」Tab 仅有表单数据修改，缺实时预览；运营调列数/间距/卡宽是「盲改」，须切前台才能看效果。
+- **根因判断**：Phase 3 表单卡只做了输入 + 保存，未含预览（原卡范围外）；补 WYSIWYG 闭环。
+- **方案**：CardSizeTab 每档卡内（表单与操作行之间）内嵌 `CardSizePreview`，消费该档 **draft 值**（未保存即时反映、随输入实时重渲）。
+- **修改文件**：
+  - `apps/server-next/src/app/admin/settings/_tabs/CardSizeTab.tsx` — 新增 `CardSizePreview` 子组件 + 预览样式（`PREVIEW_WRAP_STYLE`/`PREVIEW_LABEL_STYLE`/`PREVIEW_CARD_STYLE`）；在 `CardSizeClassCard` 表单 grid 与 action 行之间插入 `<CardSizePreview>`（传 draft `Number(sizeInput)`/`Number(gapInput)`）。
+    - **网格档（standard/compact）**：`display:grid; grid-template-columns: repeat(列数, minmax(0,1fr)); gap` 渲染「列数」个 2:3 占位卡（铺满一行直观映射「N 列」）+ 标注响应式（移动 2 / ≥640 3 / 桌面 N）。
+    - **scroll 档**：`display:flex; gap; overflow-x:auto`，固定 `width:卡宽px` 的 2:3 占位 ×6 → 直观看定宽 + 横滚 + gap。
+    - **边界**：后台 server-next 自包含，**不跨 app import 前台 CardGrid/VideoCard**（apps/web-next，跨 app 边界违规 + 前台 context 依赖）；占位仅以 `--bg-surface-raised`/`--border-default`/`--radius-sm` 主题变量复刻布局语义、**零硬编码色**。
+    - **健壮性**：越界值照实渲染（可视化「越界后果」，如 10 列 → 占位很挤）；列数上限 `PREVIEW_GRID_MAX_CARDS=12` 防越界值撑爆 DOM；NaN/空输入降级（网格档 →1 列、scroll →170px）。
+  - `tests/unit/components/server-next/admin/system/CardSizeTab.test.tsx` — 扩 2 测（共 8）：⑦ 标准档 `card-size-standard-preview-track` 初始 `grid-template-columns` 含 `repeat(5,`、gap=16px，改列数 5→6 预览实时更新 `repeat(6,`；⑧ scroll 档 `card-size-scroll-preview-track` `display:flex`、首张占位卡 `width:170px`，改卡宽 170→200 占位实时更新 `200px`。
+- **新增依赖**：无（纯 CSS + inline style，无组件库）
+- **数据库变更**：无（纯前端后台 UI 增强）
+- **门禁**：typecheck=0 / lint=0（4 successful）/ test:changed〔`vitest --changed` → CardSizeTab.test 8 passed〕/ verify:adr-contracts=0。**关键路径**：admin「前台展示」Tab——纯增量预览、不动表单/保存逻辑。
+- **六问自检**：① 契约/边界：后台自包含、不跨 app 引前台组件，未扩任何公开契约 ✓；② 复用：占位复用主题 CSS 变量、预览组件 page-local 消重（仅本 tab 用）✓；③ 分层：纯前端后台 UI ✓；④ 类型：无 any、props 显式类型、Number 防御 ✓；⑤ 测试：预览随 draft 变化 2 测 + 原 6 测全过 ✓；⑥ 沉淀：CardSizePreview 仅本 tab 消费、未达「3 处提取」阈值，page-local 即可 ✓。
+- **注意事项**：① 预览反映 **draft（未保存）值**——即时见效、保存后落库；与表单 dirty/save 解耦。② 预览仅示意布局（占位方块非真实海报）；真实视觉以前台为准，预览顶部已标注响应式降级规则避免误导。③ **合并流程**：本卡在 worktree 分支 `chore/card-size-phase2-20260622`（领先 governance），须再次 `git merge --ff-only` 合回 governance 集成分支才在主 checkout 生效。④ 用户反馈的「实时预览缺失」已闭环；「前台展示」Tab 现为「调参 + 即时预览 + 保存」完整工作流。

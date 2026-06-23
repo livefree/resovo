@@ -138,4 +138,40 @@ describe('CardSizeTab', () => {
     await waitFor(() => expect(screen.getByTestId('card-size-tab')).not.toBeNull())
     expect(screen.queryByTestId('card-size-card-standard')).toBeNull()
   })
+
+  it('7. 标准档实时预览：grid-template-columns 反映 draft 列数', async () => {
+    listCardSizesMock.mockResolvedValueOnce(ROWS)
+    const { container } = render(<CardSizeTab />)
+    await waitFor(() => expect(screen.getByTestId('card-size-standard-preview-track')).not.toBeNull())
+
+    const track = screen.getByTestId('card-size-standard-preview-track')
+    // 初值 5 列
+    expect(track.style.gridTemplateColumns).toContain('repeat(5,')
+    expect(track.style.gap).toBe('16px')
+
+    // 改列数 5 → 6，预览实时更新
+    fireEvent.change(inputOf(container, 'card-size-standard-size')!, { target: { value: '6' } })
+    await waitFor(() =>
+      expect(screen.getByTestId('card-size-standard-preview-track').style.gridTemplateColumns).toContain('repeat(6,'),
+    )
+  })
+
+  it('8. scroll 档实时预览：横滚预览 + 占位卡宽反映 draft', async () => {
+    listCardSizesMock.mockResolvedValueOnce(ROWS)
+    const { container } = render(<CardSizeTab />)
+    await waitFor(() => expect(screen.getByTestId('card-size-scroll-preview')).not.toBeNull())
+
+    const track = screen.getByTestId('card-size-scroll-preview-track')
+    expect(track.style.display).toBe('flex')
+    // 首张占位卡宽 = draft 卡宽 170px
+    const firstCard = track.firstElementChild as HTMLElement
+    expect(firstCard.style.width).toBe('170px')
+
+    // 改卡宽 170 → 200，预览实时更新
+    fireEvent.change(inputOf(container, 'card-size-scroll-size')!, { target: { value: '200' } })
+    await waitFor(() => {
+      const card = screen.getByTestId('card-size-scroll-preview-track').firstElementChild as HTMLElement
+      expect(card.style.width).toBe('200px')
+    })
+  })
 })

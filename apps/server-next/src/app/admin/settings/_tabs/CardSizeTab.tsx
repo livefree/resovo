@@ -77,6 +77,30 @@ const ADVISORY_STYLE: CSSProperties = {
   padding: '4px 0',
 }
 
+// ── 预览样式（WYSIWYG 占位网格；主题 CSS 变量、零硬编码色）───────────────────────
+
+const PREVIEW_WRAP_STYLE: CSSProperties = {
+  marginTop: '16px',
+  padding: '12px',
+  background: 'var(--bg-surface)',
+  border: '1px solid var(--border-default)',
+  borderRadius: 'var(--radius-sm)',
+}
+
+const PREVIEW_LABEL_STYLE: CSSProperties = {
+  fontSize: 'var(--font-size-xxs)',
+  color: 'var(--fg-muted)',
+  marginBottom: '8px',
+}
+
+/** 2:3 占位卡（模拟海报比例；--bg-surface-raised 填充 + 边框，零硬编码色） */
+const PREVIEW_CARD_STYLE: CSSProperties = {
+  aspectRatio: '2 / 3',
+  background: 'var(--bg-surface-raised)',
+  border: '1px solid var(--border-default)',
+  borderRadius: 'var(--radius-sm)',
+}
+
 // ── 档位元数据（D-214-2 封闭枚举展示文案）────────────────────────────────────────
 
 const CLASS_META: Record<CardSizeClass, { label: string; subtitle: string }> = {
@@ -123,6 +147,70 @@ function NumberField({ label, value, onChange, field, hint, suffix, testId }: Nu
         {error ?? hint}
       </div>
     </>
+  )
+}
+
+// ── CardSizePreview：实时 WYSIWYG 预览（消费 draft 值，纯 CSS 占位网格）──────────
+//
+// 后台 server-next 自包含——**不跨 app import 前台 CardGrid/VideoCard**（边界 + 前台 context 依赖）；
+// 仅以占位方块复刻网格/横滚的列数·间距·卡宽布局语义，随表单 draft 实时重渲。
+
+/** 网格档预览渲染卡数（= 列数，铺满一行直观映射「N 列」；上限防越界值撑爆 DOM） */
+const PREVIEW_GRID_MAX_CARDS = 12
+/** scroll 档预览占位卡数（够看清定宽 + 横滚 + gap） */
+const PREVIEW_SCROLL_CARDS = 6
+
+interface CardSizePreviewProps {
+  sizeClass: CardSizeClass
+  isScroll: boolean
+  /** 网格档桌面列数（draft，仅网格档用） */
+  columns: number
+  /** scroll 档卡定宽 px（draft，仅 scroll 档用） */
+  cardWidthPx: number
+  /** 间距 px（draft） */
+  gapPx: number
+}
+
+function CardSizePreview({ sizeClass, isScroll, columns, cardWidthPx, gapPx }: CardSizePreviewProps) {
+  const gap = Number.isFinite(gapPx) && gapPx >= 0 ? gapPx : 0
+
+  if (isScroll) {
+    const w = Number.isFinite(cardWidthPx) && cardWidthPx > 0 ? Math.trunc(cardWidthPx) : 170
+    return (
+      <div style={PREVIEW_WRAP_STYLE} data-testid={`card-size-${sizeClass}-preview`}>
+        <div style={PREVIEW_LABEL_STYLE}>预览（横滚行 · 卡宽 {w}px · 间距 {gap}px）</div>
+        <div
+          data-testid={`card-size-${sizeClass}-preview-track`}
+          style={{ display: 'flex', gap: `${gap}px`, overflowX: 'auto', paddingBottom: '4px' }}
+        >
+          {Array.from({ length: PREVIEW_SCROLL_CARDS }).map((_, i) => (
+            <div key={i} style={{ ...PREVIEW_CARD_STYLE, width: `${w}px`, flex: '0 0 auto' }} />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const cols =
+    Number.isFinite(columns) && columns >= 1 ? Math.min(Math.trunc(columns), PREVIEW_GRID_MAX_CARDS) : 1
+  return (
+    <div style={PREVIEW_WRAP_STYLE} data-testid={`card-size-${sizeClass}-preview`}>
+      <div style={PREVIEW_LABEL_STYLE}>
+        预览（桌面 {cols} 列 · 间距 {gap}px；移动端 2 列 / ≥640px 3 列）
+      </div>
+      <div
+        data-testid={`card-size-${sizeClass}-preview-track`}
+        style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+          gap: `${gap}px`,
+        }}
+      >
+        {Array.from({ length: cols }).map((_, i) => (
+          <div key={i} style={PREVIEW_CARD_STYLE} />
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -201,6 +289,13 @@ function CardSizeClassCard({ initial }: { initial: CardSizeSettings }) {
           testId={`card-size-${initial.sizeClass}-gap`}
         />
       </div>
+      <CardSizePreview
+        sizeClass={initial.sizeClass}
+        isScroll={isScroll}
+        columns={Number(sizeInput)}
+        cardWidthPx={Number(sizeInput)}
+        gapPx={Number(gapInput)}
+      />
       <div style={ACTION_ROW_STYLE}>
         <span style={DIRTY_STYLE} data-testid={`card-size-${initial.sizeClass}-dirty`}>
           {dirty ? '有未保存的修改' : '无未保存修改'}
