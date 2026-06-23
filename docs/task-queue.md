@@ -2993,4 +2993,52 @@
   - **③ 标题 → 统一 13px / line-clamp-2 / lineHeight 1.4 / weight 500**：VideoCard（14·clamp-1 → 13·clamp-2）对齐 BrowseCard（不变）。年份副标题维持 12px。
   - **视觉影响**（轻微对齐，逐页回归覆盖）：分类页 gap 收窄 + 移动端列数改善；搜索/详情大屏 gap 24→16；详情相关卡放大（6→5 列）；首页主力 VideoCard 标题单行→双行（卡高微增）。
 - **范围红线**：颜色 N/A（仅尺寸/间距 token，前台 `globals.css` 体系）；不新增 admin route；不动定宽机制重构与组件合并（高力度，本序列不含）；B 的 token 结构与断点体系为裁决点，**必须先过 arch-reviewer**（取值已冻结，仅裁结构）。
-- **Follow-up 登记**：① `VideoGrid` `layout="scroll"` 路径零消费方（含 `scrollContainerStyle` + cardWidth），A 卡仅 token 化未删；建议后续小卡评估整段删除（API 收窄需确认）。② 高力度选项（定宽机制 5→1 共享 CardGrid + VideoCard/BrowseCard 合并）未采纳，如需另起序列。③ **（B 衍生）token 真源回填卡**：`--browse-pagination-*` / `--search-*` / `--detail-*` 别名仅在 `globals.css` 手写镜像区、未进 design-tokens 真源（「镜像超集」遗留债，arch-reviewer 裁定 B 不收口）；建议独立卡把这批别名补回 `layout.ts` 真源。④ **（B 衍生）标题排版提取**：VideoCard / BrowseCard / RelatedVideos-SidebarList 三处 inline `13px/500/1.4/clamp-2` 重复（触及「3 处提取」信号），B 按口径只统一值未提取共享；如需提取 sonnet 小卡。⑤ **（运维）** e2e 期间清了 `apps/web-next/.next`（缓存损坏）+ 用户 :3000 dev server 已终止 → 下次 `npm run dev` 全新重建。
+- **Follow-up 登记**：① `VideoGrid` `layout="scroll"` 路径零消费方（含 `scrollContainerStyle` + cardWidth），A 卡仅 token 化未删；建议后续小卡评估整段删除（API 收窄需确认）。② 高力度选项（定宽机制 5→1 共享 CardGrid + VideoCard/BrowseCard 合并）未采纳，如需另起序列。**→ 已另起 `SEQ-20260622-03`（升级为 DB 驱动可配体系）**。③ **（B 衍生）token 真源回填卡**：`--browse-pagination-*` / `--search-*` / `--detail-*` 别名仅在 `globals.css` 手写镜像区、未进 design-tokens 真源（「镜像超集」遗留债，arch-reviewer 裁定 B 不收口）；建议独立卡把这批别名补回 `layout.ts` 真源。④ **（B 衍生）标题排版提取**：VideoCard / BrowseCard / RelatedVideos-SidebarList 三处 inline `13px/500/1.4/clamp-2` 重复（触及「3 处提取」信号），B 按口径只统一值未提取共享；如需提取 sonnet 小卡。⑤ **（运维）** e2e 期间清了 `apps/web-next/.next`（缓存损坏）+ 用户 :3000 dev server 已终止 → 下次 `npm run dev` 全新重建。
+
+---
+
+## [SEQ-20260622-03] CARD-SIZE-SYSTEM — DB 驱动、后台可配的前台卡片尺寸体系
+
+- **状态**：📝 规划草案（**待 ADR-214/215 Accepted 后启动**；2026-06-22 第二轮对抗复审 6 项修正已纳入，见末尾「复审修正」。未修正前仅启 Phase 0，不进 DB/组件实现）｜ **创建时间**：2026-06-22 ｜ **最后更新时间**：2026-06-22
+- **依赖**：无 BLOCKER。承接 SEQ-20260622-01「Follow-up ②」（定宽机制 5→1 + 双卡合并）并升级为 DB 可配体系。与 SEQ-20260622-02（BUGFIX-WATCH-EP-URL，已交付 `ba5a9255`）无文件域冲突。
+- **来源**：用户反馈「前台卡片尺寸视觉不统一」（首页推荐 vs 特色 vs 分类/搜索 vs 详情相关）。两轮 Opus `arch-reviewer (claude-opus-4-8)` 设计背书（前端 CardGrid 契约 + 全栈 schema/SSR/admin）。
+- **用户已锁定决策（硬约束）**：
+  1. **范围**：DB 驱动、后台可配（非纯前端 token）。前端经 公开 API→Service→DB 读、后台经 adminAPI→Service→DB 写，**前端不直连 DB**（守 Route→Service→DB 分层）。
+  2. **3 档尺寸**（混合单位）：`standard`（首页特色+分类+搜索，**列数+gap**）/ `compact`（侧边相关推荐，**列数+gap**）/ `scroll`（首页横滚推荐行：热门电影/剧集/动漫+TOP10，**卡宽 px+gap**）。可扩展。
+  3. **可配参数**：列数（网格档）/ 卡宽 px（scroll 档）+ gap 间距。**不做响应式分档**（后台只配桌面级；移动/平板前端按既有 2/3 契约派生）。
+  4. **品牌维度**：全局一套。
+  5. **FeaturedRow** 归一为等宽网格（standard 档，修反馈①核心）；**分类卡封面**用 StackedPosterFrame；**侧栏相关推荐** = compact 紧凑变体。
+  6. **横滚行纳入体系**（用户裁定，直接修①）：`--shelf-card-w-portrait/top10` 由静态 170px 改为 DB 注入 `--card-w-scroll`。
+  7. **后台入口**：`/admin/settings` 容器新增「**前台展示**」Tab（可扩展，卡片尺寸为首个内容；非独立页）。
+- **关键编号（取号时复核 +1）**：migration **124**（最新 123）；ADR **214 主**（卡片尺寸体系）+ **215 admin-route**（端点契约）；最新 ADR 213。
+- **关键 schema**：`card_size_settings`（migration 124）——**`id` UUID PK DEFAULT gen_random_uuid()**（audit 锚点，P1）/ `size_class`('standard'|'compact'|'scroll') **NOT NULL UNIQUE** / `desktop_columns` INT NULL / `card_width_px` INT NULL / `gap_px` INT NOT NULL / `settings` JSONB / `updated_at`；CHECK（网格档列数非空·width 空 / scroll 档反之；列数 2–8、卡宽 120–280、gap 0–64）；seed 3 行（**SQL 字面量** standard 5/16、compact 3/12、scroll 170/16，`ON CONFLICT (size_class) DO NOTHING`，均后台可调）；audit target_kind +`card_size`（**targetId=row.id**，仿 home_section D-182-5.3）；同步 `docs/architecture.md`。**默认值真源** `CARD_SIZE_DEFAULTS`（@resovo/types，供前端兜底/token 兜底引用；**migration 纯 SQL 不能 import TS → seed 用字面量 + 一致性单测校验 SQL seed == CARD_SIZE_DEFAULTS**，P1）。
+
+### 任务列表（按执行顺序，Phase 0→4）
+
+| Phase | 卡 | 内容 | 范围层 | 建议模型 | 门禁 |
+|---|---|---|---|---|---|
+| **0** | CARD-SIZE-ADR-MAIN | 起草 ADR-214 主 ADR（3 档模型 / schema / 存列数不存卡宽 / SSR `:root` 注入 / 缓存 / 边界）→ 落盘后 `/codex:adversarial-review` | docs | opus | Codex 对抗审核 |
+| **0** | CARD-SIZE-ADR-ROUTE | 起草 ADR-215 admin-route ADR（`GET /admin/card-sizes` + `PUT /:sizeClass` 端点契约表 / 校验范围 / 错误码 / audit）→ Codex 审 | docs | opus | `verify:endpoint-adr`、Codex |
+| **1** | CARD-SIZE-DB | migration 124 建表 + seed 3 行 + audit target_kind 扩展 + `architecture.md` 同步 | DB | sonnet | migrate 冷启动、typecheck |
+| **1** | CARD-SIZE-TYPES-QUERIES | `@resovo/types`（CardSizeSettings + CARD_SIZE_DEFAULTS）+ `db/queries/card-size-settings.ts`（仿 home-section-settings）+ **seed 一致性单测**（SQL seed == CARD_SIZE_DEFAULTS，P1 防漂移） | types/db | sonnet | typecheck/lint、seed 一致性测 |
+| **1** | CARD-SIZE-SERVICE-ADMIN | `CardSizeService` + admin route(`GET /admin/card-sizes` + `PUT /:sizeClass`, ADR-215) + app 注册 + audit(`card_size.update`, targetId=row.id) | service/route | sonnet | `verify:endpoint-adr`、api 单测 |
+| **1** | CARD-SIZE-PUBLIC-CACHE | 公开 route `GET /card-sizes`（Redis 读缓存）+ **PUT 成功→Redis del 失效协议**（不只靠 TTL，P2） | route/cache | sonnet | api 单测（admin PUT→public 变更链路） |
+| **2** | CARD-SIZE-SSR | 新建 `lib/server/card-size-fetch.ts`（server-only 公开取数通道，**web-next 此前无**）+ `[locale]/layout.tsx` 注入 `:root` `<style>` + 失败降级 CARD_SIZE_DEFAULTS | 前端 SSR | sonnet | SSR 渲染、无 FOUC |
+| **2** | CARD-SIZE-CARDGRID | 新建共享 `components/shared/card-grid/CardGrid.tsx`（`sizeClass` prop 读 `--card-cols-{class}-desktop`/`--card-gap-{class}`，封闭枚举禁自由 gridCols） | 前端共享组件 | **opus**（新共享组件契约） | CardGrid 单测、视觉回归 |
+| **2** | CARD-SIZE-VIDEOCARD-VARIANT | VideoCard 加 `interaction:'takeover'|'navigate'`（外壳分流两内部组件；**navigate 分支严禁 usePlayerStore/router/takeover hook**，P2）+ navigate 用 StackedPosterFrame；**暂保留 BrowseCard + browse-card testid 兼容**（不删，过渡） | 前端共享组件 | **opus**（VideoCard 契约变更） | VideoCard 单测两分支 |
+| **2** | CARD-SIZE-BROWSE-MIGRATE | BrowseGrid 切 CardGrid + 卡改 `VideoCard interaction='navigate'` + 删 BrowseCard + 改 `browse-category-routes.spec.ts`/`browse-tvshow.spec.ts` testid `browse-card`→`video-card` | 前端组件 | sonnet | SEARCH/VIDEO e2e |
+| **2** | CARD-SIZE-SCROLL | 横滚行消费注入变量：Shelf(PosterTrack/Top10Track)/TopTenRow/DailyAnimeRow 卡宽 `--shelf-card-w-*`→`--card-w-scroll`、gap→`--card-gap-scroll` | 前端组件 | sonnet | 首页横滚回归 |
+| **2** | CARD-SIZE-FEATURED-NORMALIZE | FeaturedRow `1.6fr...` → CardGrid standard 等宽 + 删 Shelf `featured-grid`/`top10-row` 死路径 + RelatedVideos `grid` 死分支（仅 sidebar 有消费方） | 前端组件 | sonnet | 首页/详情 e2e |
+| **3** | CARD-SIZE-ADMIN-UI | server-next `_tabs/CardSizeTab.tsx`（3 档表单：网格档列数+gap / scroll 档卡宽+gap，校验镜像 zod）+ `SettingsContainer` TABS/TabId/tabpanel 注册「前台展示」 | 后台 UI | sonnet | ADMIN e2e |
+| **4** | CARD-SIZE-E2E | e2e（SSR 注入值→视觉链路 + admin PUT→公开读变更链路）+ 全栈回归（test 全量 + test:e2e 4 projects） | 测试 | sonnet | 全量门禁 |
+
+### SEQ-20260622-03 风险与边界
+
+- **风险1（前提，已下修）**：web-next **无卡片尺寸专用 server-only 取数 helper**（已有 `fetchVideoDetail` 等 server fetch 先例〔video-detail.ts〕，**非架构空白**，P2 修正）→ CARD-SIZE-SSR 新建该 helper，否则 FOUC/CLS。
+- **风险2**：DB **存列数不存卡宽 px**（网格 `repeat(N,1fr)` 弹性列，存 px 冲突）；scroll 档例外（本就固定 px）。
+- **风险3（已化解）**：横滚 170px 纳入体系（用户裁定）→ 不再「网格归 DB、横滚归静态 token」撕裂。
+- **校验破布局**：DB CHECK + zod 双层 min/max。**SSR 失败**：catch 降级 CARD_SIZE_DEFAULTS（非空 catch，记日志）。
+- **缓存（两层，P2 厘清）**：**后端 Redis = PUT 成功后 del 失效（确定，写入 ADR-215，非只靠 TTL）**；前端 Next fetch = max-age 自然过期（`revalidateTag` 跨服务较重，暂不上）。admin→public e2e 验后端失效链路。
+- **裁定项（实施时确认）**：compact/scroll seed 默认（暂定 3列/12px、170px/16px，后台可调）。
+- **模型路由审计**：本序列「新共享组件契约（CardGrid）+ 跨消费方 schema + 撰写 ADR」三项强制 Opus；ADR-214/215 + CardGrid + VideoCard 契约 commit 须带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
+- **第二轮对抗复审修正（2026-06-22，6 项已纳入）**：① P1 schema 加 `id` UUID PK + `size_class` UNIQUE + audit `targetId=row.id`；② P1 `CARD_SIZE_DEFAULTS` migration 不能 import TS → SQL 字面量 seed + 一致性单测；③ P2 `CARD-SIZE-SERVICE-API` 预拆 `SERVICE-ADMIN`/`PUBLIC-CACHE`；④ P2 风险1 措辞下修（有 server fetch 先例）；⑤ P2 VideoCard 合并预拆 `VIDEOCARD-VARIANT`（testid 兼容 + 禁 navigate 加 player hook）/`BROWSE-MIGRATE`；⑥ P2 缓存失效确定化（后端 PUT→Redis del）。卡数 12→14。
