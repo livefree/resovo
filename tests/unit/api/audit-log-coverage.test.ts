@@ -137,6 +137,8 @@ const REQUIRED_ACTION_TYPES = [
   // ADR-173 / META-30：API 凭证统一管理（2 项 / targetKind 复用 'system'）
   'integration.credential_update',      // PUT  /admin/integrations/credentials/:provider
   'integration.credential_test',        // POST /admin/integrations/credentials/:provider/test
+  // ADR-214/215 / SEQ-20260622-03：前台卡片尺寸档位写（targetKind 'card_size'）
+  'card_size.update',                   // PUT /admin/card-sizes/:sizeClass
 ] as const
 
 const ACTION_TYPE_REGEX = /actionType:\s*['"]([a-z_.]+)['"]/g
@@ -256,6 +258,8 @@ const PAYLOAD_ASSERTION_REQUIRED = [
   // ADR-173 / META-30：API 凭证统一管理 audit payload 内容断言（tests/unit/api/integration-credentials-service.test.ts）
   'integration.credential_update',
   'integration.credential_test',
+  // ADR-214/215 / SEQ-20260622-03：卡片尺寸档位写 audit payload 内容断言（tests/unit/api/card-size-admin.test.ts）
+  'card_size.update',
 ] as const
 
 // CHG-SN-6-10：plan v1.4 §3.0.5 M-SN-4 legacy 11 项已迁移至 PAYLOAD_ASSERTION_REQUIRED

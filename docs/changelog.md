@@ -2588,3 +2588,23 @@
 - **数据库变更**：无（纯 TS 契约 + 查询 + 单测；表已由 CARD-SIZE-DB migration 124 落地）→ architecture.md 零同步（§5.19 已含 types/queries 契约位登记）。
 - **门禁**：typecheck=0 / lint=0 / test:changed=0（597 文件 / 8167 测全过——`packages/types` 基础包改动按 ADR-180 自动升全量，零回归）/ verify:adr-contracts=0（advisory baseline 提示与本卡无关）/ seed 一致性单测 4/4 passed。
 - **注意事项**：① 偏离登记——额外纳入 `UpdateCardSizeSettingsInput`：`updateCardSizeSettings`（在范围内的 queries 镜像）必须消费其入参类型，属 queries 契约必要组成，非越界。② 严守边界——CardSizeService / admin route / zod / audit ACTION_TYPES 扩展归 CARD-SIZE-SERVICE-ADMIN；公开 route / 缓存归 PUBLIC-CACHE；SSR 注入归 CARD-SIZE-SSR。③ 下一卡：CARD-SIZE-SERVICE-ADMIN（CardSizeService + admin GET/PUT 端点〔ADR-215〕 + audit card_size.update + AuditLogService TS 枚举扩展 + zod 倒置 body 测），建议模型 sonnet。
+
+## [CARD-SIZE-SERVICE-ADMIN] Phase 1：CardSizeService + admin GET/PUT 端点 + audit card_size.update + zod 倒置 body 守卫（SEQ-20260622-03）
+- **完成时间**：2026-06-22
+- **记录时间**：2026-06-22
+- **执行模型**：claude-opus-4-8（主循环；本卡建议模型 sonnet，用户裁定本 Opus 会话执行——不违规仅偏贵）
+- **子代理**：无（端点契约已由 ADR-215 Accepted 锁定 + Opus 背书〔规划期 arch-reviewer ×2〕；本卡为契约实现，非新架构决策）
+- **修改文件**：
+  - `apps/api/src/services/CardSizeService.ts`（新）— `CardSizeService`（`listCardSizes` 按 CARD_SIZE_CLASSES 枚举序重排 / `updateCardSize` before/after 全行快照 + `auditSvc.write('card_size.update', targetId=row.id)`，仿 HomeCurationService）+ inline zod schemas：`CardSizeClassParamSchema` + `GridCardSizeBodySchema`〔desktopColumns 2–8 + gapPx 0–64〕/ `ScrollCardSizeBodySchema`〔cardWidthPx 120–280 + gapPx 0–64〕（均 `.strict()`）+ `bodySchemaFor(sizeClass)` 派发（**档位×单位绑定 zod 守卫，Codex-R1 HIGH**：grid+width / scroll+columns 倒置 body 的 unknown key → 422）。
+  - `apps/api/src/routes/admin/card-sizes.ts`（新）— `GET /admin/card-sizes`（adminOnly，3 档枚举序）+ `PUT /admin/card-sizes/:sizeClass`（adminOnly，sizeClass 枚举外 422 先于 404、body 经 `bodySchemaFor` zod 422、行缺失 404）。
+  - `apps/api/src/server.ts` — import + `register(adminCardSizeRoutes, { prefix: '/v1' })`。
+  - `packages/types/src/admin-moderation.types.ts` — `AdminAuditActionType` +`card_size.update` / `AdminAuditTargetKind` +`card_size`。
+  - `apps/api/src/services/AuditLogService.ts` — `ACTION_TYPES` +`card_size.update` / `TARGET_KINDS` +`card_size`（runtime enums 端点真源）。
+  - `tests/unit/api/audit-log-coverage.test.ts` — `REQUIRED_ACTION_TYPES` + `PAYLOAD_ASSERTION_REQUIRED` +`card_size.update`（审计覆盖率 4 镜像之 2）。
+  - `tests/unit/api/audit-log-service-enums-set-equal.test.ts` — `EXPECTED_ACTION_TYPES` +`card_size.update` / `EXPECTED_TARGET_KINDS` +`card_size`（set-equal 第 4 真源镜像）。
+  - `tests/unit/api/card-size-admin.test.ts`（新）— 13 路由测：GET 枚举序 + 401 / PUT 网格档·scroll 档成功 + **audit payload 内容断言**（actionType/targetKind/targetId=row.id + before/after）/ **倒置 body 422**（grid+cardWidthPx · scroll+desktopColumns）/ 范围越界 422（列 9·卡宽 300·gap 65）/ 缺必填 422 / 枚举外 sizeClass 422 先于 find / 行缺失 404。
+  - `docs/decisions.md`（ADR-215 端点表）— 补首列 `#` 令 `verify:endpoint-adr` 共享解析器可读（canonical `| # | 方法 | 路径 | … |` 格式；不改语义契约）。
+- **新增依赖**：无
+- **数据库变更**：无（audit target_kind CHECK 已由 CARD-SIZE-DB migration 124 落地；action_type 无 DB CHECK，D-182-5.2）→ architecture.md 零同步（§5.19 已含端点契约位 + audit 扩展记录）。
+- **门禁**：typecheck=0 / lint=0 / test:changed=0（598 文件 / 8182 测全过——`packages/types` 基础包升全量，+15 测零回归）/ **verify:endpoint-adr=0**（250 admin 路由对齐，card-sizes GET/PUT 识别）/ verify:adr-contracts=0。
+- **注意事项**：① 偏离登记——修改 `docs/decisions.md` ADR-215 端点表（补 `#` 列），超原"涉及文件"清单，但属满足本卡强制门禁 `verify:endpoint-adr` 的必要格式修复（Phase 0 表缺首列、仅本卡路由落地才暴露解析错位，不改语义）。② audit 4 镜像真源同步：类型 union（admin-moderation.types）/ runtime 数组（AuditLogService）/ coverage 测（REQUIRED + PAYLOAD_ASSERTION_REQUIRED）/ set-equal 测（EXPECTED_*）——任一漏同步即 set-equal 红。③ PUT 非 PATCH（D-215-2：可编辑投影小封闭集恒整体提交）。④ 倒置 body 守卫靠 `.strict()` + 按 sizeClass 派发 schema（DB CHECK ⊇ zod 双层，D-214-10）。⑤ 下一卡：CARD-SIZE-PUBLIC-CACHE（公开 `GET /card-sizes` Redis 读缓存 + PUT→Redis del 失效 best-effort，D-215-6），建议模型 sonnet。

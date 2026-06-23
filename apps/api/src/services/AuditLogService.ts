@@ -144,6 +144,8 @@ export const ACTION_TYPES: readonly AdminAuditActionType[] = [
   // ADR-173 / META-30：API 凭证统一管理（targetKind 复用 'system'）
   'integration.credential_update',
   'integration.credential_test',
+  // ADR-214/215 D-215-2 / SEQ-20260622-03：前台卡片尺寸档位写（targetKind 'card_size'）
+  'card_size.update',
 ]
 export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'video',
@@ -163,6 +165,7 @@ export const TARGET_KINDS: readonly AdminAuditTargetKind[] = [
   'identity_candidate',  // CHG-VIR-9-B / ADR-178 D-178-6（migration 088 CHECK 14→15）
   'home_section',  // CHG-HOME-PREVIEW-API-A / ADR-182 D-182-5（migration 095 CHECK 15→16；targetId = home_section_settings.id）
   'home_page',  // CHG-HOME-DRAFT-PUBLISH-A / ADR-185 D-185-3.5（migration 097 CHECK 16→17；targetId = home_publish_versions.id）
+  'card_size',  // ADR-214/215 / SEQ-20260622-03（migration 124 CHECK 17→18；targetId = card_size_settings.id）
 ]
 
 // ── zod schema（ADR-118 §端点契约 + D-118-3） ────────────────────────

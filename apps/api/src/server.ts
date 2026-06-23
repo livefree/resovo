@@ -65,6 +65,8 @@ import { adminHomeModulesRoutes } from '@/api/routes/admin/home-modules'
 import { adminHomeRoutes } from '@/api/routes/admin/home'
 // CHG-HOME-DRAFT-PUBLISH-A / ADR-185：发布治理（draft CRUD + publish）
 import { adminHomePublishRoutes } from '@/api/routes/admin/home-publish'
+// ADR-214/215 / SEQ-20260622-03：前台卡片尺寸体系 admin 读写
+import { adminCardSizeRoutes } from '@/api/routes/admin/card-sizes'
 import { adminVideoMergesRoutes } from '@/api/routes/admin/video-merges'
 // CHG-VIR-9-B / ADR-178：identity 候选人工裁定（reject）
 import { adminIdentityCandidatesRoutes } from '@/api/routes/admin/identity-candidates'
@@ -204,6 +206,7 @@ async function start() {
   await fastify.register(adminHomeModulesRoutes, { prefix: '/v1' })
   await fastify.register(adminHomeRoutes, { prefix: '/v1' })
   await fastify.register(adminHomePublishRoutes, { prefix: '/v1' })
+  await fastify.register(adminCardSizeRoutes, { prefix: '/v1' })  // ADR-214/215：卡片尺寸体系
   await fastify.register(adminVideoMergesRoutes, { prefix: '/v1' })
   await fastify.register(adminIdentityCandidatesRoutes, { prefix: '/v1' })
   await fastify.register(adminSourcesMatrixRoutes, { prefix: '/v1' })

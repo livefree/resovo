@@ -23915,11 +23915,11 @@ ADR-211（refine D-211-2「EXISTS 未解决事件」口径——读端改 event_
 
 ### 端点契约（verify:endpoint-adr）
 
-| 方法 | 路径 | 鉴权 | 入参 | 成功 | 错误 | audit |
-|---|---|---|---|---|---|---|
-| GET | `/admin/card-sizes` | adminOnly | — | 200 `CardSizeSettings[]`（3 档） | — | — |
-| PUT | `/admin/card-sizes/:sizeClass` | adminOnly | path `sizeClass` + body（档位可编辑全集，zod） | 200 更新后 `CardSizeSettings` | 422 VALIDATION_ERROR / 404 NOT_FOUND | `card_size.update`，targetId=row.id |
-| GET | `/card-sizes` | 无（公开只读） | — | 200 `CardSizeSettings[]`（3 档，Redis 缓存） | — | — |
+| # | 方法 | 路径 | 鉴权 | 入参 | 成功 | 错误 | audit |
+|---|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/card-sizes` | adminOnly | — | 200 `CardSizeSettings[]`（3 档） | — | — |
+| 2 | PUT | `/admin/card-sizes/:sizeClass` | adminOnly | path `sizeClass` + body（档位可编辑全集，zod） | 200 更新后 `CardSizeSettings` | 422 VALIDATION_ERROR / 404 NOT_FOUND | `card_size.update`，targetId=row.id |
+| 3 | GET | `/card-sizes` | 无（公开只读） | — | 200 `CardSizeSettings[]`（3 档，Redis 缓存） | — | — |
 
 **新增 2 个 admin route**（GET + PUT）→ 本 ADR 即满足红线前置（`verify:endpoint-adr` 核验 ADR-215 存在 + Opus 背书）。公开 `GET /card-sizes` 非 admin route、不触红线。
 

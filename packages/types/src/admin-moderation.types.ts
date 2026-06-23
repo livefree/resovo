@@ -283,6 +283,11 @@ export type AdminAuditActionType =
   | 'integration.credential_update'  // PUT  /admin/integrations/credentials/:provider
   | 'integration.credential_test'    // POST /admin/integrations/credentials/:provider/test
 
+  // ADR-214/215 D-215-2 / SEQ-20260622-03：前台卡片尺寸档位写
+  // （targetKind 'card_size' / targetId = card_size_settings.id；afterJsonb 全行快照。
+  // action_type 无 DB CHECK，D-182-5.2——仅 TS 枚举 + audit 筛选器 zod 守）
+  | 'card_size.update'  // PUT /admin/card-sizes/:sizeClass
+
 export type AdminAuditTargetKind =
   | 'video'
   | 'video_source'
@@ -301,6 +306,7 @@ export type AdminAuditTargetKind =
   | 'identity_candidate'  // CHG-VIR-9-B / ADR-178 D-178-6：identity 候选 reject 目标（migration 088 CHECK 14→15）
   | 'home_section'  // CHG-HOME-PREVIEW-API-A / ADR-182 D-182-5：Home Curation 区块操作目标（migration 095 CHECK 15→16；targetId = home_section_settings.id）
   | 'home_page'  // CHG-HOME-DRAFT-PUBLISH-A / ADR-185 D-185-3.5：整页发布/回滚目标（migration 097 CHECK 16→17；targetId = home_publish_versions.id）
+  | 'card_size'  // ADR-214/215 / SEQ-20260622-03：前台卡片尺寸档位写目标（migration 124 CHECK 17→18；targetId = card_size_settings.id）
 
 export interface AdminAuditLog {
   readonly id: string  // bigserial → string（避免 JS 大数精度）

@@ -1,0 +1,110 @@
+/**
+ * CardSizeService.ts — 前台卡片尺寸体系后台读写 Service（ADR-215 D-215-1/2，仿 HomeCurationService）
+ *
+ * 端点真源：ADR-215 端点契约表
+ *   - GET /admin/card-sizes          → listCardSizes（3 档全量，枚举序）
+ *   - PUT /admin/card-sizes/:sizeClass → updateCardSize（全替换该档可编辑投影 + audit card_size.update）
+ *
+ * 校验双层（D-214-10）：DB CHECK（migration 124）+ 本文件 zod min/max。
+ * 档位×单位绑定 zod 守卫（Codex-R1 HIGH）：按 sizeClass 派发 body schema，
+ *   .strict() 令倒置 body（grid 档带 cardWidthPx / scroll 档带 desktopColumns）的 unknown key → 422。
+ */
+
+import { z } from 'zod'
+import type { Pool } from 'pg'
+import {
+  CARD_SIZE_CLASSES,
+  type CardSizeClass,
+  type CardSizeSettings,
+  type UpdateCardSizeSettingsInput,
+} from '@resovo/types'
+import {
+  listCardSizeSettings,
+  findCardSizeSettings,
+  updateCardSizeSettings,
+} from '@/api/db/queries/card-size-settings'
+import { AuditLogService } from '@/api/services/AuditLogService'
+
+// ── zod schemas（D-214-10 双层校验下层；route 经 Service 单点消费）────────────
+
+export const CardSizeClassParamSchema = z.enum(
+  CARD_SIZE_CLASSES as [CardSizeClass, ...CardSizeClass[]],
+)
+
+const GapSchema = z.number().int().min(0).max(64)
+
+/**
+ * 网格档（standard/compact）PUT body：可编辑投影 = { desktopColumns, gapPx }（D-215-2）。
+ * .strict() → 带 cardWidthPx（scroll 档单位）= unknown key → 422（倒置 body 守卫，Codex-R1）。
+ */
+export const GridCardSizeBodySchema = z.object({
+  desktopColumns: z.number().int().min(2).max(8),
+  gapPx: GapSchema,
+}).strict()
+
+/**
+ * scroll 档 PUT body：可编辑投影 = { cardWidthPx, gapPx }（D-215-2）。
+ * .strict() → 带 desktopColumns（网格档单位）= unknown key → 422（倒置 body 守卫）。
+ */
+export const ScrollCardSizeBodySchema = z.object({
+  cardWidthPx: z.number().int().min(120).max(280),
+  gapPx: GapSchema,
+}).strict()
+
+export type GridCardSizeBody = z.infer<typeof GridCardSizeBodySchema>
+export type ScrollCardSizeBody = z.infer<typeof ScrollCardSizeBodySchema>
+
+/** 据 sizeClass 取对应 body schema（档位×单位绑定 zod 派发，R1-HIGH 倒置 body 守卫） */
+export function bodySchemaFor(
+  sizeClass: CardSizeClass,
+): typeof GridCardSizeBodySchema | typeof ScrollCardSizeBodySchema {
+  return sizeClass === 'scroll' ? ScrollCardSizeBodySchema : GridCardSizeBodySchema
+}
+
+// ── Service ───────────────────────────────────────────────────────────────────
+
+export class CardSizeService {
+  private readonly auditSvc: AuditLogService
+
+  constructor(private readonly db: Pool) {
+    this.auditSvc = new AuditLogService(db)
+  }
+
+  /** GET：3 档全量，按 CardSizeClass 枚举序（DB 返字典序 → Service 重排，仿 listSectionSummaries） */
+  async listCardSizes(): Promise<CardSizeSettings[]> {
+    const rows = await listCardSizeSettings(this.db)
+    const bySize = new Map(rows.map((r) => [r.sizeClass, r]))
+    return CARD_SIZE_CLASSES
+      .map((c) => bySize.get(c))
+      .filter((r): r is CardSizeSettings => r !== undefined)
+  }
+
+  /**
+   * PUT：全替换该档可编辑投影 + audit `card_size.update`（before/after 全行快照）。
+   * @returns null = card_size 行缺失（seed 3 行恒存在；缺行 = 迁移漂移兜底 404）
+   */
+  async updateCardSize(
+    sizeClass: CardSizeClass,
+    input: UpdateCardSizeSettingsInput,
+    actorId: string,
+    requestId?: string,
+  ): Promise<CardSizeSettings | null> {
+    const before = await findCardSizeSettings(this.db, sizeClass)
+    if (!before) return null
+
+    const after = await updateCardSizeSettings(this.db, sizeClass, input)
+    if (!after) return null
+
+    this.auditSvc.write({
+      actorId,
+      actionType: 'card_size.update',
+      targetKind: 'card_size',
+      targetId: before.id, // D-215-2：锚定 settings 行 id（sizeClass key 非 UUID）
+      beforeJsonb: before as unknown as Record<string, unknown>,
+      afterJsonb: after as unknown as Record<string, unknown>,
+      requestId: requestId ?? null,
+    })
+
+    return after
+  }
+}
