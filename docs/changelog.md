@@ -2895,3 +2895,14 @@
 - **⚠️ 遗留（用户已确认合并取舍）**：
   - **A2「手机 W=160→2 列」未兑现**：受 `app-shell min-width:1200`（spec §7.2 桌面优先 / 整站横向滚动）架构约束，web-next 无移动端窄视口响应式。A2 的 ADR / Codex-A2-R3 算术建立在「容器随 viewport 收缩到 ~343」的错误前提上。如需移动端响应式 2 列，须**另起架构任务**改 `app-shell`（推翻 §7.2），远超 A1/A2 范围。
   - **视觉回归（admin-visual project）未跑**：baseline 未入库（`PLAYWRIGHT_VISUAL=1` 触发），待单独生成 baseline 补跑。
+
+---
+
+## [HANDOFF-37] 分类/搜索页统一筛选区 — Taxonomy 基座 + 共享筛选契约定稿（SEQ-20260624-01 Card 0）
+
+- **范围（纯加性契约）**：前台筛选区 5 维（type/genre/country/lang/year）+ 网格排序条统一改造的 taxonomy SSOT + 组件 Props 契约定型。不含组件实装（HANDOFF-39）/后端 `/videos`（HANDOFF-38）/页面接入（HANDOFF-40）。
+- **arch-reviewer (claude-opus-4-8) CONDITIONAL PASS → 5 必改全吸收**：① taxonomy 收敛单一 `FILTER_TAXONOMY` 配置（`valueSource`/`labelSource` 双判别，year 计算维度不写死年份值）；② type 维度 `valueSource:'category'` 不持有值列表（避免 types→web-next 反向依赖 + 不复制 `lib/categories.ts` 真源，ADR-048），label 走既有 `videoType.*` 命名空间（非 `nav.cat*`，避免文案三处重复）；③ 语言枚举 `AUDIO_LANGUAGE_CANONICALS`+派生 `AudioLanguageCanonical` 一并提升至 types，api 改 `@/types` 引用 + re-export 兜底，**不动** `SUBTITLE_LANGUAGE_CANONICALS`；④ country curated 占位标注（待产品确认）+ `labelSource:'country-name'` 走 formatCountryName；⑤ Props：`onTypeChange(VideoType|null)`（传 API 值不传 URL slug）+ `mode:'category'|'search'` + `hiddenDimensions` 替代旧 `lockedDims`。
+- **文件**：🆕 `packages/types/src/search-filter-taxonomy.ts`（FILTER_TAXONOMY + CURATED_FILTER_COUNTRIES〔占位〕 + SORT_OPTIONS + YEAR_FILTER_SPAN）｜✏️ `packages/types/src/video.types.ts`（提升 AUDIO_LANGUAGE_CANONICALS + AudioLanguageCanonical）｜✏️ `packages/types/src/index.ts`（导出枚举 + `export * from './search-filter-taxonomy'`）｜✏️ `apps/api/src/services/SourceLanguageResolver.ts`（改引用 `@/types` + re-export）｜🆕 `apps/web-next/src/components/shared/filter/types.ts`（FilterArea/GridSortBar Props）。
+- **门禁**：typecheck 8 workspace=0 / lint 4 successful（仅既有 server-next warning）/ 全量单测 604 文件 8235 测全过（受影响 `source-language-resolver` 17/17）。纯类型/枚举加性，e2e N/A。
+- **执行模型**：claude-opus-4-8（主循环）｜**子代理**：arch-reviewer（claude-opus-4-8，taxonomy 出口 + Props 契约定稿，agentId a98649503cc1d410e）。
+- **follow-up**：`CURATED_FILTER_COUNTRIES` 10 国清单待产品确认（非阻塞，实装前确认）。

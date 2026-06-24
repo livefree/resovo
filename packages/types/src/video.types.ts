@@ -253,6 +253,14 @@ export const SOURCE_TYPES = ['hls', 'mp4', 'dash'] as const
 export type SourceType = typeof SOURCE_TYPES[number]
 
 /**
+ * 语音规范词封闭枚举（ADR-199 D-199-2 真源，自 apps/api SourceLanguageResolver 提升 / HANDOFF-37）。
+ * 「国配」并入「国语」（同为中文配音，分立误判多语音）。扩词改这里 + apps/api AUDIO_VARIANT_RULES。
+ * 前台筛选 lang 维度值集合即此。
+ */
+export const AUDIO_LANGUAGE_CANONICALS = ['国语', '粤语', '日语', '韩语', '英语'] as const
+export type AudioLanguageCanonical = typeof AUDIO_LANGUAGE_CANONICALS[number]
+
+/**
  * 语音维度 provenance（ADR-199 D-199-3 五级推断链，Migration 112）。
  * 顺序即优先级：行级线路名 token > 上游 vod_lang > 标题 token > 地区推断 > 未知。
  * 升级规则：region_inferred/unknown 可被前三者覆盖，反向禁止（数据优先于推断）。

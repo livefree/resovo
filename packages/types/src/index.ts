@@ -76,7 +76,11 @@ export {
   BANGUMI_STATUSES,
   EXTERNAL_REF_PROVIDERS, EXTERNAL_REF_MATCH_STATUSES,
   AUDIO_LANGUAGE_SOURCES, SUBTITLE_LANGUAGE_SOURCES,
+  AUDIO_LANGUAGE_CANONICALS,
 } from './video.types'
+
+// ── HANDOFF-37 前台筛选区 taxonomy SSOT（FILTER_TAXONOMY / curated 地区 / 排序选项）─
+export * from './search-filter-taxonomy'
 
 // ── ADR-201 / META-32-A 统一元数据状态契约（类型 + 枚举双形态）─────
 export type * from './metadata-status.types'

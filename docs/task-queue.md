@@ -3130,3 +3130,41 @@
 - **Phase A2-0 Codex 对抗审 round-1（2026-06-23，3 BLOCKER + 3 CONCERN 全吸收入 ADR-214 Amendment A2）**：R2 migration 126 约束顺序（先 DROP 125 size_unit_check/size_class CHECK 再改 global 再删 desktop_columns 列）→ A2-1；R3 手机算术修正 W=180→160（手机 2 列）→ A2-1/A2-3；R4 资产清理扩 Shelf/TopTenRow/DailyAnimeRow 内联 + fetch 遍历 → A2-3，测试清单 → A2-5；R1 精确=border-box + e2e getBoundingClientRect → A2-5；R5 CardSizeClass 收敛 'global' 保留非删 → A2-1/A2-2；R6 auto-fill 理由 + overflow min(W,100%) + 分区对齐 → A2-3。**Amendment A2 状态 = Accepted（待用户裁可）→ 解锁 A2-1。**
 - **Phase A2-3 Codex 对抗审 round-2（2026-06-23，auto-fill→auto-fit 实施期自纠）= SELF-CORRECTION CONDITIONALLY VALID**：固定宽轨道（非 1fr）下 auto-fill 保留空轨道 → `justify-content:center` 居中含空轨道整块 ≈ 满容器、卡片左对齐不居中（兑现不了用户「卡少居中」）；auto-fit 折叠空轨道才真居中且卡宽恒 = W（无 1fr 不拉伸）→ 原 Codex-A2-R6「auto-fit 拉伸」理由仅对 minmax(W,1fr) 成立、A2 已弃 1fr 故失效。**修正网格用 `repeat(auto-fit, min(var(--card-w),100%))`**。Codex 补三边界（已记 ADR D-214-A2-2 / 实装吸收）：① 多行末行左对齐（同 auto-fill，可接受）；② 0px 折叠轨道 → e2e `tracks()` 过滤 `n>0`；③ `min(W,100%)` 超窄容器收宽（< W 时非严格 = W，有意取舍，getBoundingClientRect=W 断言在桌面 1280 跑）。
 - **A2-1~A2-4 交付（2026-06-23，本提交）**：migration 126 + types 收敛 'global' + queries/fetch/Service/lib 单一全局 + CardGrid auto-fit 精确定宽+居中 + ScrollRow/Shelf/TopTenRow/DailyAnimeRow 变量回收 + globals.css + CardSizeTab 单一表单+手机列数提示 + 全栈测试重写。门禁：typecheck=0 / lint 通过 / card-size 单测 79+148 全绿。**A2-5 e2e spec 已重写**（card-size-grid 全站精确定宽 + featured-row-sparse 居中），实跑属合并 main 前 e2e gate（worktree 缺 .env.local，同 A1）。**执行模型**：claude-opus-4-8（主循环，满足 A2-3 CSS 原语翻转强制 Opus + types 共享契约强制 Opus）｜**子代理**：codex-rescue（codex runtime，auto-fit 自纠对抗审，agentId a1b5a7548f304bf5e）。
+
+---
+
+## [SEQ-20260624-01] FILTER-UNIFY — 分类/搜索页统一筛选过滤区（5 维 + 排序条 + 共享组件 + 后端补齐）
+
+- **状态**：🔄 执行中（HANDOFF-37 ✅ / 38 起）
+- **创建时间**：2026-06-24
+- **最后更新时间**：2026-06-24（HANDOFF-37 交付）
+- **目标**：分类页与搜索页共用同一筛选区（类型/题材/地区/语言/年份 5 维行内互斥单选）+ 网格左上排序条（添加时间/人气/评分）；类型行与顶部导航双向联动；后端 `/videos` 补 genre/lang 查询；筛选项值集合走 `@resovo/types` taxonomy SSOT（前台零硬编码）。
+- **范围**：`packages/types`（taxonomy 出口 + 语言枚举提升 + curated 地区）；`apps/api`（`/videos` genre/lang + `/search` lang 音频对齐）；`apps/web-next`（共享 FilterArea/GridSortBar + Nav 联动 + 页面接入 + i18n）。
+- **依赖**：方案 + 设计草图已用户验收（`docs/designs/filter-area-unified-redesign_20260624.html` v4）；用户确认 taxonomy 契约 6 条边界（2026-06-24）。
+
+### 任务列表（按执行顺序；依赖序 37 → (38∥39) → 40，41 follow-up）
+
+1. HANDOFF-37 — Taxonomy 基座 + 共享筛选契约（Opus 定稿）（状态：✅ 2026-06-24）
+   - 范围：`packages/types` 新建 search-filter-taxonomy（维度→值集合+i18n key+formatter+curated 地区 ISO 列表）；`AUDIO_LANGUAGE_CANONICALS` 从 `apps/api` SourceLanguageResolver 提升到 `@resovo/types`（api 改引用）；FilterArea/GridSortBar Props 契约定型。
+   - 强制：arch-reviewer (Opus) 定稿 taxonomy 出口结构 + Props 契约（新共享 API + 跨 4 消费方）。
+   - 验收：types 单出口导出 taxonomy；SourceLanguageResolver 引用同一真源零重复；typecheck/lint 全过；Props 契约 Opus PASS。
+   - **完成备注（2026-06-24）**：arch-reviewer (claude-opus-4-8) CONDITIONAL PASS → 5 必改全吸收（单一 FILTER_TAXONOMY valueSource/labelSource 双判别 / type 维 source='category' 不持值列表防 types→web-next 反依赖 / 语言枚举+派生 type 一并提升 + api re-export 兜底 / country curated 占位 + labelSource='country-name' / Props onTypeChange(VideoType|null)+mode+hiddenDimensions 替代 lockedDims）。门禁：typecheck 8 workspace=0 / lint 4 successful / 全量单测 604 文件 8235 测全过（source-language-resolver 17/17）。纯加性 e2e N/A。follow-up：CURATED_FILTER_COUNTRIES 10 国待产品确认。详见 changelog [HANDOFF-37]。
+2. HANDOFF-38 — 后端 `/videos` genre/lang 补齐（PostgreSQL）（状态：⬜）
+   - 范围：routes/videos.ts QuerySchema 加 genre/lang（z.enum taxonomy）；VideoService.list 加 genre/lang；db/queries/videos.ts VideoListFilters 加 lang + `EXISTS(sources.audio_language)` 子查询（**genre 条件已存在 / sort 已通**）；migration 127 sources(audio_language) 索引 + mc.genres GIN（若未建）；单测 lang 命中/未命中/NULL。
+   - 验收：`/videos?genre=&lang=` 生效；非法值 422；lang「任一 source 命中」语义；门禁 + 单测全过。
+3. HANDOFF-39 — 共享 FilterArea + GridSortBar 组件 + i18n（状态：⬜）
+   - 范围：components/browse/FilterArea.tsx → shared/filter/FilterArea.tsx（5 维消费 taxonomy / 删 rating_min·status 行 / 删 lockedDims / type↔nav 联动）；新建 GridSortBar；layout/Nav.tsx + NavMoreMenu.tsx 联动；messages/zh-CN+en 加 genre 20 项 + 维度/排序标签。
+   - 验收：组件消费 taxonomy 零硬编码；type↔nav 双向联动；URL-param 驱动；门禁全过。
+4. HANDOFF-40 — 分类/搜索页接入 + E2E（状态：⬜）
+   - 范围：[type]/page.tsx（FilterArea 无 lockedDims + GridSortBar）；search/SearchPage.tsx（加 FilterArea + GridSortBar，移除 type tab）；BrowseGrid 无需改；e2e browse-category-routes/browse-tvshow/search-page 更新。
+   - 验收：两页筛选区一致；互斥单选 + reset page；排序切换；e2e:search + e2e:video 过。
+5. HANDOFF-41 — `/search` lang 字幕→音频对齐（ES，follow-up）（状态：⬜）
+   - 范围：SearchService lang subtitle_langs→audio_language；es_mapping.json + elasticsearch.ts mapping + 重建索引；routes/search.ts 枚举对齐 taxonomy。
+   - 验收：搜索页 lang 命中音频语音；ES 重建脚本；门禁过。
+
+### 关键约束
+
+- **筛选项 taxonomy 契约（用户 2026-06-24 确认）**：值集合静态枚举 SSOT（`@resovo/types`）+ label i18n key + zod 严格校验 + 脏值不进前台（raw/other/审核）+ curated 地区（非 DISTINCT）+ formatCountryName 显示；**不做 per-option 计数**（网格右上总数已足够）。
+- **强制 Opus**：HANDOFF-37 taxonomy 出口 + FilterArea/GridSortBar Props 契约（新共享 API + 跨 4 消费方）→ arch-reviewer 定稿。
+- **lang 音频聚合**：`audio_language` 在 sources 层（Migration 112），按「任一 source 命中」EXISTS 子查询；NULL=未知不命中（HANDOFF-38 需 Opus 复核 SQL）。
+- **类型行不锁定**：分类/搜索页均显示全类型，点 type 与顶部导航双向联动（分类页 = 路由跳转）；`lockedDims` 取消。

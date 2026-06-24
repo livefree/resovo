@@ -16,15 +16,15 @@
  * 已上提）；双形态：已是 ISO code 直接用，否则过中文/别名表。
  */
 
-import type { AudioLanguageSource, SubtitleLanguageSource } from '@/types'
-import { countryToIso } from '@/types'
+import type { AudioLanguageSource, SubtitleLanguageSource, AudioLanguageCanonical } from '@/types'
+import { countryToIso, AUDIO_LANGUAGE_CANONICALS } from '@/types'
 import { AUDIO_VARIANT_RULES, SUBTITLE_VARIANT_RULES } from './TitleIdentityParser'
 
-// ── 封闭枚举规范词（D-199-2 真源；扩词改这里 + AUDIO_VARIANT_RULES）──────────────
+// ── 封闭枚举规范词（D-199-2 真源已上提 @resovo/types / HANDOFF-37；扩词改 types + AUDIO_VARIANT_RULES）──
 
-/** 语音规范词封闭枚举。「国配」并入「国语」（同为中文配音，分立误判多语音）。 */
-export const AUDIO_LANGUAGE_CANONICALS = ['国语', '粤语', '日语', '韩语', '英语'] as const
-export type AudioLanguageCanonical = typeof AUDIO_LANGUAGE_CANONICALS[number]
+/** 语音规范词：真源已提升至 @resovo/types（HANDOFF-37）。re-export 兜底既有 api 内消费方。 */
+export { AUDIO_LANGUAGE_CANONICALS }
+export type { AudioLanguageCanonical }
 
 /** 字幕已知具体语言规范词封闭枚举（subtitle_languages 数组元素值域）。 */
 export const SUBTITLE_LANGUAGE_CANONICALS = ['中文', '英文'] as const
