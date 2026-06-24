@@ -2846,3 +2846,11 @@
 - **改动**：① `watch/[slug]/page.tsx` PlayerShell 下方新增相关视频横滚区（`max-w-feature` 容器 + `<RelatedVideos>`）；② **复用 `detail/RelatedVideos`**（详情 + 播放共用同款横滚，注释更新说明通用归属）；③ `initialVideo`（server `fetchVideoDetail`）传入。播放页此前无相关视频区。
 - **门禁**：typecheck=0 / lint=0 / 相关测 20 绿（**npx vitest 替代**：related-videos 4 + scroll-row 9 + 详情 fetch-sources 7）。**`test:changed` 脚本 spawn worktree-local `node_modules/.bin/vitest` ENOENT**（worktree node_modules 不完整环境约束，同 `.env.local` 缺失）→ 用 `npx vitest`（解析主仓 vitest）替代验证。PLAYER e2e 须主 checkout/CI（登记 #7）。
 - **注意事项**：① 相关卡 `navigate` 纯跳新视频详情、**不耦合 GlobalPlayerHost full/mini/pip 状态机**（严守 D-214-A1-6）。② 滚动吸顶 mini 播放器为可选后续（D-214-A1-6 ⑤，本卡不做）。③ RelatedVideos 提取至 shared（消 components/detail 历史归属）为可选后续。
+
+## [CARD-SIZE-A1-E2E] Phase 7：card-size-grid.spec size-driven 重写 + 合并 gate 登记（SEQ-20260623-01）
+
+- **日期**：2026-06-23 ｜ **类型**：e2e spec（测试收口）｜ **执行模型**：claude-opus-4-8（主循环）｜ **子代理**：无。
+- **依据**：Codex-R5 测试漂移 + ADR e2e 门禁（既有 spec 断言旧列数语义需重写）。
+- **改动**：重写 `tests/e2e-next/card-size-grid.spec.ts`（4 测）：① SSR 注入变量——standard 出 `--card-w-standard:200px`（非列数）+ **compact 全栈退役无残留**（`--card-cols-compact`/`--card-gap-compact`/`--card-w-compact` 均空）；② featured-grid 桌面 size-driven `auto-fill`——卡宽恒定 ~200px〔[195,300] 含 1fr 拉伸〕+ 列数容器派生〔≥3〕+ gap 16px；③ 长标题不撑破轨道·无水平溢出（D-214-4 min-width:0）；④ 窄视口保留 2 列计数（D-214-A1-2 仅 ≥1024 size-driven）。
+- **门禁**：typecheck=0 / lint=0（spec 语法/类型）。**e2e 实跑环境阻塞**——worktree 缺 `.env.local` + node_modules 不完整 → dev server 起不来 + playwright 不可跑 → **`test:e2e` 4 projects + migration 125 冷启动 + 全量单测须主 checkout/CI 跑 = 合并 main 前 gate**（同 CARD-SIZE-E2E）。
+- **注意事项**：① 本卡 spec 不占活跃工作台槽（环境阻塞性质）。② 详情/播放横滚 e2e（`related-scroll` 渲染断言）可后续补 spec（本卡聚焦 size-driven 网格回归）。③ **🎉 SEQ-20260623-01 代码全交付（#0–#7）**——剩合并 main 前 gate 实跑。

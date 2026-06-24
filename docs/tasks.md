@@ -60,15 +60,16 @@ _（**SEQ-20260610-02 source-health v2 落地 🔄 15/17 — Phase 1 ✅ + Phase
 
 ---
 
-### 🔄 CARD-SIZE-A1-E2E — e2e 重写 + 全量回归（SEQ-20260623-01 Phase 7，合并 gate 收口）
+### ⏸️ CARD-SIZE-A1-E2E — card-size-grid.spec size-driven 重写 ✅ + 合并 gate 实跑登记（SEQ-20260623-01 Phase 7）
 
-- **状态**：🔄 进行中 ｜ **创建/开始**：2026-06-23 ｜ **执行模型**：claude-opus-4-8（主循环；卡建议 sonnet）｜ **子代理**：无。
-- **依据**：Codex-R5 测试漂移 + ADR e2e 门禁（合并 main 前 test:e2e）。承接 SEQ-20260622-03 CARD-SIZE-E2E 同款环境约束。
-- **问题理解**：卡片尺寸 A1 改造（standard size-driven + compact 退役 + 详情/播放横滚）需 e2e 验证 SSR→视觉链路 + 合并 main 前全量门禁；既有 `card-size-grid.spec` 断言旧列数语义、需重写。
-- **方案**：① 重写 `tests/e2e-next/card-size-grid.spec.ts`（standard size-driven 桌面卡宽 `--card-w-standard` 断言替列数 / compact 删除后无 `--card-cols-compact`/`--card-w-compact` 残留变量 / 窄视口响应式）；② 详情/播放页相关横滚 e2e（`related-scroll` 渲染 + VideoCard）；③ **合并 main 前**：全量单测 `npm run test -- --run` + `test:e2e` 4 projects + migration 125 冷启动。
-- **涉及文件**：`tests/e2e-next/card-size-grid.spec.ts`（重写）+ 可能详情/播放 e2e spec。
-- **门禁**：spec 可写（worktree）；**实跑环境阻塞**——worktree 缺 `.env.local` + node_modules 不完整 → dev server 起不来 + playwright/`test:changed` 不可跑 → **`test:e2e` 4 projects + 全量单测 + migration 125 冷启动须主 checkout/CI 跑 = 合并 main 前 gate**（同 CARD-SIZE-E2E）。
-- **备注**：本卡 spec 编写为主、实跑登记合并 gate；不占编码工作台活跃槽（环境阻塞性质）。**横滚线 #2/#5/#6 主体已交付**，本卡收口测试 + 合并 gate。
+- **状态**：⏸️ **spec 已交付 + 可跑门禁全绿**（card-size-grid.spec size-driven 重写，typecheck=0/lint=0；commit 见 changelog [CARD-SIZE-A1-E2E]）·**待 e2e 实跑**（`test:e2e` 4 projects + migration 125 冷启动 + 全量单测须主 checkout/CI 跑 = 合并 main 前 gate；worktree 缺 `.env.local` + node_modules 不完整起不来 dev server）——**不占活跃工作台槽**（环境阻塞性质，同 CARD-SIZE-E2E）｜ **执行模型**：claude-opus-4-8。
+- **已交付**：`card-size-grid.spec.ts` 重写 4 测（① SSR standard `--card-w-standard:200px` + compact 无残留 ② featured-grid size-driven auto-fill 卡宽~200/列数派生/gap16 ③ 长标题不溢出 ④ 窄视口保留 2 列）。
+- **合并 main 前 gate（须主 checkout/CI）**：① `migration 125` 冷启动实跑（六步顺序 + 约束名 + NOT NULL 回填）；② `test:e2e` 4 projects（card-size-grid + 详情/播放横滚视觉）；③ 全量单测 `npm run test -- --run`；④ admin PUT→公开读→SSR 新鲜度端到端。
+- **可选后续**：详情/播放横滚 e2e（`related-scroll` 渲染断言）补 spec；首页 ScrollRow 迁移 #8；RelatedVideos 提取 shared。
+
+---
+
+_（**🎉 SEQ-20260623-01 CARD-SIZE-A1 代码全交付（#0–#7）2026-06-23**：#0 ADR Amendment A1 + Codex 审〔`61db5770`〕→ #1A/1B/3/4 尺寸线 size-driven 批次〔`67b0e36c`〕→ #2 ScrollRow〔`4a4f4393`〕→ #5 详情拆侧栏〔`784f8b81`〕→ #6 播放页横滚〔`06b86be3`〕→ #7 e2e spec。**两条核心诉求落地**：① standard 网格 column-driven→size-driven〔运营设卡片宽度 px、前台卡片随设定变〕+ compact 幽灵档退役；② 详情/播放页相关视频统一为全宽横滚〔退役 60px 侧栏竖列表、播放页新增〕。每步门禁绿〔typecheck/lint=0 + 全量单测 8221 + arch-reviewer + Codex 评审吸收〕。**剩合并 main 前 gate**：migration 125 冷启动 + test:e2e 4 projects + 全量单测〔worktree 环境受限须主 checkout/CI〕。worktree `worktree-card-size-a1` 6 commit 未 push/合 main。取下一任务前先查 🚨 BLOCKER。）_
 
 ---
 
