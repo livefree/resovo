@@ -9,7 +9,6 @@
 import Link from 'next/link'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
-import { cn } from '@/lib/utils'
 import { ALL_CATEGORIES, MORE_TYPE_PARAMS } from '@/lib/categories'
 
 // 扩展分类（6 种，"更多 ▼" 下拉内），单源 lib/categories.ts（I-6）
@@ -29,8 +28,20 @@ export function MoreMenu({ locale, currentType, label }: MoreMenuProps) {
   const t = useTranslations('nav')
   const [open, setOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
+  // 延时关闭定时器（hover-intent）：离开 wrapper 不立即关，给指针穿越「按钮↔菜单」间隙的时间，
+  // 抵达菜单（wrapper 后代）触发 mouseenter → 取消关闭。彻底兜底几何死区——Nav header `items-center`
+  // 致按钮垂直居中、其下方约 8px 为非 wrapper 后代的 header 空隙，鼠标下移穿越即触发 onMouseLeave。
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const active = currentType !== null && MORE_KEYS.has(currentType)
+
+  // 卸载清理延时关闭定时器（防泄漏 / setState on unmounted）
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current)
+    },
+    [],
+  )
 
   // 点击外部 + ESC 关闭（touch 模式下需要）
   useEffect(() => {
@@ -50,16 +61,29 @@ export function MoreMenu({ locale, currentType, label }: MoreMenuProps) {
     }
   }, [open])
 
+  function cancelScheduledClose() {
+    if (closeTimerRef.current !== null) {
+      clearTimeout(closeTimerRef.current)
+      closeTimerRef.current = null
+    }
+  }
+
   function handleMouseEnter() {
     // hover 展开仅用于 pointer: fine（桌面鼠标）设备（I-5）
     if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
+      cancelScheduledClose()
       setOpen(true)
     }
   }
 
   function handleMouseLeave() {
     if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
-      setOpen(false)
+      // 延时关闭：留出指针穿越间隙抵达菜单的时间，期间 re-enter（wrapper 后代）取消关闭。
+      cancelScheduledClose()
+      closeTimerRef.current = setTimeout(() => {
+        setOpen(false)
+        closeTimerRef.current = null
+      }, 200)
     }
   }
 
@@ -137,50 +161,52 @@ export function MoreMenu({ locale, currentType, label }: MoreMenuProps) {
       </button>
 
       {open && (
-        <div
-          role="menu"
-          data-testid="nav-more-menu"
-          className="absolute z-50 top-full mt-2"
-          style={{
-            left: 0,
-            minWidth: '180px',
-            borderRadius: '10px',
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border-default)',
-            boxShadow: '0 8px 24px color-mix(in oklch, var(--color-gray-1000) 12%, transparent)',
-            padding: '6px',
-          }}
-        >
-          {MORE_CATS.map((cat) => {
-            const isActive = currentType === cat.typeParam
-            return (
-              <Link
-                key={cat.typeParam}
-                href={`/${locale}/${cat.typeParam}`}
-                role="menuitem"
-                data-testid={`nav-more-${cat.typeParam}`}
-                onClick={() => setOpen(false)}
-                className="block transition-colors"
-                style={{
-                  padding: '8px 12px',
-                  fontSize: '14px',
-                  fontWeight: 500,
-                  borderRadius: '6px',
-                  textDecoration: 'none',
-                  color: isActive ? 'var(--accent-default)' : 'var(--fg-default)',
-                  background: isActive ? 'var(--accent-muted)' : 'transparent',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isActive) e.currentTarget.style.background = 'var(--bg-surface-sunken)'
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) e.currentTarget.style.background = 'transparent'
-                }}
-              >
-                {t(cat.labelKey)}
-              </Link>
-            )
-          })}
+        // 外层=定位+透明桥接容器：紧贴按钮底部（top-full，无 margin），
+        // paddingTop 充当 8px hover 桥接区，避免鼠标穿越间隙离开 wrapper 触发收起。
+        <div className="absolute z-50 top-full" style={{ left: 0, paddingTop: '8px' }}>
+          <div
+            role="menu"
+            data-testid="nav-more-menu"
+            style={{
+              minWidth: '180px',
+              borderRadius: '10px',
+              background: 'var(--bg-surface)',
+              border: '1px solid var(--border-default)',
+              boxShadow: '0 8px 24px color-mix(in oklch, var(--color-gray-1000) 12%, transparent)',
+              padding: '6px',
+            }}
+          >
+            {MORE_CATS.map((cat) => {
+              const isActive = currentType === cat.typeParam
+              return (
+                <Link
+                  key={cat.typeParam}
+                  href={`/${locale}/${cat.typeParam}`}
+                  role="menuitem"
+                  data-testid={`nav-more-${cat.typeParam}`}
+                  onClick={() => setOpen(false)}
+                  className="block transition-colors"
+                  style={{
+                    padding: '8px 12px',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    borderRadius: '6px',
+                    textDecoration: 'none',
+                    color: isActive ? 'var(--accent-default)' : 'var(--fg-default)',
+                    background: isActive ? 'var(--accent-muted)' : 'transparent',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) e.currentTarget.style.background = 'var(--bg-surface-sunken)'
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) e.currentTarget.style.background = 'transparent'
+                  }}
+                >
+                  {t(cat.labelKey)}
+                </Link>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>
