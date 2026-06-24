@@ -2968,3 +2968,34 @@
 - **E2E**：三 spec 更新（filter-area 5 维渲染 + grid-sort-bar + type 行 activeType 高亮〔movie/variety〕+ search-tab 移除断言）+ typecheck-clean。**worktree 无 Postgres/.env.local → `test:e2e:search` 在 seed globalSetup 阻塞、零测试运行（环境非测试失败）→ E2E 实跑归合并 main 前 gate**（同 CARD-SIZE-A1A2-GATE 先例）。
 - **已知次要项**：搜索页后端无 sort 时默认 relevance（查询相关性最优 UX）vs GridSortBar 默认高亮 latest 的视觉不一致——统一设计仅 3 排序（latest/hot/rating）、无 relevance 按钮，relevance 为搜索隐式默认；显式选 hot/rating/latest 均生效。非阻塞，记此备查。
 - **执行模型**：claude-opus-4-8（主循环）｜**子代理**：无（页面接入用 HANDOFF-39 已定 FilterArea 契约；CategoryFilterBar 持路由知识属页面层、非新共享契约）。
+
+---
+
+## [HANDOFF-41] 分类/搜索页统一筛选区 — `/search` lang 字幕→音频对齐（ES audio_langs，SEQ-20260624-01 Card 5 / 序列收口）
+- **完成时间**：2026-06-24
+- **记录时间**：2026-06-24 23:40
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8, agentId abf2f3205d8f24e2d) — ES 字段契约 + 聚合语义跨页等价 + reindex 策略定稿（schema 改动，强制 Opus）
+- **背景（HANDOFF-40B 遗留）**：搜索页 lang 此前映射 ES `subtitle_langs`（字幕），与用户确认「语言=音频语音」及 `/videos` 已落地的 `video_sources.audio_language` EXISTS（HANDOFF-38）语义错位 → 两页 lang 维结果集不等价（违反方案 B「两页完全等价」）。本卡对齐 ES 侧到音频语义，序列收口。
+- **跨页等价不变式（Opus 数学证明，本卡唯一不可妥协约束）**：新增 ES 字段 `audio_langs`（keyword 数组），由 indexer 以**与 `/videos` EXISTS 逐字段对齐的 source 选择谓词**聚合 → `{term:{audio_langs:X}}` 命中集 ⟺ `/videos` 的 `EXISTS(...audio_language=X)`。`ARRAY_AGG(DISTINCT)` 去重不引差异；NULL 两侧一致排除（SQL `=X` 三值逻辑天然排 NULL，ES 子查询显式 `IS NOT NULL`）。
+- **改动（M1 HIGH，indexer）**：`VideoIndexSyncService.ts` 加 `AUDIO_LANGS_SUBQUERY = (SELECT ARRAY_AGG(DISTINCT audio_language) FROM video_sources WHERE video_id=v.id AND is_active=true AND deleted_at IS NULL AND audio_language IS NOT NULL)` + 谓词对齐注释指向 `videos.ts:104-110`；三处 SQL（FETCH/RECONCILE/STALE_UNPUBLISHED）**全加** `AS audio_langs`；`VideoEsRow` 加 `audio_langs: string[] | null`；`buildDocument` 加 `audio_langs: row.audio_langs ?? []`（**锁 `?? []`**——ARRAY_AGG 空集返 NULL 非 `{}`，空数组 term 不命中=「全 NULL 仅在『全部』出现」与 /videos 一致）。
+- **改动（D1 mapping）**：`es_mapping.json` 加 `"audio_langs": { "type": "keyword" }`（镜像 `subtitle_langs` 命名/类型）。
+- **改动（D3 query）**：`SearchService.ts` lang filter `{ term: { subtitle_langs } }` → `{ term: { audio_langs } }`；`subtitle_langs` 字段**保留**（结果卡 `subtitleLangs` 展示，line 133，与 lang 筛选维正交，不删）。
+- **改动（M2 route）**：`routes/search.ts` lang `z.string().optional()` → `z.enum(AUDIO_LANGUAGE_CANONICALS).optional()`；四常量（VIDEO_TYPES/VIDEO_STATUSES/VIDEO_GENRES/AUDIO_LANGUAGE_CANONICALS）统一迁 `@/types`（复刻 `videos.ts:15` 范式，避 `@resovo/types` 陈旧 dist 缺导出）；非法值 422。唯一消费方 SearchPage(enum-lang) 渲染规范词，无非规范词调用，收窄安全。
+- **改动（M3 reindex 脚本）**：🆕 `scripts/reindex-es-audio-langs.ts`——`putMapping`（additive 幂等，对存量索引补 audio_langs）+ keyset 分页（`id > $哨兵 ORDER BY id`，全零 UUID 起点）全量遍历 published 视频 `syncVideo` 回填（FETCH_SQL 已含 audio_langs）+ refresh + **计数收敛断言**（遍历计数 == DB published 总数；**不用 `exists:audio_langs`**——空数组在 ES 不算 exists 会假阴性）。**不复用** `reconcilePublished`（其 RECONCILE_SQL `ORDER BY updated_at DESC LIMIT` 无游标分页，循环调用反复回填 top-N 不前进，Opus M3 揪出）；**`ensureIndex` 不动**（mapping 演化收敛到 es_mapping.json + 一次性脚本，不混入启动期热路径，Opus 裁定）。
+- **修改文件**：
+  - `apps/api/src/services/VideoIndexSyncService.ts` — AUDIO_LANGS_SUBQUERY + VideoEsRow + buildDocument + 三处 SQL
+  - `apps/api/src/db/migrations/es_mapping.json` — +audio_langs keyword
+  - `apps/api/src/services/SearchService.ts` — lang filter subtitle_langs→audio_langs
+  - `apps/api/src/routes/search.ts` — lang z.enum(AUDIO_LANGUAGE_CANONICALS) + 四常量统一 @/types
+  - `scripts/reindex-es-audio-langs.ts` — 🆕 ES 存量索引 audio_langs 回填脚本（幂等可重入）
+  - `tests/unit/api/search.test.ts` — lang→audio_langs 断言 + 非法 lang 422（+2）
+  - `tests/unit/api/videoIndexSync.test.ts` — audio_langs 写入 + NULL→空数组兜底（+2）
+- **新增依赖**：无
+- **数据库变更**：无（PG schema 未变；ES mapping additive 加 keyword 字段，非 PG migration；migration 127 音频索引 HANDOFF-38 已建，本卡复用）
+- **门禁**：typecheck=0（root + apps/api 直跑 + reindex 脚本临时 tsconfig 独测）/ lint=0（api#lint tsc 干净，4 successful）/ 变更测试 33 passed（search 19 + videoIndexSync 14）/ verify:adr-contracts=0。
+- **注意事项**：
+  - **reindex 实跑 + E2E search 归合并 main 前 gate**（需 ES + Postgres + .env.local，worktree 阻塞，同 40B/CARD-SIZE-A1A2-GATE 先例）。部署后须跑 `node --env-file=.env.local --import tsx scripts/reindex-es-audio-langs.ts` 回填存量 audio_langs（回填前 lang 搜索零结果，回填后逐步生效）。
+  - **audio_language 列无 CHECK 约束**（migration 112 TEXT NULL，封闭性靠应用层 SourceLanguageResolver/ADR-199 D-199-2）：理论脏值（非枚举音频语言）会进 audio_langs 数组，但因 route z.enum 收窄不可达 → 无召回风险（死数据）。Opus 建议 reindex 时可附 `SELECT DISTINCT audio_language ... NOT IN (枚举)` 健康检查日志（非阻塞，未实装）。
+  - subtitle_langs 与 audio_langs 数据血缘不同（前者 ES 取自 `subtitles` 表，后者取自 `video_sources.audio_language`），二者正交，本卡不触碰 subtitle 逻辑。
+  - **SEQ-20260624-01 全交付**（37/38/39/40A/40B/41 ✅）：分类/搜索两页统一筛选区主体 + ES lang 音频对齐收口完成。

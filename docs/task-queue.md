@@ -3135,7 +3135,7 @@
 
 ## [SEQ-20260624-01] FILTER-UNIFY — 分类/搜索页统一筛选过滤区（5 维 + 排序条 + 共享组件 + 后端补齐）
 
-- **状态**：🔄 主体交付（37 ✅ / 38 ✅ / 39 ✅ / 40A ✅ / 40B ✅；40 已拆 A/B）｜**剩 41 follow-up**（/search lang 字幕→音频 ES 对齐）+ 合并 main 前 E2E 实跑 gate
+- **状态**：✅ 全交付（37 ✅ / 38 ✅ / 39 ✅ / 40A ✅ / 40B ✅ / 41 ✅；40 已拆 A/B）2026-06-24｜**剩合并 main 前 gate**：test:e2e（search+video 4 projects）+ `scripts/reindex-es-audio-langs.ts` 实跑（需 ES+Postgres+.env.local，worktree 阻塞，同 CARD-SIZE-A1A2-GATE 先例）+ 全量单测兜底
 - **创建时间**：2026-06-24
 - **最后更新时间**：2026-06-24（HANDOFF-40B 交付：分类/搜索页接入统一筛选区 + 删旧 + E2E specs）
 - **目标**：分类页与搜索页共用同一筛选区（类型/题材/地区/语言/年份 5 维行内互斥单选）+ 网格左上排序条（添加时间/人气/评分）；类型行与顶部导航双向联动；后端 `/videos` 补 genre/lang 查询；筛选项值集合走 `@resovo/types` taxonomy SSOT（前台零硬编码）。
@@ -3167,9 +3167,11 @@
    - 范围：[type]/page.tsx（client 包装器持 categories 路由知识 → 新 FilterArea category 模式 + activeType + GridSortBar）；search/SearchPage.tsx（加 FilterArea search 模式 + GridSortBar，移除 type tab，转发 genre/country/lang/year/sort 到 /search，计数迁 GridSortBar）；GridSortBar 置 BrowseGrid 内取 total；**删旧** `browse/FilterArea.tsx` + 其单测；e2e browse-category-routes/browse-tvshow/search-page 更新。
    - 验收：两页筛选区一致；互斥单选 + reset page；排序切换；type↔nav 联动；e2e:search + e2e:video 过。依赖 40A（搜索页后端就绪）。
    - **完成备注（2026-06-24）**：新建 `browse/CategoryFilterBar.tsx`（client 包装器：ALL_CATEGORIES 派生 typeOptions + videoType→typeParam 跳路由〔tvshow 特例〕+ null→home，使共享 FilterArea 纯净）；`[type]/page.tsx` 用它替 `FilterArea lockedDims`；`BrowseGrid` 内置 `GridSortBar total totalLabelKey=countCategory`（恒显，loading 时 total=undefined 不显计数）+ 重构 return 恒显排序条；`SearchPage` 移除 type tab（删 SearchTab/TABS/handleTabChange/tNav）+ 加 FilterArea search 模式 + GridSortBar(countSearch) + doSearch 转发 type/genre/country/lang/year/sort 到 /search + 删冗余 foundResults p；**删旧** `browse/FilterArea.tsx` + `tests/.../browse/FilterArea.test.tsx`（零残留引用）。门禁：typecheck=0/lint=0/单测全绿（shared/filter 21 + BrowseGrid 7 + web-next 473）。**E2E**：三 spec 更新（filter-area 5 维 + grid-sort-bar + activeType 高亮 + search-tab 移除断言）+ typecheck-clean，但 **worktree 无 Postgres/.env.local → test:e2e seed globalSetup 阻塞、零测试运行（环境非测试失败）→ 实跑归合并 main 前 gate**（同 CARD-SIZE-A1A2-GATE 先例）。**已知次要项**：搜索页后端默认 relevance vs GridSortBar 默认高亮 latest 的视觉不一致（统一设计无 relevance 按钮、relevance 为搜索隐式默认）。详见 changelog [HANDOFF-40B]。
-5. HANDOFF-41 — `/search` lang 字幕→音频对齐（ES，follow-up）（状态：⬜）
-   - 范围：SearchService lang subtitle_langs→audio_language；es_mapping.json + elasticsearch.ts mapping + 重建索引；routes/search.ts 枚举对齐 taxonomy。
-   - 验收：搜索页 lang 命中音频语音；ES 重建脚本；门禁过。
+5. HANDOFF-41 — `/search` lang 字幕→音频对齐（ES，follow-up）（状态：✅ 2026-06-24）
+   - 范围：SearchService lang subtitle_langs→audio_langs；es_mapping.json + reindex 脚本；routes/search.ts 枚举对齐 taxonomy；VideoIndexSyncService 加 audio_langs ARRAY_AGG 子查询（镜像 /videos EXISTS 语义保跨页等价）。
+   - 验收：搜索页 lang 命中音频语音；ES reindex 脚本；门禁过；跨页 lang 语义等价不变式（`{term:audio_langs}` ⟺ `/videos` EXISTS）。
+   - 强制：arch-reviewer (Opus) 定稿 ES 字段契约 + 聚合语义跨页等价 + reindex 策略（schema 改动）。
+   - **完成备注（2026-06-24）**：arch-reviewer (claude-opus-4-8, agentId abf2f3205d8f24e2d) CONDITIONAL PASS → 3 必改全吸收。**跨页等价不变式严格成立**（Opus 数学证明：`{term:audio_langs:X}` 命中集 ⟺ `/videos` EXISTS(...audio_language=X)，DISTINCT 不引差异、NULL 两侧一致排除）。**M1(HIGH)**：`AUDIO_LANGS_SUBQUERY`（`ARRAY_AGG(DISTINCT audio_language) WHERE is_active AND deleted_at IS NULL AND audio_language IS NOT NULL`）+ 谓词逐字段对齐注释指向 videos.ts:104-110 + 三处 SQL（FETCH/RECONCILE/STALE_UNPUBLISHED）全加 `AS audio_langs` + VideoEsRow `audio_langs:string[]|null` + buildDocument 锁 `?? []`（ARRAY_AGG 空集返 NULL 非 `{}`，空数组 term 不命中=「全 NULL 仅在『全部』」一致）。**D1**：es_mapping.json `audio_langs`(keyword 数组，镜像 subtitle_langs 命名)。**D3**：SearchService lang `subtitle_langs`→`audio_langs`，subtitle_langs 字段保留（结果卡 subtitleLangs 展示，正交维度）。**M2**：routes/search.ts lang `z.string()`→`z.enum(AUDIO_LANGUAGE_CANONICALS)`，四常量统一迁 `@/types`（复刻 videos.ts:15 范式）；非法值 422；唯一消费方 SearchPage(enum-lang) 无非规范词调用，收窄安全。**M3**：新建 `scripts/reindex-es-audio-langs.ts`——keyset(id>$哨兵) 全量遍历 published 视频 syncVideo 回填 + putMapping(additive 幂等) + refresh + **计数收敛断言**（不用 exists:audio_langs，空数组假阴性）；**不复用 reconcilePublished**（RECONCILE_SQL 无游标分页循环不前进）；**ensureIndex 不动**。门禁：typecheck=0（root+api+脚本独测）/lint=0（api#lint tsc 干净）/变更测试 33（search 19[+2 audio_langs·非法 lang 422]+videoIndexSync 14[+2 audio_langs 写入·NULL→空数组]）/verify:adr-contracts=0。**reindex 实跑 + E2E search**（需 ES+Postgres）归合并 main 前 gate（worktree 无 ES/.env.local，同 40B/CARD-SIZE 先例）。**边界**（Opus 列出，非阻塞）：audio_language 列无 CHECK 约束（脏值靠应用层 SourceLanguageResolver 封闭，因 route z.enum 收窄不可达=无召回风险）。详见 changelog [HANDOFF-41]。
 
 ### 关键约束
 

@@ -31,6 +31,7 @@ const VIDEO_ROW = {
   cast: ['李四', '王五'],
   writers: ['赵六'],
   subtitle_langs: ['zh', 'en'],
+  audio_langs: ['国语', '粤语'],
   is_published: true,
   content_rating: 'general',
   review_status: 'approved',
@@ -89,6 +90,31 @@ describe('VideoIndexSyncService.syncVideo', () => {
     expect(doc.writers).toEqual(['赵六'])
     expect(doc.subtitle_langs).toEqual(['zh', 'en'])
     expect(doc.created_at).toBe('2024-01-01T00:00:00.000Z')
+  })
+
+  // ── HANDOFF-41：audio_langs（音频语音维）写入 + 空集兜底 ──────────────
+  it('HANDOFF-41: 文档包含 audio_langs（音频语音聚合，与 /videos lang 跨页等价）', async () => {
+    const db = makeDb()
+    const es = makeEs()
+    const svc = new VideoIndexSyncService(db, es)
+
+    await svc.syncVideo('vid-1')
+
+    const doc = (es.index as ReturnType<typeof vi.fn>).mock.calls[0][0].document
+    expect(doc.audio_langs).toEqual(['国语', '粤语'])
+  })
+
+  it('HANDOFF-41: audio_langs 为 NULL（ARRAY_AGG 空集）→ 兜底空数组（term 不命中）', async () => {
+    // 无活跃音频源 / 全 audio_language NULL 时，AUDIO_LANGS_SUBQUERY 返回 NULL；
+    // buildDocument `?? []` 锁定空数组语义（与 /videos「全 NULL 仅在『全部』出现」一致）。
+    const db = makeDb([{ ...VIDEO_ROW, audio_langs: null }])
+    const es = makeEs()
+    const svc = new VideoIndexSyncService(db, es)
+
+    await svc.syncVideo('vid-1')
+
+    const doc = (es.index as ReturnType<typeof vi.fn>).mock.calls[0][0].document
+    expect(doc.audio_langs).toEqual([])
   })
 
   it('视频不存在（deleted_at 过滤后无行）：静默跳过，不调用 es.index', async () => {

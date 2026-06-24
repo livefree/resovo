@@ -170,10 +170,20 @@ describe('GET /v1/search', () => {
     expect(res.json().pagination.hasNext).toBe(true)
   })
 
-  it('lang 过滤：ES 查询包含 subtitle_langs 条件', async () => {
-    await app.inject({ method: 'GET', url: '/v1/search?lang=zh-CN' })
+  // HANDOFF-41：lang = 音频语音（audio_langs），不再打在字幕字段（subtitle_langs）。
+  // 与 /videos 的 EXISTS(video_sources.audio_language) 跨页等价。
+  it('lang 过滤：ES 查询打在 audio_langs 而非 subtitle_langs（字幕→音频对齐）', async () => {
+    await app.inject({ method: 'GET', url: '/v1/search?lang=国语' })
     const esBody = mockEs.search.mock.calls[0][0] as Record<string, unknown>
-    expect(JSON.stringify(esBody)).toContain('subtitle_langs')
+    const bodyStr = JSON.stringify(esBody)
+    expect(bodyStr).toContain('audio_langs')
+    expect(bodyStr).toContain('国语')
+    expect(bodyStr).not.toContain('subtitle_langs')
+  })
+
+  it('非法 lang → 422（非 AUDIO_LANGUAGE_CANONICALS 封闭枚举）', async () => {
+    const res = await app.inject({ method: 'GET', url: '/v1/search?lang=zh-CN' })
+    expect(res.statusCode).toBe(422)
   })
 
   // ── HANDOFF-40A：genre 暴露 + sort hot 对齐 ─────────────────────

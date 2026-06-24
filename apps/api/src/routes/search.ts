@@ -11,10 +11,14 @@ import { z } from 'zod'
 
 import { es } from '@/api/lib/elasticsearch'
 import { SearchService } from '@/api/services/SearchService'
-import { VIDEO_TYPES, VIDEO_STATUSES, VIDEO_GENRES } from '@resovo/types'
+// HANDOFF-41：统一从 @/types（live source）引——复刻 videos.ts:15 范式，避 @resovo/types
+// 陈旧 dist 产物缺 AUDIO_LANGUAGE_CANONICALS 导出风险（HANDOFF-38 已证）。
+import { VIDEO_TYPES, VIDEO_STATUSES, VIDEO_GENRES, AUDIO_LANGUAGE_CANONICALS } from '@/types'
 
 const VideoTypeEnum = z.enum(VIDEO_TYPES)
 const GenreEnum = z.enum(VIDEO_GENRES)
+// HANDOFF-41：lang = 音频语音封闭枚举（taxonomy SSOT），对齐 /videos 的 AudioLangEnum。
+const AudioLangEnum = z.enum(AUDIO_LANGUAGE_CANONICALS)
 // HANDOFF-40A：加 'hot'（GridSortBar 统一排序 latest/hot/rating），保留 relevance 兼容
 const SortEnum = z.enum(['relevance', 'rating', 'latest', 'hot'])
 
@@ -55,7 +59,7 @@ export async function searchRoutes(fastify: FastifyInstance) {
       genre: GenreEnum.optional(),
       year: z.coerce.number().int().min(1900).max(2100).optional(),
       rating_min: z.coerce.number().min(0).max(10).optional(),
-      lang: z.string().optional(),
+      lang: AudioLangEnum.optional(),
       country: z.string().optional(),
       status: StatusEnum.optional(),
       director: z.string().optional(),

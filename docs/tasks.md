@@ -6,6 +6,10 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
+_（**SEQ-20260624-01 统一筛选区全交付 ✅ 2026-06-24**：37/38/39/40A/40B/41 六卡全 ✅。分类页与搜索页共用同一 5 维筛选区（类型/题材/地区/语言/年份）+ 网格左上排序条（添加时间/人气/评分），taxonomy SSOT 零硬编码、type↔nav 双向联动，前后端全维度对齐——`/videos`(PostgreSQL) genre/lang + `/search`(ES) genre/sort-hot/lang 音频对齐（新 `audio_langs` 字段，跨页 lang 语义等价 Opus 数学证明）。**剩合并 main 前 gate**：test:e2e（4 projects）+ `scripts/reindex-es-audio-langs.ts` 实跑（需 ES+Postgres+.env.local）+ 全量单测兜底——worktree 阻塞，同 CARD-SIZE-A1A2-GATE 先例。取卡前先查 🚨 BLOCKER。）_
+
+---
+
 ### ⏸️ IMGH-P4-A — 方案C worker：确定性出口写 checked_at + fetchImageDimensions 判别式 + A-SCAN 门（ADR-213，SEQ-20260621-02）
 
 - **状态**：⏸️ **代码已交付**（commit `968d4efb`，门禁全绿）·**待部署期跑 A-SCAN**（`scripts/run-imgh-ascan.ts` 落 `checked_at` 真值、排空初始 unknown 桶 → C 硬前置门）——A-SCAN 属运维步、非编码工作台占用，**不占单 🔄 槽**｜ **创建/开始**：2026-06-22 ｜ **执行模型**：claude-opus-4-8（主循环）｜**子代理**：无（实施按 ADR-213 D-213-5；worker 逻辑非新架构决策）

@@ -185,6 +185,9 @@
       "subtitle_langs": {
         "type": "keyword"
       },
+      "audio_langs": {
+        "type": "keyword"
+      },
       "cover_url": {
         "type": "keyword",
         "index": false

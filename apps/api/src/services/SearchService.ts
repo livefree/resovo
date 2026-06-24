@@ -58,7 +58,10 @@ export class SearchService {
     if (filters.type) filter.push({ term: { type: filters.type } })
     if (filters.genre) filter.push({ term: { genres: filters.genre } })
     if (filters.year) filter.push({ term: { year: filters.year } })
-    if (filters.lang) filter.push({ term: { subtitle_langs: filters.lang } })
+    // HANDOFF-41：lang = 音频语音（audio_langs），非字幕（subtitle_langs）。
+    // 与 /videos 的 EXISTS(video_sources.audio_language) 跨页等价（VideoIndexSyncService
+    // AUDIO_LANGS_SUBQUERY 谓词逐字段对齐）。subtitle_langs 仅供结果卡展示（line 133）。
+    if (filters.lang) filter.push({ term: { audio_langs: filters.lang } })
     if (filters.ratingMin !== undefined) {
       filter.push({ range: { rating: { gte: filters.ratingMin } } })
     }

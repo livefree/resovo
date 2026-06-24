@@ -24,6 +24,21 @@ const SUBTITLE_LANGS_SUBQUERY = `(
   WHERE video_id = v.id AND deleted_at IS NULL
 )`
 
+// ── audio_langs 子查询（音频语音维，HANDOFF-41）────────────────────
+// ⚠️ 跨页等价不变式（不可妥协）：本子查询的过滤谓词必须与 /videos lang 筛选的
+//    EXISTS 谓词逐字段对齐（apps/api/src/db/queries/videos.ts:104-110）：
+//      is_active = true  ∧  deleted_at IS NULL  ∧  audio_language IS NOT NULL
+//    使 ES `{term:{audio_langs:X}}` 命中 ⟺ /videos 的 EXISTS(...audio_language=X)。
+//    任何谓词改动都会破坏 /videos↔/search lang 等价，须两侧同步（arch-reviewer M1）。
+// ⚠️ ARRAY_AGG 在无输入行时返回 NULL（非 `{}`）；`IS NOT NULL` 过滤确保不产出含 NULL 元素
+//    的脏数组（`{国语,NULL}`）。全 NULL/无活跃源 → 子查询返 NULL → buildDocument `?? []` 兜空数组
+//    → 任何 term 不命中（与 /videos「全 NULL 仅在『全部』出现」一致）。
+const AUDIO_LANGS_SUBQUERY = `(
+  SELECT ARRAY_AGG(DISTINCT audio_language) FROM video_sources
+  WHERE video_id = v.id AND is_active = true AND deleted_at IS NULL
+    AND audio_language IS NOT NULL
+)`
+
 // ── DB 行类型（补全 SearchService 依赖的全部字段）──────────────────
 
 interface VideoEsRow {
@@ -52,6 +67,7 @@ interface VideoEsRow {
   languages: string[]
   tags: string[]
   subtitle_langs: string[] | null
+  audio_langs: string[] | null
   is_published: boolean
   content_rating: string
   review_status: string
@@ -76,7 +92,8 @@ const ES_FIELDS = `
 
 const FETCH_SQL = `
   SELECT ${ES_FIELDS},
-         ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs
+         ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs,
+         ${AUDIO_LANGS_SUBQUERY} AS audio_langs
   FROM videos v
   JOIN media_catalog mc ON mc.id = v.catalog_id
   WHERE v.id = $1
@@ -85,7 +102,8 @@ const FETCH_SQL = `
 
 const RECONCILE_SQL = `
   SELECT ${ES_FIELDS},
-         ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs
+         ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs,
+         ${AUDIO_LANGS_SUBQUERY} AS audio_langs
   FROM videos v
   JOIN media_catalog mc ON mc.id = v.catalog_id
   WHERE v.is_published = true
@@ -99,7 +117,8 @@ const RECONCILE_SQL = `
 /** CHG-411: 查询最近修改的非上架视频（用于修复漏下架的 ES 文档） */
 const STALE_UNPUBLISHED_SQL = `
   SELECT ${ES_FIELDS},
-         ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs
+         ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs,
+         ${AUDIO_LANGS_SUBQUERY} AS audio_langs
   FROM videos v
   JOIN media_catalog mc ON mc.id = v.catalog_id
   WHERE v.deleted_at IS NULL
@@ -147,6 +166,7 @@ function buildDocument(row: VideoEsRow): Record<string, unknown> {
     languages:        row.languages ?? [],
     tags:             row.tags ?? [],
     subtitle_langs:   row.subtitle_langs ?? [],
+    audio_langs:      row.audio_langs ?? [], // HANDOFF-41 M1：?? [] 锁定——ARRAY_AGG 空集返 NULL，空数组语义明确（term 不命中）
     is_published:     row.is_published,
     content_rating:   row.content_rating,
     review_status:    row.review_status,
