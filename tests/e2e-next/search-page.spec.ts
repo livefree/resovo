@@ -106,6 +106,17 @@ test.describe('搜索页基础', () => {
     const input = page.getByTestId('search-input')
     await expect(input).toHaveValue('测试关键词')
   })
+
+  test('渲染统一筛选区 + 排序条（已移除 type tab，与分类页一致，HANDOFF-40B）', async ({ page }) => {
+    await page.goto('/en/search')
+    await expect(page.getByTestId('filter-area')).toBeVisible()
+    for (const dim of ['type', 'genre', 'country', 'lang', 'year']) {
+      await expect(page.getByTestId(`filter-${dim}`)).toBeVisible()
+    }
+    await expect(page.getByTestId('grid-sort-bar')).toBeVisible()
+    // 旧 type tab 已移除（统一为 FilterArea type 行）
+    await expect(page.getByTestId('search-tab-all')).toHaveCount(0)
+  })
 })
 
 // ── 搜索结果 ─────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import { getTranslations } from 'next-intl/server'
 import { PageTransition } from '@/components/primitives/page-transition/PageTransition'
-import { FilterArea } from '@/components/browse/FilterArea'
+import { CategoryFilterBar } from '@/components/browse/CategoryFilterBar'
 import { BrowseGrid } from '@/components/browse/BrowseGrid'
 import { ALL_CATEGORIES } from '@/lib/categories'
 import type { VideoType } from '@resovo/types'
@@ -64,12 +64,12 @@ export async function CategoryPageContent({
           </h1>
         </div>
 
-        {/* 筛选区 — spec §12.3（锁定 type 维度，防止用户绕过分类路由） */}
+        {/* 统一筛选区 — 5 维（type 行显示全类型 + 与顶部导航双向联动，HANDOFF-40B） */}
         <div style={{ marginBottom: '24px' }}>
-          <FilterArea lockedDims={['type']} />
+          <CategoryFilterBar locale={locale} videoType={videoType} />
         </div>
 
-        {/* 网格 + 分页 — spec §12.4（initialType 强制覆盖 URL type 参数） */}
+        {/* 网格 + 排序条 + 分页 — spec §12.4（initialType 强制覆盖 URL type 参数） */}
         <BrowseGrid initialType={videoType} />
       </div>
     </PageTransition>

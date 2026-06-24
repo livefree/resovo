@@ -2953,3 +2953,18 @@
 - **门禁**：typecheck=0 / lint=0 / 变更测试 `vitest --changed HEAD` search.test 18 测全过（+5 新：genre 转发·非法 422 / sort=hot 映射 rating_votes / latest·rating / 非法 sort 422）/ verify:adr-contracts=0。**关键路径**公开 `/search`，route 测试覆盖。
 - **执行模型**：claude-opus-4-8（主循环）｜**子代理**：无（route+service 2 层、无 schema/reindex/新架构决策）。
 - **依赖**：40B（前端两页接入）依赖本卡后端就绪。lang 字幕→音频对齐仍归 HANDOFF-41。
+
+---
+
+## [HANDOFF-40B] 分类/搜索页统一筛选区 — 两页接入 + 删旧 FilterArea + E2E（SEQ-20260624-01 Card 3B）
+
+- **范围（前端两页接入，序列收口主体）**：把 HANDOFF-39 共享 FilterArea + GridSortBar 接入分类页与搜索页（两页筛选区完全一致），删旧 4 维 `browse/FilterArea`，更新 E2E。依赖 40A✅（搜索页后端就绪）。
+- **分类页（Server Component RSC 边界）**：新建 client 包装器 `browse/CategoryFilterBar.tsx` 承接路由知识（`ALL_CATEGORIES` 派生 typeOptions + `videoType→typeParam` 跳路由〔tvshow→variety 特例〕+ null→home），使共享 FilterArea 保持纯净（不持路由知识）。`[type]/page.tsx` 用 `CategoryFilterBar` 替 `<FilterArea lockedDims={['type']} />`。type↔nav 双向联动经 pathname 单源自动达成（点 type→跳路由→Nav 重算）。
+- **GridSortBar 取 total**：`BrowseGrid.tsx` 内置 `<GridSortBar total totalLabelKey="filter.countCategory" />`（BrowseGrid 是 total 数据所有者），重构 return 使排序条恒显于网格/骨架/空态之上（loading 时 total=undefined → GridSortBar 防御不显计数）。BrowseGrid 已透传全 searchParams 到 /videos，sort/genre/lang 自动生效（无需改请求逻辑）。
+- **搜索页**：`SearchPage.tsx` 移除 type tab（删 SearchTab/TABS/handleTabChange/tNav）+ 加 `<FilterArea mode="search" typeOptions />` + `<GridSortBar total totalLabelKey="filter.countSearch" />`；`doSearch` 重构为从 URL 透传 type/genre/country/lang/year/sort 到 /search（40A 已支持 genre/sort=hot）；计数迁 GridSortBar（删冗余 foundResults p）。
+- **删旧（HANDOFF-39 D6 过渡态收口）**：`git rm` `browse/FilterArea.tsx` + `tests/unit/components/browse/FilterArea.test.tsx`，零残留引用（grep 核验）。
+- **文件**：🆕 `browse/CategoryFilterBar.tsx`｜✏️ `browse/BrowseGrid.tsx`（内置 GridSortBar + 重构 return）｜✏️ `app/[locale]/[type]/page.tsx`｜✏️ `app/[locale]/search/_components/SearchPage.tsx`｜🗑️ `browse/FilterArea.tsx` + 其单测｜✏️ `tests/e2e-next/{browse-category-routes,browse-tvshow,search-page}.spec.ts`。
+- **门禁**：typecheck=0（8 workspace）/ lint=0 / 单测全绿（shared/filter 21 + BrowseGrid 7 + web-next 域 473）。
+- **E2E**：三 spec 更新（filter-area 5 维渲染 + grid-sort-bar + type 行 activeType 高亮〔movie/variety〕+ search-tab 移除断言）+ typecheck-clean。**worktree 无 Postgres/.env.local → `test:e2e:search` 在 seed globalSetup 阻塞、零测试运行（环境非测试失败）→ E2E 实跑归合并 main 前 gate**（同 CARD-SIZE-A1A2-GATE 先例）。
+- **已知次要项**：搜索页后端无 sort 时默认 relevance（查询相关性最优 UX）vs GridSortBar 默认高亮 latest 的视觉不一致——统一设计仅 3 排序（latest/hot/rating）、无 relevance 按钮，relevance 为搜索隐式默认；显式选 hot/rating/latest 均生效。非阻塞，记此备查。
+- **执行模型**：claude-opus-4-8（主循环）｜**子代理**：无（页面接入用 HANDOFF-39 已定 FilterArea 契约；CategoryFilterBar 持路由知识属页面层、非新共享契约）。

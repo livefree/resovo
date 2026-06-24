@@ -78,3 +78,37 @@ test.describe('分类路由可达性（CLEANUP-05 固化）', () => {
     })
   }
 })
+
+test.describe('分类页统一筛选区（HANDOFF-40B）', () => {
+  test('/movie 渲染 5 维筛选区 + 排序条 + type 行高亮当前分类', async ({ page }) => {
+    await page.route(`${API_BASE}/**`, (route) =>
+      route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { code: 'NOT_FOUND', message: 'not mocked', status: 404 } }),
+      }),
+    )
+    await page.route(/\/videos\?/, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: makeMockVideos('movie'),
+          pagination: { total: 6, page: 1, limit: 40, hasNext: false },
+        }),
+      }),
+    )
+
+    await page.goto('/en/movie')
+
+    // 5 维筛选区 + 排序条
+    await expect(page.getByTestId('filter-area')).toBeVisible()
+    for (const dim of ['type', 'genre', 'country', 'lang', 'year']) {
+      await expect(page.getByTestId(`filter-${dim}`)).toBeVisible()
+    }
+    await expect(page.getByTestId('grid-sort-bar')).toBeVisible()
+
+    // type 行高亮当前分类（activeType 受控，category 模式）
+    await expect(page.getByTestId('filter-type-movie')).toHaveAttribute('aria-checked', 'true')
+  })
+})

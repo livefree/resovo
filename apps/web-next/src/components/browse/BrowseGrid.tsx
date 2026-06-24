@@ -21,6 +21,7 @@ import { CardGrid } from '@/components/shared/card-grid/CardGrid'
 import { VideoCard } from '@/components/video/VideoCard'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import { Pagination } from '@/components/primitives/pagination'
+import { GridSortBar } from '@/components/shared/filter/GridSortBar'
 import type { VideoCard as VideoCardType, VideoType, ApiListResponse } from '@resovo/types'
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -97,38 +98,44 @@ export function BrowseGrid({ initialType }: BrowseGridProps) {
     router.push((pathname ?? '') + '?' + params.toString())
   }
 
-  if (!loaded) {
-    return <BrowseGridSkeleton />
-  }
-
-  if (total === 0) {
-    return (
-      <div
-        data-testid="browse-empty"
-        className="flex items-center justify-center py-12 text-sm"
-        style={{ color: 'var(--fg-muted)' }}
-      >
-        暂无相关内容
-      </div>
-    )
-  }
-
   return (
     <div>
-      <CardGrid sizeClass="global" data-testid="browse-grid">
-        {videos.map((video) => (
-          <VideoCard key={video.id} video={video} interaction="navigate" />
-        ))}
-      </CardGrid>
-
-      {totalPages > 1 && (
-        <Pagination
-          data-testid="browse-pagination"
-          page={page}
-          totalPages={totalPages}
-          onPrev={() => navigate(page - 1)}
-          onNext={() => navigate(page + 1)}
+      {/* 排序条恒显（网格左上）；loading 时不传 total → 不显计数（GridSortBar 防御） */}
+      <div style={{ marginBottom: 'var(--space-3)' }}>
+        <GridSortBar
+          total={loaded ? total : undefined}
+          totalLabelKey="filter.countCategory"
         />
+      </div>
+
+      {!loaded ? (
+        <BrowseGridSkeleton />
+      ) : total === 0 ? (
+        <div
+          data-testid="browse-empty"
+          className="flex items-center justify-center py-12 text-sm"
+          style={{ color: 'var(--fg-muted)' }}
+        >
+          暂无相关内容
+        </div>
+      ) : (
+        <>
+          <CardGrid sizeClass="global" data-testid="browse-grid">
+            {videos.map((video) => (
+              <VideoCard key={video.id} video={video} interaction="navigate" />
+            ))}
+          </CardGrid>
+
+          {totalPages > 1 && (
+            <Pagination
+              data-testid="browse-pagination"
+              page={page}
+              totalPages={totalPages}
+              onPrev={() => navigate(page - 1)}
+              onNext={() => navigate(page + 1)}
+            />
+          )}
+        </>
       )}
     </div>
   )

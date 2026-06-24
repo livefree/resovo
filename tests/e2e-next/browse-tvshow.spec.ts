@@ -125,5 +125,8 @@ test.describe('分类页 /tvshow 别名映射', () => {
 
     expect(videosReq.url()).toContain('type=variety')
     expect(videosReq.url()).not.toContain('type=tvshow')
+
+    // 统一筛选区 type 行高亮 variety（activeType 经 pathname tvshow→variety 映射，HANDOFF-40B）
+    await expect(page.getByTestId('filter-type-variety')).toHaveAttribute('aria-checked', 'true')
   })
 })

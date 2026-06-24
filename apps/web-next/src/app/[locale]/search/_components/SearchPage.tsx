@@ -31,18 +31,18 @@ import { SearchEmptyState } from '@/components/search/SearchEmptyState'
 import { parseHighlight } from '@/lib/parse-highlight'
 import { getVideoDetailHref } from '@/lib/video-route'
 import { VideoGrid } from '@/components/video/VideoGrid'
+import { FilterArea } from '@/components/shared/filter/FilterArea'
+import { GridSortBar } from '@/components/shared/filter/GridSortBar'
 import type { SearchResult, ApiListResponse, VideoType } from '@resovo/types'
 import { ALL_CATEGORIES } from '@/lib/categories'
 
 // ── 常量 ──────────────────────────────────────────────────────────────────────
 
-/** CHG-342: 4→12 (all + 11 VideoType) / 派生自 ALL_CATEGORIES (ADR-048 前台 SSOT) */
-type SearchTab = 'all' | VideoType
+/** type 维选项值集合（派生自 ALL_CATEGORIES，ADR-048 前台 SSOT；注入共享 FilterArea） */
+const TYPE_OPTIONS: readonly VideoType[] = ALL_CATEGORIES.map((c) => c.videoType as VideoType)
 
-const TABS: Array<{ key: SearchTab; navKey: string }> = [
-  { key: 'all', navKey: 'catAll' },
-  ...ALL_CATEGORIES.map((c) => ({ key: c.videoType as SearchTab, navKey: c.labelKey })),
-]
+/** /search 转发的筛选维度（统一 FilterArea 写入 URL；GridSortBar 写 sort，40A 后端已支持） */
+const FORWARDED_FILTERS = ['type', 'genre', 'country', 'lang', 'year', 'sort'] as const
 
 const PAGE_SIZE = 20
 
@@ -195,12 +195,11 @@ export function SearchPage() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const params = useParams()
-  const locale = (params.locale as string) ?? 'zh'
+  const locale = (params.locale as string) ?? 'en'
   const t = useTranslations('search')
-  const tNav = useTranslations('nav')
 
+  const searchKey = searchParams.toString()
   const urlQuery = searchParams.get('q') ?? ''
-  const urlTab = (searchParams.get('type') as SearchTab | null) ?? 'all'
   const urlPage = Math.max(1, Number(searchParams.get('page') ?? '1'))
 
   const [inputValue, setInputValue] = useState(urlQuery)
@@ -220,13 +219,23 @@ export function SearchPage() {
     setInputValue(urlQuery)
   }, [urlQuery])
 
-  const doSearch = useCallback(async (q: string, tab: SearchTab, page: number) => {
-    if (!q.trim()) { setResults([]); setTotal(0); setLoading(false); return }
+  // 统一筛选区维度（type/genre/country/lang/year）+ GridSortBar(sort) 全部写 URL，
+  // doSearch 据当前 URL 透传给 /search（40A 后端已支持 genre/sort=hot）。
+  const doSearch = useCallback(async (sp: URLSearchParams) => {
+    const q = (sp.get('q') ?? '').trim()
+    if (!q) { setResults([]); setTotal(0); setLoading(false); return }
     setLoading(true)
     try {
-      const typeParam = tab !== 'all' ? `&type=${tab}` : ''
+      const query = new URLSearchParams()
+      query.set('q', q)
+      query.set('limit', String(PAGE_SIZE))
+      query.set('page', sp.get('page') ?? '1')
+      for (const key of FORWARDED_FILTERS) {
+        const v = sp.get(key)
+        if (v) query.set(key, v)
+      }
       const res = await apiClient.get<ApiListResponse<SearchResult>>(
-        `/search?q=${encodeURIComponent(q.trim())}&limit=${PAGE_SIZE}&page=${page}${typeParam}`,
+        `/search?${query.toString()}`,
         { skipAuth: true },
       )
       setResults(res.data)
@@ -239,10 +248,10 @@ export function SearchPage() {
     }
   }, [])
 
-  // URL params 变化驱动搜索
+  // URL params（含筛选/排序）变化驱动搜索
   useEffect(() => {
-    void doSearch(urlQuery, urlTab, urlPage)
-  }, [urlQuery, urlTab, urlPage, doSearch])
+    void doSearch(new URLSearchParams(searchKey))
+  }, [searchKey, doSearch])
 
   // 输入防抖 300ms → 更新 URL q，重置 page
   function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -269,17 +278,6 @@ export function SearchPage() {
       p.set('q', inputValue.trim())
     } else {
       p.delete('q')
-    }
-    p.delete('page')
-    router.replace(`${pathname}?${p.toString()}`)
-  }
-
-  function handleTabChange(tab: SearchTab) {
-    const p = new URLSearchParams(searchParams.toString())
-    if (tab !== 'all') {
-      p.set('type', tab)
-    } else {
-      p.delete('type')
     }
     p.delete('page')
     router.replace(`${pathname}?${p.toString()}`)
@@ -378,48 +376,17 @@ export function SearchPage() {
       {/* 内容区 */}
       <div className="max-w-page mx-auto px-6 py-6">
 
-        {/* Tab 切换 */}
-        <div
-          className="flex items-center gap-1 overflow-x-auto"
-          style={{ marginBottom: 'var(--search-tab-gap)', scrollbarWidth: 'none' }}
-          role="tablist"
-          aria-label={t('tablistAriaLabel')}
-        >
-          {TABS.map((tab) => {
-            const isActive = urlTab === tab.key
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                data-testid={`search-tab-${tab.key}`}
-                onClick={() => handleTabChange(tab.key)}
-                style={{
-                  padding: '10px 14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: isActive ? 600 : 400,
-                  color: isActive ? 'var(--accent-default)' : 'var(--fg-muted)',
-                  background: isActive ? 'var(--accent-muted)' : 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  transition: 'all 150ms ease',
-                }}
-              >
-                {tNav(tab.navKey)}
-                {hasQuery && hasResults && isActive && (
-                  <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--fg-subtle)' }}>
-                    {total}
-                  </span>
-                )}
-              </button>
-            )
-          })}
+        {/* 统一筛选区（与分类页完全一致：5 维消费 taxonomy，HANDOFF-40B） */}
+        <div style={{ marginBottom: 'var(--space-4)' }}>
+          <FilterArea mode="search" typeOptions={TYPE_OPTIONS} />
+        </div>
+
+        {/* 排序条 + 结果计数（替代原 type tab 计数，置于结果区上方左侧） */}
+        <div style={{ marginBottom: 'var(--space-4)' }}>
+          <GridSortBar
+            total={hasQuery && hasResults ? total : undefined}
+            totalLabelKey="filter.countSearch"
+          />
         </div>
 
         {/* 结果区 */}
@@ -427,9 +394,6 @@ export function SearchPage() {
           <SearchEmptyState.Skeleton />
         ) : hasQuery && hasResults ? (
           <section>
-            <p className="mb-4 text-sm" style={{ color: 'var(--fg-muted)' }}>
-              {t('foundResults', { count: total })}
-            </p>
             <div
               data-testid="search-results-list"
               style={{ display: 'flex', flexDirection: 'column', gap: 'var(--search-result-gap)' }}
