@@ -609,54 +609,44 @@
  * （.detail-lower-grid + --detail-sidebar-* 已随拆侧栏删除，VideoDetailClient 直接垂直排列）。 */
 
 /* ───────────────────────────────────────────────────────────────────────────
- * CardGrid（CARD-SIZE-CARDGRID / ADR-214 D-214-7/10 + Amendment A1 D-214-A1-1/2/3）
- *   — standard 网格 size-driven（运营设卡宽、列数由容器宽派生）
+ * CardGrid（CARD-SIZE-CARDGRID / ADR-214 D-214-7 + Amendment A2 D-214-A2-2/3）
+ *   — 全站单一全局卡宽，精确定宽 + 居中留白（全站卡片视觉精确一致）
  *
- * standard 为唯一网格档（compact 经 Amendment A1 D-214-A1-3 废弃删除）。响应式：
- *   - mobile=2 / ≥640px=3 列：计数级联（`--cg-cols` + 基础 `.card-grid` 模板，D-214-10 既有 2/3 契约）。
- *   - ≥1024px：size-driven `auto-fill`（卡宽恒定最小 `--card-w-standard`、列数由容器宽派生，D-214-A1-1）。
- *     仅桌面 size-driven——窄屏 `auto-fill` 会塌 1 列、破移动 2 列契约（D-214-A1-2）。
- * `--cg-cols` = 组件私有派生计数（移动/平板用）；缺失 → `var(--cg-cols, 2)` 兜底退 2 列不坍塌。
- * `minmax(min(--card-w-standard,200px),1fr)` + `> * { min-width:0 }`：
- *   `min(W,100%)` 防超窄容器单列溢出 + 变量缺失兜底 200px（不塌 1 列）；
- *   `min-width:0` 防 1fr 轨道被海报固有宽/长标题 min-content 撑破（D-214-4 / Codex-R2）。
- *   真实生效由 CARD-SIZE-A1-E2E 窄容器+长标题视觉回归锁。
+ * grid-template-columns: repeat(auto-fit, min(var(--card-w),100%))
+ *   - **精确定宽**：固定轨道宽 = var(--card-w)（非 A1 的 minmax(W,1fr) 弹性）→ 卡宽恒 = W、杜绝浮动，
+ *     与横滚区 width:var(--card-w) 同机制 → border-box 宽像素级相等（D-214-A2-2）。
+ *   - **auto-fit（非 auto-fill·修正 Codex-A2-R6/R7）**：固定宽轨道下 auto-fit 折叠尾部空轨道、**不拉伸卡**
+ *     （无 1fr，故无 A1「auto-fit 撑大畸形卡」问题——该问题仅存于 minmax(W,1fr)）。卡数 < 一行容量时
+ *     折叠空轨道 + justify-content:center → 卡片整排居中（D-214-A2-3）。auto-fill 会保留空轨道占宽 →
+ *     卡片左对齐、右侧留空轨道、不居中（兑现不了用户「居中」要求，故修正为 auto-fit）。
+ *   - **min(var(--card-w),100%)**：超窄容器（< W）卡宽收至 100% 不溢出（overflow 防御，D-214-A2-2）。
+ *   - **justify-content:center**：末列留白左右均匀（D-214-A2-3 用户裁定）。
+ *   - **> * { min-width:0 }**：防卡内长标题/海报固有宽撑破轨道。
+ *   - 列数由容器宽 / W 自动派生（含手机，无断点列数硬编码，D-214-A2-4）；--card-w 缺失兜底 160px。
  * ─────────────────────────────────────────────────────────────────────────── */
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(var(--cg-cols, 2), minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, min(var(--card-w, 160px), 100%));
+  justify-content: center;
+  gap: var(--card-gap, 16px);
 }
 .card-grid > * {
   min-width: 0;
 }
-.card-grid--standard {
-  --cg-cols: 2;
-  gap: var(--card-gap-standard);
-}
-@media (min-width: 640px) {
-  .card-grid--standard {
-    --cg-cols: 3;
-  }
-}
-@media (min-width: 1024px) {
-  /* size-driven 覆盖基础计数模板：卡宽恒定（最小），列数由容器宽派生（Amendment A1 D-214-A1-1/2） */
-  .card-grid--standard {
-    grid-template-columns: repeat(auto-fill, minmax(min(var(--card-w-standard, 200px), 100%), 1fr));
-  }
-}
 
 /* ───────────────────────────────────────────────────────────────────────────
- * ScrollRow（CARD-SIZE-A1-SCROLLROW / ADR-214 Amendment A1 D-214-A1-6）— 横滚布局原语
+ * ScrollRow（CARD-SIZE-A1-SCROLLROW / ADR-214 Amendment A1 D-214-A1-6 + A2 D-214-A2-7）— 横滚布局原语
  *
  * 平级 .card-grid：容器 flex 横滚 + scroll-snap，每个 child 经组件包裹为 .scroll-row__item 定宽。
- * 消费 scroll 档 DB 真源变量 --card-w-scroll（卡定宽）/ --card-gap-scroll（间距），
+ * **A2 单一全局卡宽**：消费全局 --card-w（卡定宽）/ --card-gap（间距），与网格区同源 → 全站视觉精确一致。
  * 经 [locale]/layout.tsx 全局 :root 注入 + card-size-fetch helper 内置 CARD_SIZE_DEFAULTS 降级、生产恒有值。
- * __item 加渲染韧性兜底 var(--card-w-scroll, 170px)（对齐 .card-grid var(--cg-cols,2)，消非注入子树/隔离测卡宽飘移；非配置真源、不违 D-214-5）。
- * 容器 tabindex=0 + role=region：隐藏滚动条 + 无 nav 下键盘/纯鼠标可达（WCAG 2.1.1，arch-reviewer HIGH）。
+ * __item 加渲染韧性兜底 var(--card-w, 160px)（消非注入子树/隔离测卡宽飘移；非配置真源、不违 D-214-5）。
+ * 横滚区左对齐起点（无 justify-content:center，D-214-A2-3）；容器 tabindex=0 + role=region：
+ * 隐藏滚动条 + 无 nav 下键盘/纯鼠标可达（WCAG 2.1.1，arch-reviewer HIGH）。
  * ─────────────────────────────────────────────────────────────────────────── */
 .scroll-row {
   display: flex;
-  gap: var(--card-gap-scroll);
+  gap: var(--card-gap, 16px);
   overflow-x: auto;
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
@@ -666,7 +656,7 @@
   display: none;
 }
 .scroll-row__item {
-  width: var(--card-w-scroll, 170px);
+  width: var(--card-w, 160px);
   flex-shrink: 0;
   scroll-snap-align: start;
 }

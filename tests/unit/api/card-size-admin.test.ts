@@ -1,15 +1,15 @@
 /**
- * card-size-admin.test.ts — admin /admin/card-sizes 读写路由 + audit（ADR-215 + Amendment A1 / SEQ-20260623-01）
+ * card-size-admin.test.ts — admin /admin/card-sizes 读写路由 + audit（ADR-215 + Amendment A2 / SEQ-20260623-02）
  *
  * 覆盖（CardSizeService 经真 Fastify app inject，mock queries + AuditLogService）：
- *   GET  /admin/card-sizes            — 200 + 2 档按 CARD_SIZE_CLASSES 枚举序（非 DB 字典序）
+ *   GET  /admin/card-sizes            — 200 + 单行全局（size_class='global'）
  *   PUT  /admin/card-sizes/:sizeClass — 200 + audit card_size.update 内容断言（targetId=row.id + before/after）
- *     · 未知字段 422（.strict()）：带 desktopColumns（A1 护栏不暴露编辑）或其他 unknown key
+ *     · 未知字段 422（.strict()）：带 desktopColumns（A2 已删列）或其他 unknown key
  *     · 范围越界 422（D-214-10）：卡宽 401 > 400 / 119 < 120 / gap 65
  *     · 缺必填 cardWidthPx 422
- *     · 枚举外 sizeClass 422（先于 404）；行缺失 404（迁移漂移兜底）
+ *     · 枚举外 sizeClass 422（先于 404）：A2 仅 'global' 合法，退役 standard/scroll/compact 均拒；行缺失 404
  *
- * Amendment A1：单位统一为卡宽（standard size-driven / scroll 横滚同构），body = { cardWidthPx [120,400], gapPx }。
+ * Amendment A2：单行全局，body = { cardWidthPx [120,400], gapPx }。
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -52,12 +52,11 @@ vi.mock('@/api/services/AuditLogService', () => ({
   },
 }))
 
-// ── Fixtures（Amendment A1：2 档、单位统一为卡宽）──────────────────────────────
+// ── Fixtures（Amendment A2：单行全局）──────────────────────────────────────────
 
 function row(sizeClass: CardSizeClass, over: Partial<CardSizeSettings> = {}): CardSizeSettings {
   const base: Record<CardSizeClass, CardSizeSettings> = {
-    standard: { id: 'cs-standard', sizeClass: 'standard', desktopColumns: null, cardWidthPx: 200, gapPx: 16, settings: {}, updatedAt: '2026-06-23T00:00:00Z' },
-    scroll: { id: 'cs-scroll', sizeClass: 'scroll', desktopColumns: null, cardWidthPx: 170, gapPx: 16, settings: {}, updatedAt: '2026-06-23T00:00:00Z' },
+    global: { id: 'cs-global', sizeClass: 'global', cardWidthPx: 160, gapPx: 16, settings: {}, updatedAt: '2026-06-23T00:00:00Z' },
   }
   return { ...base[sizeClass], ...over }
 }
@@ -83,19 +82,18 @@ describe('GET /admin/card-sizes', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks()
-    // DB 字典序返回（scroll/standard）——断言 Service 重排为枚举序 standard/scroll
-    mockList.mockResolvedValue([row('scroll'), row('standard')])
+    mockList.mockResolvedValue([row('global')])
     app = await buildApp()
   })
 
-  it('200 + 2 档按 CARD_SIZE_CLASSES 枚举序（非 DB 字典序）', async () => {
+  it('200 + 单行全局（size_class=global）', async () => {
     const res = await app.inject({
       method: 'GET',
       url: '/v1/admin/card-sizes',
       headers: { authorization: await adminToken() },
     })
     expect(res.statusCode).toBe(200)
-    expect(res.json().data.map((r: CardSizeSettings) => r.sizeClass)).toEqual(['standard', 'scroll'])
+    expect(res.json().data.map((r: CardSizeSettings) => r.sizeClass)).toEqual(['global'])
   })
 
   it('未鉴权 401', async () => {
@@ -111,28 +109,28 @@ describe('PUT /admin/card-sizes/:sizeClass', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks()
-    mockFind.mockResolvedValue(row('standard'))
-    mockUpdate.mockResolvedValue(row('standard', { cardWidthPx: 220 }))
+    mockFind.mockResolvedValue(row('global'))
+    mockUpdate.mockResolvedValue(row('global', { cardWidthPx: 220 }))
     mockRedisUnlink.mockResolvedValue(1)
     app = await buildApp()
   })
 
-  it('standard 更新成功 200 + data（cardWidthPx 单位）', async () => {
+  it('global 更新成功 200 + data（cardWidthPx 单位）', async () => {
     const res = await app.inject({
       method: 'PUT',
-      url: '/v1/admin/card-sizes/standard',
+      url: '/v1/admin/card-sizes/global',
       headers: { authorization: await adminToken(), 'content-type': 'application/json' },
       body: JSON.stringify({ cardWidthPx: 220, gapPx: 16 }),
     })
     expect(res.statusCode).toBe(200)
     expect(res.json().data.cardWidthPx).toBe(220)
-    expect(mockUpdate).toHaveBeenCalledWith(expect.anything(), 'standard', expect.objectContaining({ cardWidthPx: 220, gapPx: 16 }))
+    expect(mockUpdate).toHaveBeenCalledWith(expect.anything(), 'global', expect.objectContaining({ cardWidthPx: 220, gapPx: 16 }))
   })
 
   it('audit R-MID-1 内容断言：actionType/targetKind/targetId=row.id + before/after', async () => {
     await app.inject({
       method: 'PUT',
-      url: '/v1/admin/card-sizes/standard',
+      url: '/v1/admin/card-sizes/global',
       headers: { authorization: await adminToken(), 'content-type': 'application/json' },
       body: JSON.stringify({ cardWidthPx: 220, gapPx: 16 }),
     })
@@ -140,8 +138,8 @@ describe('PUT /admin/card-sizes/:sizeClass', () => {
     expect(mockAuditWrite).toHaveBeenCalledWith(expect.objectContaining({
       actionType: 'card_size.update',
       targetKind: 'card_size',
-      targetId: 'cs-standard',
-      beforeJsonb: expect.objectContaining({ cardWidthPx: 200 }),
+      targetId: 'cs-global',
+      beforeJsonb: expect.objectContaining({ cardWidthPx: 160 }),
       afterJsonb: expect.objectContaining({ cardWidthPx: 220 }),
     }))
   })
@@ -149,7 +147,7 @@ describe('PUT /admin/card-sizes/:sizeClass', () => {
   it('PUT 成功 → 失效公开缓存（redis.unlink card-sizes:v1，D-215-6）', async () => {
     await app.inject({
       method: 'PUT',
-      url: '/v1/admin/card-sizes/standard',
+      url: '/v1/admin/card-sizes/global',
       headers: { authorization: await adminToken(), 'content-type': 'application/json' },
       body: JSON.stringify({ cardWidthPx: 220, gapPx: 16 }),
     })
@@ -160,7 +158,7 @@ describe('PUT /admin/card-sizes/:sizeClass', () => {
     mockRedisUnlink.mockRejectedValueOnce(new Error('redis down'))
     const res = await app.inject({
       method: 'PUT',
-      url: '/v1/admin/card-sizes/standard',
+      url: '/v1/admin/card-sizes/global',
       headers: { authorization: await adminToken(), 'content-type': 'application/json' },
       body: JSON.stringify({ cardWidthPx: 220, gapPx: 16 }),
     })
@@ -168,25 +166,12 @@ describe('PUT /admin/card-sizes/:sizeClass', () => {
     expect(res.json().data.cardWidthPx).toBe(220)
   })
 
-  it('scroll 档更新成功 200（cardWidthPx 单位，与 standard 同构）', async () => {
-    mockFind.mockResolvedValue(row('scroll'))
-    mockUpdate.mockResolvedValue(row('scroll', { cardWidthPx: 200 }))
+  // ── 未知字段 422（.strict()：A2 已删 desktopColumns 列）──────────────────────
+
+  it('未知字段 422：带 desktopColumns（A2 已删列）被拒', async () => {
     const res = await app.inject({
       method: 'PUT',
-      url: '/v1/admin/card-sizes/scroll',
-      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
-      body: JSON.stringify({ cardWidthPx: 200, gapPx: 16 }),
-    })
-    expect(res.statusCode).toBe(200)
-    expect(res.json().data.cardWidthPx).toBe(200)
-  })
-
-  // ── 未知字段 422（.strict()：A1 后 desktopColumns 护栏不暴露编辑）─────────────
-
-  it('未知字段 422：standard 带 desktopColumns（护栏不暴露）被拒', async () => {
-    const res = await app.inject({
-      method: 'PUT',
-      url: '/v1/admin/card-sizes/standard',
+      url: '/v1/admin/card-sizes/global',
       headers: { authorization: await adminToken(), 'content-type': 'application/json' },
       body: JSON.stringify({ cardWidthPx: 200, desktopColumns: 5, gapPx: 16 }),
     })
@@ -195,24 +180,12 @@ describe('PUT /admin/card-sizes/:sizeClass', () => {
     expect(mockUpdate).not.toHaveBeenCalled()
   })
 
-  it('未知字段 422：scroll 带 desktopColumns 被拒', async () => {
-    mockFind.mockResolvedValue(row('scroll'))
-    const res = await app.inject({
-      method: 'PUT',
-      url: '/v1/admin/card-sizes/scroll',
-      headers: { authorization: await adminToken(), 'content-type': 'application/json' },
-      body: JSON.stringify({ cardWidthPx: 170, desktopColumns: 5, gapPx: 16 }),
-    })
-    expect(res.statusCode).toBe(422)
-    expect(mockUpdate).not.toHaveBeenCalled()
-  })
-
-  // ── 范围越界 422（D-214-10 双层下层 zod；A1 卡宽 [120,400]）──────────────────
+  // ── 范围越界 422（D-214-10 双层下层 zod；卡宽 [120,400]）─────────────────────
 
   it('范围越界 422：cardWidthPx 401 > 400', async () => {
     const res = await app.inject({
       method: 'PUT',
-      url: '/v1/admin/card-sizes/standard',
+      url: '/v1/admin/card-sizes/global',
       headers: { authorization: await adminToken(), 'content-type': 'application/json' },
       body: JSON.stringify({ cardWidthPx: 401, gapPx: 16 }),
     })
@@ -220,21 +193,20 @@ describe('PUT /admin/card-sizes/:sizeClass', () => {
   })
 
   it('范围越界 422：cardWidthPx 119 < 120', async () => {
-    mockFind.mockResolvedValue(row('scroll'))
     const res = await app.inject({
       method: 'PUT',
-      url: '/v1/admin/card-sizes/scroll',
+      url: '/v1/admin/card-sizes/global',
       headers: { authorization: await adminToken(), 'content-type': 'application/json' },
       body: JSON.stringify({ cardWidthPx: 119, gapPx: 16 }),
     })
     expect(res.statusCode).toBe(422)
   })
 
-  it('范围内 422 边界放宽验证：cardWidthPx 350（原 [120,280] 拒、A1 [120,400] 允）→ 200', async () => {
-    mockUpdate.mockResolvedValue(row('standard', { cardWidthPx: 350 }))
+  it('范围内 350 允许（卡宽 [120,400]）→ 200', async () => {
+    mockUpdate.mockResolvedValue(row('global', { cardWidthPx: 350 }))
     const res = await app.inject({
       method: 'PUT',
-      url: '/v1/admin/card-sizes/standard',
+      url: '/v1/admin/card-sizes/global',
       headers: { authorization: await adminToken(), 'content-type': 'application/json' },
       body: JSON.stringify({ cardWidthPx: 350, gapPx: 16 }),
     })
@@ -245,7 +217,7 @@ describe('PUT /admin/card-sizes/:sizeClass', () => {
   it('范围越界 422：gapPx 65 > 64', async () => {
     const res = await app.inject({
       method: 'PUT',
-      url: '/v1/admin/card-sizes/standard',
+      url: '/v1/admin/card-sizes/global',
       headers: { authorization: await adminToken(), 'content-type': 'application/json' },
       body: JSON.stringify({ cardWidthPx: 200, gapPx: 65 }),
     })
@@ -255,7 +227,7 @@ describe('PUT /admin/card-sizes/:sizeClass', () => {
   it('缺必填字段 422：缺 cardWidthPx', async () => {
     const res = await app.inject({
       method: 'PUT',
-      url: '/v1/admin/card-sizes/standard',
+      url: '/v1/admin/card-sizes/global',
       headers: { authorization: await adminToken(), 'content-type': 'application/json' },
       body: JSON.stringify({ gapPx: 16 }),
     })
@@ -276,10 +248,10 @@ describe('PUT /admin/card-sizes/:sizeClass', () => {
     expect(mockFind).not.toHaveBeenCalled()
   })
 
-  it('退役档 compact（A1 枚举外）422（先于 404）', async () => {
+  it.each(['standard', 'scroll', 'compact'])('退役档 %s（A2 枚举外）422（先于 404）', async (retired) => {
     const res = await app.inject({
       method: 'PUT',
-      url: '/v1/admin/card-sizes/compact',
+      url: `/v1/admin/card-sizes/${retired}`,
       headers: { authorization: await adminToken(), 'content-type': 'application/json' },
       body: JSON.stringify({ cardWidthPx: 200, gapPx: 16 }),
     })
@@ -291,7 +263,7 @@ describe('PUT /admin/card-sizes/:sizeClass', () => {
     mockFind.mockResolvedValue(null)
     const res = await app.inject({
       method: 'PUT',
-      url: '/v1/admin/card-sizes/standard',
+      url: '/v1/admin/card-sizes/global',
       headers: { authorization: await adminToken(), 'content-type': 'application/json' },
       body: JSON.stringify({ cardWidthPx: 220, gapPx: 16 }),
     })

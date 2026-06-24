@@ -3101,13 +3101,13 @@
 
 ## [SEQ-20260623-02] CARD-SIZE-A2 — 废弃分档 → 单一全局卡宽 + 全站精确定宽（统一卡片显示尺寸，ADR-214 Amendment A2）
 
-- **状态**：🔄 执行中（A2-0 起）
+- **状态**：🔄 执行中（A2-1~A2-4 代码+测试已交付门禁全绿；A2-5 e2e spec 已重写·待合并 gate 实跑）
 - **创建时间**：2026-06-23 ｜ **最后更新时间**：2026-06-23
 - **目标**：兑现用户**真实诉求**「全站所有区域卡片显示成**同一尺寸**（视觉精确一致）」——推翻 ADR-214/A1 分档模型，**单一全局卡宽 + 全站精确定宽 + 居中留白**。
 - **范围**：推翻分档卡宽体系（A1 的 #0/#1A/#1B/#3/#4），**保留横滚化布局**（A1 的 #2/#5/#6）；migration 126 单行全局 + `@resovo/types` 废枚举 + `CardSizeService` 单一配置 + CardGrid 精确定宽+居中 + ScrollRow 消费 `--card-w` + 后台单一表单 + e2e 重写。
 - **依据**：**AskUserQuestion ×2 明确确认**（全站统一尺寸 + 网格留白居中 + 手机端列数由 W 决定可接受）；ADR-214 Amendment A2。
 - **来源**：用户复盘——「统一卡片尺寸」真实含义 = **全站视觉精确一致**，非分档可配（ADR-214 + A1 + 前序治理三次方案均误解为「分档管理」）。
-- **用户锁定决策（硬约束）**：① 单一全局卡宽 `--card-w` + `--card-gap`（废 standard/scroll/compact 分档）；② 网格 `repeat(auto-fill, var(--card-w))` 精确定宽 + `justify-content:center` 居中留白；③ 横滚 `width:var(--card-w)`；④ 手机端列数由 W 决定（接受 W 大则 1 列）；⑤ 后台单一「卡片宽度 + 间距」表单。
+- **用户锁定决策（硬约束）**：① 单一全局卡宽 `--card-w` + `--card-gap`（废 standard/scroll/compact 分档）；② 网格 `repeat(auto-fit, min(var(--card-w),100%))` 精确定宽 + `justify-content:center` 居中留白（**实施期 auto-fill→auto-fit 自纠**，Codex-A2-R7 复核：固定宽轨道下 auto-fill 保留空轨道致卡少不居中、auto-fit 折叠空轨道才真居中）；③ 横滚 `width:var(--card-w)`；④ 手机端列数由 W 决定（接受 W 大则 1 列）；⑤ 后台单一「卡片宽度 + 间距」表单。
 - **关键编号**：migration **126**（最新 125）；**ADR-214 Amendment A2**（不新增 ADR 号）；ADR-215 端点保留、body 简化。
 
 ### 任务列表（Phase A2-0→A2-5）
@@ -3117,7 +3117,7 @@
 | **A2-0** | CARD-SIZE-A2-ADR | 落盘 ADR-214 Amendment A2（废分档→单一全局卡宽 + 精确定宽 + 居中 + 手机取舍）→ Codex 审 | opus | Codex 对抗审 |
 | **A2-1** | CARD-SIZE-A2-SCHEMA | migration 126（card_size_settings 单行全局 size_class='global' / 删 scroll 行 + standard→global / CHECK 改 / 删 desktop_columns）+ `@resovo/types` 废枚举 + 一致性测重写 | sonnet | migrate 冷启动、一致性测、typecheck |
 | **A2-2** | CARD-SIZE-A2-API | CardSizeService 单一配置读写（GET 单行 / PUT 全局卡宽+gap）+ admin/public 测重写 | sonnet | api 测、verify:endpoint-adr |
-| **A2-3** | CARD-SIZE-A2-CSS | CardGrid `repeat(auto-fill,min(var(--card-w),100%))` 精确定宽 + `justify-content:center` / ScrollRow `width:var(--card-w)` / **Shelf·TopTenRow·DailyAnimeRow 内联 `--card-w-scroll`→`--card-w`**（Codex-A2-R4 实测内联消费）/ card-size-fetch 遍历→单一 `--card-w`+`--card-gap` / globals.css；CardGrid/ScrollRow/fetch 测重写 | **opus**（CSS 原语翻转） | 视觉回归、单测 |
+| **A2-3** | CARD-SIZE-A2-CSS | CardGrid `repeat(auto-fit,min(var(--card-w),100%))` 精确定宽 + `justify-content:center`（**auto-fit 自纠 Codex-A2-R7**）/ ScrollRow `width:var(--card-w)` / **Shelf·TopTenRow·DailyAnimeRow 内联 `--card-w-scroll`→`--card-w`**（Codex-A2-R4 实测内联消费）/ card-size-fetch 遍历→单一 `--card-w`+`--card-gap` / globals.css；CardGrid/ScrollRow/fetch 测重写 | **opus**（CSS 原语翻转） | 视觉回归、单测 |
 | **A2-4** | CARD-SIZE-A2-TAB | CardSizeTab 分档表单 → 单一「卡片宽度+间距」+ 预览（全站统一 + 手机列数提示）+ validation/api 单一 + Tab 测重写 | sonnet | CardSizeTab 测 |
 | **A2-5** | CARD-SIZE-A2-E2E | card-size-grid.spec 重写（全站同宽断言：网格/横滚卡宽均 = --card-w）+ 全量回归 + test:e2e（合并 gate） | sonnet | 全量门禁 |
 
@@ -3128,3 +3128,5 @@
 - **保留 A1 资产**：ScrollRow 组件 / 详情拆侧栏 / 播放横滚 布局不动，仅卡宽变量来源 `--card-w-scroll`→全局 `--card-w`（含 Shelf/TopTenRow/DailyAnimeRow 内联）。
 - **模型路由**：A2-0 ADR + A2-3 CSS 原语翻转强制 Opus；A2-0 走 Codex 对抗审。
 - **Phase A2-0 Codex 对抗审 round-1（2026-06-23，3 BLOCKER + 3 CONCERN 全吸收入 ADR-214 Amendment A2）**：R2 migration 126 约束顺序（先 DROP 125 size_unit_check/size_class CHECK 再改 global 再删 desktop_columns 列）→ A2-1；R3 手机算术修正 W=180→160（手机 2 列）→ A2-1/A2-3；R4 资产清理扩 Shelf/TopTenRow/DailyAnimeRow 内联 + fetch 遍历 → A2-3，测试清单 → A2-5；R1 精确=border-box + e2e getBoundingClientRect → A2-5；R5 CardSizeClass 收敛 'global' 保留非删 → A2-1/A2-2；R6 auto-fill 理由 + overflow min(W,100%) + 分区对齐 → A2-3。**Amendment A2 状态 = Accepted（待用户裁可）→ 解锁 A2-1。**
+- **Phase A2-3 Codex 对抗审 round-2（2026-06-23，auto-fill→auto-fit 实施期自纠）= SELF-CORRECTION CONDITIONALLY VALID**：固定宽轨道（非 1fr）下 auto-fill 保留空轨道 → `justify-content:center` 居中含空轨道整块 ≈ 满容器、卡片左对齐不居中（兑现不了用户「卡少居中」）；auto-fit 折叠空轨道才真居中且卡宽恒 = W（无 1fr 不拉伸）→ 原 Codex-A2-R6「auto-fit 拉伸」理由仅对 minmax(W,1fr) 成立、A2 已弃 1fr 故失效。**修正网格用 `repeat(auto-fit, min(var(--card-w),100%))`**。Codex 补三边界（已记 ADR D-214-A2-2 / 实装吸收）：① 多行末行左对齐（同 auto-fill，可接受）；② 0px 折叠轨道 → e2e `tracks()` 过滤 `n>0`；③ `min(W,100%)` 超窄容器收宽（< W 时非严格 = W，有意取舍，getBoundingClientRect=W 断言在桌面 1280 跑）。
+- **A2-1~A2-4 交付（2026-06-23，本提交）**：migration 126 + types 收敛 'global' + queries/fetch/Service/lib 单一全局 + CardGrid auto-fit 精确定宽+居中 + ScrollRow/Shelf/TopTenRow/DailyAnimeRow 变量回收 + globals.css + CardSizeTab 单一表单+手机列数提示 + 全栈测试重写。门禁：typecheck=0 / lint 通过 / card-size 单测 79+148 全绿。**A2-5 e2e spec 已重写**（card-size-grid 全站精确定宽 + featured-row-sparse 居中），实跑属合并 main 前 e2e gate（worktree 缺 .env.local，同 A1）。**执行模型**：claude-opus-4-8（主循环，满足 A2-3 CSS 原语翻转强制 Opus + types 共享契约强制 Opus）｜**子代理**：codex-rescue（codex runtime，auto-fit 自纠对抗审，agentId a1b5a7548f304bf5e）。

@@ -1,12 +1,12 @@
 /**
- * card-size/api.ts — 前台卡片尺寸体系 admin API 客户端封装（ADR-215 + Amendment A1，仿 home-curation/api.ts）
+ * card-size/api.ts — 前台卡片尺寸体系 admin API 客户端封装（ADR-215 + Amendment A2，仿 home-curation/api.ts）
  *
  * 消费端点：apps/api/src/routes/admin/card-sizes.ts（ADR-215 D-215-1/2）
- *   - GET  /admin/card-sizes           → 2 档全量 CardSizeSettings[]（枚举序）
- *   - PUT  /admin/card-sizes/:sizeClass → 全替换该档可编辑投影 + audit card_size.update
+ *   - GET  /admin/card-sizes           → A2 单行全局 CardSizeSettings[]
+ *   - PUT  /admin/card-sizes/:sizeClass → 全替换全局可编辑投影 + audit card_size.update（:sizeClass='global'）
  *
- * body 统一（Amendment A1 D-214-A1-1/5：单位统一为卡宽，standard size-driven / scroll 横滚同构）：
- *   { cardWidthPx, gapPx }（desktopColumns 列数护栏本轮不暴露编辑；服务端 zod `.strict()` 拒未知字段）。
+ * body（Amendment A2 D-214-A2-6：单一全局卡宽，全站网格 + 横滚共用）：
+ *   { cardWidthPx, gapPx }（服务端 zod `.strict()` 拒未知字段）。
  */
 
 import { apiClient } from '@/lib/api-client'
@@ -18,13 +18,13 @@ export interface CardSizeBody {
   gapPx: number
 }
 
-/** GET /admin/card-sizes — 2 档全量（后台直读 DB 不走公开缓存，服务端枚举序） */
+/** GET /admin/card-sizes — A2 单行全局（后台直读 DB 不走公开缓存） */
 export async function listCardSizes(): Promise<CardSizeSettings[]> {
   const result = await apiClient.get<{ data: CardSizeSettings[] }>('/admin/card-sizes')
   return result.data
 }
 
-/** PUT /admin/card-sizes/:sizeClass — 全替换该档可编辑投影；422 越界/未知字段 由 ApiClientError 抛出 */
+/** PUT /admin/card-sizes/:sizeClass — 全替换全局可编辑投影（:sizeClass='global'）；422 越界/未知字段 由 ApiClientError 抛出 */
 export async function updateCardSize(
   sizeClass: CardSizeClass,
   body: CardSizeBody,

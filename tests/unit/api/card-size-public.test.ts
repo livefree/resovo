@@ -1,12 +1,12 @@
 /**
- * card-size-public.test.ts — 公开 GET /card-sizes Redis 读穿缓存（ADR-215 D-215-6 + Amendment A1 / SEQ-20260623-01）
+ * card-size-public.test.ts — 公开 GET /card-sizes Redis 读穿缓存（ADR-215 D-215-6 + Amendment A2 / SEQ-20260623-02）
  *
  * 覆盖（CardSizeService.getPublicCardSizes 经真 Fastify app inject，mock redis + queries）：
  *   - cache hit：redis.get 命中 → JSON.parse 直返，不触 DB（listCardSizeSettings 0 次）
- *   - cache miss：redis.get null → DB listCardSizeSettings（枚举序）+ setex TTL 兜底
+ *   - cache miss：redis.get null → DB listCardSizeSettings + setex TTL 兜底
  *   - 无鉴权 200（公开只读，前台 SSR 取数）
  *
- * Amendment A1：2 档（standard size-driven / scroll 横滚），单位统一为卡宽。
+ * Amendment A2：单行全局（size_class='global'，全站统一卡宽）。
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -35,12 +35,11 @@ vi.mock('@/api/db/queries/card-size-settings', () => ({
   updateCardSizeSettings: vi.fn(),
 }))
 
-// ── Fixtures（Amendment A1：2 档、单位统一为卡宽）──────────────────────────────
+// ── Fixtures（Amendment A2：单行全局）──────────────────────────────────────────
 
 function row(sizeClass: CardSizeClass, over: Partial<CardSizeSettings> = {}): CardSizeSettings {
   const base: Record<CardSizeClass, CardSizeSettings> = {
-    standard: { id: 'cs-standard', sizeClass: 'standard', desktopColumns: null, cardWidthPx: 200, gapPx: 16, settings: {}, updatedAt: '2026-06-23T00:00:00Z' },
-    scroll: { id: 'cs-scroll', sizeClass: 'scroll', desktopColumns: null, cardWidthPx: 170, gapPx: 16, settings: {}, updatedAt: '2026-06-23T00:00:00Z' },
+    global: { id: 'cs-global', sizeClass: 'global', cardWidthPx: 160, gapPx: 16, settings: {}, updatedAt: '2026-06-23T00:00:00Z' },
   }
   return { ...base[sizeClass], ...over }
 }
@@ -64,34 +63,33 @@ describe('GET /card-sizes（公开读穿缓存）', () => {
   })
 
   it('cache hit：redis.get 命中 → 直返不触 DB', async () => {
-    const cached = [row('standard'), row('scroll')]
+    const cached = [row('global')]
     mockRedisGet.mockResolvedValue(JSON.stringify(cached))
 
     const res = await app.inject({ method: 'GET', url: '/v1/card-sizes' })
 
     expect(res.statusCode).toBe(200)
-    expect(res.json().data.map((r: CardSizeSettings) => r.sizeClass)).toEqual(['standard', 'scroll'])
+    expect(res.json().data.map((r: CardSizeSettings) => r.sizeClass)).toEqual(['global'])
     expect(mockList).not.toHaveBeenCalled()
     expect(mockRedisSetex).not.toHaveBeenCalled()
   })
 
-  it('cache miss：redis.get null → DB 枚举序 + setex TTL 兜底', async () => {
+  it('cache miss：redis.get null → DB 单行全局 + setex TTL 兜底', async () => {
     mockRedisGet.mockResolvedValue(null)
-    // DB 字典序返回 → Service 重排为枚举序 standard/scroll
-    mockList.mockResolvedValue([row('scroll'), row('standard')])
+    mockList.mockResolvedValue([row('global')])
     mockRedisSetex.mockResolvedValue('OK')
 
     const res = await app.inject({ method: 'GET', url: '/v1/card-sizes' })
 
     expect(res.statusCode).toBe(200)
-    expect(res.json().data.map((r: CardSizeSettings) => r.sizeClass)).toEqual(['standard', 'scroll'])
+    expect(res.json().data.map((r: CardSizeSettings) => r.sizeClass)).toEqual(['global'])
     expect(mockList).toHaveBeenCalledOnce()
     expect(mockRedisSetex).toHaveBeenCalledWith('card-sizes:v1', 60, expect.any(String))
   })
 
   it('无鉴权 200（公开只读，前台 SSR 取数）', async () => {
     mockRedisGet.mockResolvedValue(null)
-    mockList.mockResolvedValue([row('standard'), row('scroll')])
+    mockList.mockResolvedValue([row('global')])
     mockRedisSetex.mockResolvedValue('OK')
 
     const res = await app.inject({ method: 'GET', url: '/v1/card-sizes' })

@@ -4,7 +4,7 @@
  * 两层：
  * ① 组件契约（jsdom）：scroll-row class + children 包裹 .scroll-row__item + 可达性(role/tabindex/aria-label)
  *    + className/data-testid 透传 + null child 跳过 + Fragment 边界（顶层 Fragment 当单 child，锁契约）。
- * ② globals.css 契约（源快照）：.scroll-row flex 横滚 + scroll-snap / __item 定宽 var(--card-w-scroll,170px) 兜底 / gap。
+ * ② globals.css 契约（源快照）：.scroll-row flex 横滚 + scroll-snap / __item 定宽 var(--card-w,160px) 兜底 / gap（A2 单一全局变量）。
  *    —— jsdom 不算布局，横滚「真实生效」由 CARD-SIZE-A1-E2E 视觉回归锁；本层只防关键 token / a11y 属性被误删的源级回归。
  */
 
@@ -95,21 +95,26 @@ describe('ScrollRow — 组件契约（D-214-A1-6）', () => {
   })
 })
 
-describe('ScrollRow — globals.css 契约（D-214-A1-6，源快照）', () => {
+describe('ScrollRow — globals.css 契约（D-214-A1-6 + A2 D-214-A2-7，源快照）', () => {
   // vitest 从 repo root 运行 → process.cwd() = 仓库根
   const cssPath = resolve(process.cwd(), 'apps/web-next/src/app/globals.css')
   const cssNoWs = readFileSync(cssPath, 'utf8').replace(/\s/g, '')
 
-  it('.scroll-row flex 横滚 + scroll-snap + 消费 --card-gap-scroll', () => {
+  it('.scroll-row flex 横滚 + scroll-snap + 消费单一 --card-gap（A2）', () => {
     expect(cssNoWs).toContain('.scroll-row{display:flex')
     expect(cssNoWs).toContain('overflow-x:auto')
     expect(cssNoWs).toContain('scroll-snap-type:xmandatory')
-    expect(cssNoWs).toContain('gap:var(--card-gap-scroll)')
+    expect(cssNoWs).toContain('gap:var(--card-gap,16px)')
   })
 
-  it('.scroll-row__item 定宽 var(--card-w-scroll,170px) 兜底 + flex-shrink:0 + scroll-snap-align', () => {
-    expect(cssNoWs).toContain('.scroll-row__item{width:var(--card-w-scroll,170px)')
+  it('.scroll-row__item 定宽 var(--card-w,160px) 兜底 + flex-shrink:0 + scroll-snap-align（A2 与网格区同源）', () => {
+    expect(cssNoWs).toContain('.scroll-row__item{width:var(--card-w,160px)')
     expect(cssNoWs).toContain('flex-shrink:0')
     expect(cssNoWs).toContain('scroll-snap-align:start')
+  })
+
+  it('A2 分档变量已回收（无 --card-w-scroll / --card-gap-scroll 残留）', () => {
+    expect(cssNoWs).not.toContain('--card-w-scroll')
+    expect(cssNoWs).not.toContain('--card-gap-scroll')
   })
 })

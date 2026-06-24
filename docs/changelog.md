@@ -2854,3 +2854,29 @@
 - **改动**：重写 `tests/e2e-next/card-size-grid.spec.ts`（4 测）：① SSR 注入变量——standard 出 `--card-w-standard:200px`（非列数）+ **compact 全栈退役无残留**（`--card-cols-compact`/`--card-gap-compact`/`--card-w-compact` 均空）；② featured-grid 桌面 size-driven `auto-fill`——卡宽恒定 ~200px〔[195,300] 含 1fr 拉伸〕+ 列数容器派生〔≥3〕+ gap 16px；③ 长标题不撑破轨道·无水平溢出（D-214-4 min-width:0）；④ 窄视口保留 2 列计数（D-214-A1-2 仅 ≥1024 size-driven）。
 - **门禁**：typecheck=0 / lint=0（spec 语法/类型）。**e2e 实跑环境阻塞**——worktree 缺 `.env.local` + node_modules 不完整 → dev server 起不来 + playwright 不可跑 → **`test:e2e` 4 projects + migration 125 冷启动 + 全量单测须主 checkout/CI 跑 = 合并 main 前 gate**（同 CARD-SIZE-E2E）。
 - **注意事项**：① 本卡 spec 不占活跃工作台槽（环境阻塞性质）。② 详情/播放横滚 e2e（`related-scroll` 渲染断言）可后续补 spec（本卡聚焦 size-driven 网格回归）。③ **🎉 SEQ-20260623-01 代码全交付（#0–#7）**——剩合并 main 前 gate 实跑。
+
+## [SEQ-20260623-02 / CARD-SIZE-A2-SCHEMA+API+CSS+TAB] 废弃分档 → 单一全局卡宽 + 全站精确定宽（A2-1~A2-4 批次）
+- **完成时间**：2026-06-23
+- **记录时间**：2026-06-23 18:55
+- **执行模型**：claude-opus-4-8（主循环；满足 A2-3 CSS 原语翻转 + types 共享契约强制 Opus）
+- **子代理**：codex-rescue (codex runtime，auto-fill→auto-fit 自纠对抗审，agentId a1b5a7548f304bf5e)
+- **依据**：ADR-214 Amendment A2（D-214-A2-1/2/3/4/5/6/7，Accepted）——用户真实诉求「全站所有区域卡片显示同一尺寸（视觉精确一致）」，推翻 A1 分档模型。类型耦合批次（types 收敛破全栈 typecheck，A2-1~A2-4 须一起到绿）。
+- **修改文件**：
+  - `packages/types/src/card-size.types.ts` — `CardSizeClass` 收敛单值 `'global'`（保留类型形状，D-214-A2-6）；删 `desktopColumns`；`CARD_SIZE_DEFAULTS = { global: { cardWidthPx:160, gapPx:16 } }`。
+  - `apps/api/src/db/migrations/126_card_size_a2_global.sql`（新）— 7 步严格顺序（Codex-A2-R2）：DROP 125 约束 → DELETE scroll → standard→global/卡宽160 → ADD size_class CHECK IN('global') + card_width_px_check[120,400] → DROP COLUMN desktop_columns。
+  - `apps/api/src/db/queries/card-size-settings.ts` — 删 desktop_columns 映射/COLUMNS/fieldMap。
+  - `apps/api/src/services/CardSizeService.ts` — 单一全局读写注释；逻辑经 CARD_SIZE_CLASSES 投影自然适配。
+  - `apps/web-next/src/lib/server/card-size-fetch.ts` — declarationsFor 注入单一 `--card-w`/`--card-gap`（删分档后缀 + desktopColumns，D-214-A2-7）。
+  - `apps/web-next/src/components/shared/card-grid/CardGrid.tsx` — sizeClass 形状保留（'global'）；文档 auto-fit 精确定宽+居中。
+  - `apps/web-next/src/app/globals.css` — `.card-grid` `repeat(auto-fit,min(var(--card-w,160px),100%))` 精确定宽 + `justify-content:center` 居中 + 单一 `--card-gap`（删 .card-grid--standard/--cg-cols 计数级联）；`.scroll-row`/`.scroll-row__item` 消费 `--card-w`/`--card-gap`。
+  - `apps/web-next/src/components/home/FeaturedRow.tsx` + `browse/BrowseGrid.tsx` — CardGrid sizeClass `"standard"`→`"global"`。
+  - `apps/web-next/src/components/{video/Shelf,home/TopTenRow,home/DailyAnimeRow}.tsx` + `shared/scroll-row/ScrollRow.tsx` — 内联 `--card-w-scroll`/`--card-gap-scroll`→`--card-w`/`--card-gap`（Codex-A2-R4 实测内联消费回收）。
+  - `apps/server-next/src/app/admin/settings/_tabs/CardSizeTab.tsx` — 分档表单 → 单一全局「卡片宽度+间距」+ auto-fit 居中预览 + 手机列数实时提示（estimateMobileCols，D-214-A2-4）。
+  - `apps/server-next/src/lib/card-size/{validation,api}.ts` — A2 单一全局注释。
+  - `tests/unit/{web-next/lib/card-size-fetch,web-next/card-grid,web-next/scroll-row,components/server-next/admin/system/CardSizeTab,api/card-size-public,api/card-size-admin,db/migrations/124_card_size_settings_seed}.test.tsx?` + `tests/integration/api/card-size-settings-schema.test.ts` — 全栈重写为 A2 单一全局契约（含 seed 测纳入 126 演进：size_class 改名 + DROP COLUMN）。
+  - `tests/e2e-next/{card-size-grid,featured-row-sparse}.spec.ts` — A2-5 全站精确定宽 + 居中断言（getBoundingClientRect=注入 --card-w；tracks() 过滤 0px 折叠轨道，Codex-A2-R7-D）。
+  - `docs/architecture.md` §5.19 — migration 126 单行全局 + 删 desktop_columns 同步。
+  - `docs/decisions.md` — ADR D-214-A2-2/3/4 auto-fill→auto-fit 自纠（Codex-A2-R7 复核 + 三边界）。
+- **门禁**：typecheck=0 / lint 通过（仅既有无关 warning）/ card-size 单测 79（前台+API+Tab+seed+消费方）+ audit-log 148 全绿。**e2e 实跑环境阻塞**（worktree 缺 `.env.local`）→ `test:e2e` + migration 126 冷启动 + 全量单测 = 合并 main 前 gate（同 A1）。
+- **Codex 对抗审 round-2**：auto-fill→auto-fit 自纠 = SELF-CORRECTION CONDITIONALLY VALID（固定宽轨道下 auto-fill 保留空轨道致卡少不居中；auto-fit 折叠空轨道才真居中、无 1fr 不拉伸；原 R6「auto-fit 拉伸」理由仅对 minmax(W,1fr) 成立、A2 已弃 1fr 失效）。三边界已吸收。
+- **注意事项**：① A2 保留 A1 横滚化布局（#2/#5/#6），仅推翻分档卡宽体系。② A2-5 e2e 实跑 + 全量回归属合并 gate 运维步。③ 残余 desktop_columns 仅存 migration 124/125/126 自身（历史演进，正确）。

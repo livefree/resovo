@@ -2,12 +2,12 @@
  * CardSizeService.ts — 前台卡片尺寸体系后台读写 Service（ADR-215 D-215-1/2，仿 HomeCurationService）
  *
  * 端点真源：ADR-215 端点契约表
- *   - GET /admin/card-sizes          → listCardSizes（2 档全量，枚举序）
- *   - PUT /admin/card-sizes/:sizeClass → updateCardSize（全替换该档可编辑投影 + audit card_size.update）
+ *   - GET /admin/card-sizes          → listCardSizes（A2 单行全局）
+ *   - PUT /admin/card-sizes/:sizeClass → updateCardSize（全替换该行可编辑投影 + audit card_size.update；:sizeClass='global'）
  *
- * 校验双层（D-214-10）：DB CHECK（migration 124+125）+ 本文件 zod min/max。
- * 统一 body schema（Amendment A1 D-214-A1-1/5）：单位统一为卡宽 → 全档同构 { cardWidthPx [120,400], gapPx }，
- *   .strict() 令未知字段（含本轮不暴露编辑的 desktopColumns 护栏）→ 422（严格 body 守卫）。
+ * 校验双层（D-214-10）：DB CHECK（migration 124+125+126）+ 本文件 zod min/max。
+ * body schema（Amendment A2 D-214-A2-6）：单一全局卡宽 { cardWidthPx [120,400], gapPx }，
+ *   .strict() 令未知字段 → 422（严格 body 守卫）。
  */
 
 import { z } from 'zod'
@@ -27,7 +27,7 @@ import {
 import { AuditLogService } from '@/api/services/AuditLogService'
 import { baseLogger } from '@/api/lib/logger'
 
-/** 公开读缓存 key（ADR-215 D-215-6；3 档配置整份缓存，del-on-write 主 + TTL 兜底辅） */
+/** 公开读缓存 key（ADR-215 D-215-6；A2 单行全局整份缓存，del-on-write 主 + TTL 兜底辅） */
 const PUBLIC_CACHE_KEY = 'card-sizes:v1'
 /** TTL 兜底秒数（del 失效为主、TTL 自愈为辅；与 HomeService shelf/top10 同口径 60s） */
 const PUBLIC_CACHE_TTL = 60
@@ -41,10 +41,9 @@ export const CardSizeClassParamSchema = z.enum(
 const GapSchema = z.number().int().min(0).max(64)
 
 /**
- * PUT body：统一可编辑投影 = { cardWidthPx, gapPx }（D-215-2 + Amendment A1 D-214-A1-1/5）。
- * 单位统一为卡宽后 standard（size-driven）/ scroll（横滚）body 同构；范围 [120,400] 镜像 migration 125
- * size_unit_check + DB CHECK 双层（D-214-10）。.strict() → 未知字段（含本轮不暴露编辑的 desktopColumns
- * 列数护栏，D-214-A1-4）→ 422。
+ * PUT body：全局可编辑投影 = { cardWidthPx, gapPx }（D-215-2 + Amendment A2 D-214-A2-6）。
+ * 单一全局卡宽；范围 [120,400] 镜像 migration 126 card_width_px_check + DB CHECK 双层（D-214-10）。
+ * .strict() → 未知字段 → 422。
  */
 export const CardSizeBodySchema = z.object({
   cardWidthPx: z.number().int().min(120).max(400),
@@ -53,7 +52,7 @@ export const CardSizeBodySchema = z.object({
 
 export type CardSizeBody = z.infer<typeof CardSizeBodySchema>
 
-/** 据 sizeClass 取 body schema（A1 单位统一为卡宽 → 全档同构；保留派发签名兼容 route/未来扩展） */
+/** 据 sizeClass 取 body schema（A2 单一全局；保留派发签名兼容 route/未来扩展） */
 export function bodySchemaFor(_sizeClass: CardSizeClass): typeof CardSizeBodySchema {
   return CardSizeBodySchema
 }
@@ -70,7 +69,7 @@ export class CardSizeService {
     this.auditSvc = new AuditLogService(db)
   }
 
-  /** admin GET：2 档全量，按 CardSizeClass 枚举序（DB 返字典序 → Service 重排，仿 listSectionSummaries）。直读 DB 不走缓存——后台要实时。 */
+  /** admin GET：A2 单行全局（保留 CARD_SIZE_CLASSES 枚举序投影，兼容范式；DB 返字典序）。直读 DB 不走缓存——后台要实时。 */
   async listCardSizes(): Promise<CardSizeSettings[]> {
     const rows = await listCardSizeSettings(this.db)
     const bySize = new Map(rows.map((r) => [r.sizeClass, r]))
@@ -110,7 +109,7 @@ export class CardSizeService {
 
   /**
    * PUT：全替换该档可编辑投影 + audit `card_size.update`（before/after 全行快照）。
-   * @returns null = card_size 行缺失（seed 2 档恒存在；缺行 = 迁移漂移兜底 404）
+   * @returns null = card_size 行缺失（A2 单行全局恒存在；缺行 = 迁移漂移兜底 404）
    */
   async updateCardSize(
     sizeClass: CardSizeClass,

@@ -1,11 +1,10 @@
 /**
- * card-size/validation.ts — 卡片尺寸表单校验边界（ADR-214 D-214-10 + Amendment A1 客户端镜像）
+ * card-size/validation.ts — 卡片尺寸表单校验边界（ADR-214 D-214-10 + Amendment A2 客户端镜像）
  *
  * 真源在服务端：`apps/api/src/services/CardSizeService.ts` CardSizeBodySchema
- *   （cardWidthPx int [120,400] / gapPx int [0,64]）外加 DB CHECK（migration 124+125）。
+ *   （cardWidthPx int [120,400] / gapPx int [0,64]）外加 DB CHECK（migration 124+125+126）。
  *
- * Amendment A1：单位统一为卡宽（standard size-driven / scroll 横滚同构）；desktopColumns 列数护栏
- *   本轮不暴露编辑（D-214-A1-4），不在可编辑边界内。
+ * Amendment A2：单一全局卡宽（全站网格 + 横滚共用 cardWidthPx + gapPx，D-214-A2-1/6）。
  *
  * 本文件以 **plain 常量镜像** 这批边界供 admin 表单即时反馈，
  * **不引入 zod**（server-next 无 zod 依赖；沿用 sibling tab inline 校验约定，避免技术栈外依赖）。
@@ -14,9 +13,9 @@
 
 /** 各可编辑字段的整数范围（镜像服务端 zod min/max） */
 export const CARD_SIZE_BOUNDS = {
-  /** 卡片宽度 px（standard size-driven / scroll 横滚，全档同构） */
+  /** 全站统一卡片宽度 px（网格 + 横滚共用，A2 D-214-A2-1） */
   cardWidthPx: { min: 120, max: 400 },
-  /** 卡间距 px（全档通用） */
+  /** 卡间距 px */
   gapPx: { min: 0, max: 64 },
 } as const
 

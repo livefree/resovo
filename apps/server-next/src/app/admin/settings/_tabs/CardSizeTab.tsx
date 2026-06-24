@@ -1,16 +1,15 @@
 'use client'
 
 /**
- * CardSizeTab — 「前台展示」站点设置 Tab：前台卡片尺寸体系编辑面板（SEQ-20260622-03 Phase 3 / ADR-214/215）
+ * CardSizeTab — 「前台展示」站点设置 Tab：前台卡片尺寸体系编辑面板（SEQ-20260623-02 Phase A2-4 / ADR-214 Amendment A2/215）
  *
  * 消费端点（ADR-215 D-215-1/2，经 @/lib/card-size/api）：
- *   - GET  /admin/card-sizes           → 2 档全量
- *   - PUT  /admin/card-sizes/:sizeClass → 全替换该档可编辑投影
+ *   - GET  /admin/card-sizes           → 单行全局
+ *   - PUT  /admin/card-sizes/:sizeClass → 全替换该行可编辑投影（:sizeClass='global'）
  *
- * 2 档封闭枚举（D-214-2 + Amendment A1：compact 废弃，单位统一为卡宽）：
- *   - standard（网格档）：编辑 卡片宽度 px + 间距（size-driven，列数由容器宽派生）
- *   - scroll（横滚行）：编辑 卡片定宽 px + 间距
- * 每档独立 save——对齐 PUT/:sizeClass 端点粒度 + 单档 audit（card_size.update）。
+ * 单一全局卡宽（D-214-A2-1/6，推翻 A1 分档）：编辑全站统一 卡片宽度 px + 间距，
+ *   网格 + 横滚所有区域共用 → 视觉精确一致。列数由容器宽 / 卡宽自动派生（无列数概念）。
+ *   手机列数随卡宽变化，面板实时提示（D-214-A2-4）。
  *
  * 保存后约 ≤60s（SSR revalidate / 公开缓存 TTL）内前台渲染新尺寸（D-214-9 新鲜度有界）。
  */
@@ -101,11 +100,27 @@ const PREVIEW_CARD_STYLE: CSSProperties = {
   borderRadius: 'var(--radius-sm)',
 }
 
-// ── 档位元数据（D-214-2 封闭枚举展示文案）────────────────────────────────────────
+// ── 档位元数据（A2 单值 'global' 全站统一展示文案，D-214-A2-1/6）──────────────────
 
 const CLASS_META: Record<CardSizeClass, { label: string; subtitle: string }> = {
-  standard: { label: '标准网格', subtitle: '首页特色 / 分类页 / 搜索结果（卡片宽度 + 间距，列数自动）' },
-  scroll: { label: '横向滚动行', subtitle: '首页横滚卡片行（卡片定宽 px + 间距）' },
+  global: {
+    label: '全站卡片尺寸',
+    subtitle: '首页特色 / 分类页 / 搜索结果 / 横滚行 / 详情·播放相关——全站卡片统一宽度 + 间距（列数自动派生）',
+  },
+}
+
+// ── 手机端列数估算（D-214-A2-4：列数随卡宽变化，面板提示）────────────────────────
+//
+// 手机视口 375 − 页面左右内边距约 32 = 343 内容宽；列数 = ⌊(内容宽 + gap) / (卡宽 + gap)⌋。
+// 估算用途（实际由 CSS auto-fill 派生）：卡宽越大手机列数越少（W=160→2 列 / W>167→1 列）。
+const MOBILE_VIEWPORT_W = 375
+const MOBILE_PAGE_PADDING = 32
+
+function estimateMobileCols(cardWidthPx: number, gapPx: number): number {
+  const w = Number.isFinite(cardWidthPx) && cardWidthPx > 0 ? cardWidthPx : PREVIEW_FALLBACK_W
+  const g = Number.isFinite(gapPx) && gapPx >= 0 ? gapPx : 0
+  const content = MOBILE_VIEWPORT_W - MOBILE_PAGE_PADDING
+  return Math.max(1, Math.floor((content + g) / (w + g)))
 }
 
 function describeError(err: unknown): string {
@@ -154,53 +169,39 @@ function NumberField({ label, value, onChange, field, hint, suffix, testId }: Nu
 // 后台 server-next 自包含——**不跨 app import 前台 CardGrid/VideoCard**（边界 + 前台 context 依赖）；
 // 仅以占位方块复刻网格/横滚的列数·间距·卡宽布局语义，随表单 draft 实时重渲。
 
-/** 预览占位卡数（grid auto-fill 自动排列 / scroll 横排，够看清卡宽 + 间距） */
+/** 预览占位卡数（grid auto-fill 自动排列，够看清卡宽 + 间距 + 居中留白） */
 const PREVIEW_GRID_CARDS = 8
-/** scroll 档预览占位卡数（够看清定宽 + 横滚 + gap） */
-const PREVIEW_SCROLL_CARDS = 6
-/** 卡宽降级兜底（NaN/空输入，与 scroll 默认同口径） */
-const PREVIEW_FALLBACK_W = 170
+/** 卡宽降级兜底（NaN/空输入，与 A2 全局默认同口径） */
+const PREVIEW_FALLBACK_W = 160
 
 interface CardSizePreviewProps {
   sizeClass: CardSizeClass
-  isScroll: boolean
-  /** 卡片宽度 px（draft，全档同构；Amendment A1 单位统一为卡宽） */
+  /** 全站统一卡片宽度 px（draft，D-214-A2-1） */
   cardWidthPx: number
   /** 间距 px（draft） */
   gapPx: number
 }
 
-function CardSizePreview({ sizeClass, isScroll, cardWidthPx, gapPx }: CardSizePreviewProps) {
+/**
+ * 全站统一卡宽预览（A2 D-214-A2-2/3）：auto-fill 精确定宽 + justify-content:center 居中留白，
+ * 复刻前台 `.card-grid` 网格语义；附手机端列数估算（D-214-A2-4）。
+ */
+function CardSizePreview({ sizeClass, cardWidthPx, gapPx }: CardSizePreviewProps) {
   const gap = Number.isFinite(gapPx) && gapPx >= 0 ? gapPx : 0
   const w = Number.isFinite(cardWidthPx) && cardWidthPx > 0 ? Math.trunc(cardWidthPx) : PREVIEW_FALLBACK_W
+  const mobileCols = estimateMobileCols(w, gap)
 
-  if (isScroll) {
-    return (
-      <div style={PREVIEW_WRAP_STYLE} data-testid={`card-size-${sizeClass}-preview`}>
-        <div style={PREVIEW_LABEL_STYLE}>预览（横滚行 · 卡宽 {w}px · 间距 {gap}px）</div>
-        <div
-          data-testid={`card-size-${sizeClass}-preview-track`}
-          style={{ display: 'flex', gap: `${gap}px`, overflowX: 'auto', paddingBottom: '4px' }}
-        >
-          {Array.from({ length: PREVIEW_SCROLL_CARDS }).map((_, i) => (
-            <div key={i} style={{ ...PREVIEW_CARD_STYLE, width: `${w}px`, flex: '0 0 auto' }} />
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  // standard：size-driven 网格（auto-fill，卡宽恒定最小、列数由预览容器宽自动派生，D-214-A1-1）
   return (
     <div style={PREVIEW_WRAP_STYLE} data-testid={`card-size-${sizeClass}-preview`}>
       <div style={PREVIEW_LABEL_STYLE}>
-        预览（桌面 size-driven · 卡宽 {w}px · 间距 {gap}px；列数随容器宽自动 / 移动端 2 列 / ≥640px 3 列）
+        预览（全站统一 · 卡宽 {w}px · 间距 {gap}px；列数随容器宽自动派生 · 居中留白 · 手机约 {mobileCols} 列）
       </div>
       <div
         data-testid={`card-size-${sizeClass}-preview-track`}
         style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(auto-fill, minmax(min(${w}px, 100%), 1fr))`,
+          gridTemplateColumns: `repeat(auto-fit, min(${w}px, 100%))`,
+          justifyContent: 'center',
           gap: `${gap}px`,
         }}
       >
@@ -217,8 +218,7 @@ function CardSizePreview({ sizeClass, isScroll, cardWidthPx, gapPx }: CardSizePr
 function CardSizeClassCard({ initial }: { initial: CardSizeSettings }) {
   const toast = useToast()
   const meta = CLASS_META[initial.sizeClass]
-  const isScroll = initial.sizeClass === 'scroll'
-  // Amendment A1：单位统一为卡宽（standard size-driven / scroll 横滚）；desktopColumns 护栏本轮不暴露编辑
+  // Amendment A2：单一全局卡宽（全站网格 + 横滚共用），编辑卡片宽度 px + 间距
   const sizeField: CardSizeField = 'cardWidthPx'
 
   const initialSize = initial.cardWidthPx ?? 0
@@ -248,7 +248,7 @@ function CardSizeClassCard({ initial }: { initial: CardSizeSettings }) {
     } finally {
       setSaving(false)
     }
-  }, [hasError, isScroll, sizeInput, gapInput, initial.sizeClass, meta.label, toast])
+  }, [hasError, sizeInput, gapInput, initial.sizeClass, meta.label, toast])
 
   const handleReset = useCallback(() => {
     setSizeInput(String(baseline.size))
@@ -269,11 +269,7 @@ function CardSizeClassCard({ initial }: { initial: CardSizeSettings }) {
           onChange={setSizeInput}
           field={sizeField}
           suffix="px"
-          hint={
-            isScroll
-              ? '横滚卡片定宽，范围 120–400px'
-              : 'size-driven 卡片宽度（列数由容器宽自动派生 / 移动端 2 列、≥640px 3 列），范围 120–400px'
-          }
+          hint="全站统一卡片宽度（网格 + 横滚共用，列数由容器宽自动派生），范围 120–400px"
           testId={`card-size-${initial.sizeClass}-size`}
         />
         <NumberField
@@ -288,7 +284,6 @@ function CardSizeClassCard({ initial }: { initial: CardSizeSettings }) {
       </div>
       <CardSizePreview
         sizeClass={initial.sizeClass}
-        isScroll={isScroll}
         cardWidthPx={Number(sizeInput)}
         gapPx={Number(gapInput)}
       />
@@ -322,7 +317,7 @@ function CardSizeClassCard({ initial }: { initial: CardSizeSettings }) {
   )
 }
 
-// ── CardSizeTab：取数 + 渲染 3 档 ───────────────────────────────────────────────
+// ── CardSizeTab：取数 + 渲染单行全局配置（A2 D-214-A2-1）─────────────────────────
 
 export function CardSizeTab() {
   const [rows, setRows] = useState<CardSizeSettings[] | null>(null)
@@ -362,14 +357,14 @@ export function CardSizeTab() {
   return (
     <div style={SECTION_STYLE} data-testid="card-size-tab">
       <p style={ADVISORY_STYLE}>
-        调整前台视频卡片在网格 / 横滚行中的尺寸。保存后约 1 分钟内前台渲染新尺寸（SSR 新鲜度有界）。
-        网格档为 size-driven：设定卡片宽度，列数由容器宽度自动派生（无需写死列数）。
+        设定全站统一的视频卡片宽度 + 间距，所有区域（首页特色 / 分类页 / 搜索结果 / 横滚行 / 详情·播放相关）
+        卡片显示同一尺寸。列数由容器宽度自动派生（无需写死列数），桌面居中留白、手机列数随卡宽变化。
+        保存后约 1 分钟内前台渲染新尺寸（SSR 新鲜度有界）。
       </p>
       {rows.map((row) => (
         <CardSizeClassCard key={`${row.sizeClass}-${retryKey}`} initial={row} />
       ))}
       <div style={ACTION_ROW_STYLE}>
-        <span style={DIRTY_STYLE}>共 {rows.length} 档</span>
         <AdminButton variant="default" size="sm" onClick={refresh} data-testid="card-size-reload">
           重新加载
         </AdminButton>
