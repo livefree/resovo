@@ -12,6 +12,53 @@
     "kids": "Kids",
     "other": "Other"
   },
+  "filter": {
+    "allOption": "All",
+    "sortLabel": "Sort",
+    "dim": {
+      "type": "Type",
+      "genre": "Genre",
+      "country": "Region",
+      "lang": "Language",
+      "year": "Year"
+    },
+    "genre": {
+      "action": "Action",
+      "comedy": "Comedy",
+      "romance": "Romance",
+      "thriller": "Thriller",
+      "horror": "Horror",
+      "sci_fi": "Sci-Fi",
+      "fantasy": "Fantasy",
+      "history": "History",
+      "crime": "Crime",
+      "mystery": "Mystery",
+      "war": "War",
+      "family": "Family",
+      "biography": "Biography",
+      "martial_arts": "Martial Arts",
+      "adventure": "Adventure",
+      "disaster": "Disaster",
+      "musical": "Musical",
+      "western": "Western",
+      "sport": "Sport",
+      "other": "Other"
+    },
+    "lang": {
+      "国语": "Mandarin",
+      "粤语": "Cantonese",
+      "日语": "Japanese",
+      "韩语": "Korean",
+      "英语": "English"
+    },
+    "sort": {
+      "latest": "Latest",
+      "hot": "Popularity",
+      "rating": "Rating"
+    },
+    "countCategory": "{count} titles",
+    "countSearch": "{count} results"
+  },
   "nav": {
     "home": "Home",
     "more": "More",

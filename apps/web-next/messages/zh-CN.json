@@ -12,6 +12,53 @@
     "kids": "少儿",
     "other": "其他"
   },
+  "filter": {
+    "allOption": "全部",
+    "sortLabel": "排序",
+    "dim": {
+      "type": "类型",
+      "genre": "题材",
+      "country": "地区",
+      "lang": "语言",
+      "year": "年份"
+    },
+    "genre": {
+      "action": "动作",
+      "comedy": "喜剧",
+      "romance": "爱情",
+      "thriller": "惊悚",
+      "horror": "恐怖",
+      "sci_fi": "科幻",
+      "fantasy": "奇幻",
+      "history": "历史",
+      "crime": "犯罪",
+      "mystery": "悬疑",
+      "war": "战争",
+      "family": "家庭",
+      "biography": "传记",
+      "martial_arts": "武侠",
+      "adventure": "冒险",
+      "disaster": "灾难",
+      "musical": "歌舞",
+      "western": "西部",
+      "sport": "运动",
+      "other": "其他"
+    },
+    "lang": {
+      "国语": "国语",
+      "粤语": "粤语",
+      "日语": "日语",
+      "韩语": "韩语",
+      "英语": "英语"
+    },
+    "sort": {
+      "latest": "添加时间",
+      "hot": "人气高低",
+      "rating": "评分高低"
+    },
+    "countCategory": "共 {count} 部",
+    "countSearch": "找到 {count} 个结果"
+  },
   "nav": {
     "home": "首页",
     "more": "更多",

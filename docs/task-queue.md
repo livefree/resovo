@@ -3135,9 +3135,9 @@
 
 ## [SEQ-20260624-01] FILTER-UNIFY — 分类/搜索页统一筛选过滤区（5 维 + 排序条 + 共享组件 + 后端补齐）
 
-- **状态**：🔄 执行中（HANDOFF-37 ✅ / 38 ✅ / 39 起）
+- **状态**：🔄 执行中（HANDOFF-37 ✅ / 38 ✅ / 39 ✅ / 40 起）
 - **创建时间**：2026-06-24
-- **最后更新时间**：2026-06-24（HANDOFF-38 交付：/videos genre/lang 后端补齐）
+- **最后更新时间**：2026-06-24（HANDOFF-39 交付：共享 FilterArea + GridSortBar + i18n）
 - **目标**：分类页与搜索页共用同一筛选区（类型/题材/地区/语言/年份 5 维行内互斥单选）+ 网格左上排序条（添加时间/人气/评分）；类型行与顶部导航双向联动；后端 `/videos` 补 genre/lang 查询；筛选项值集合走 `@resovo/types` taxonomy SSOT（前台零硬编码）。
 - **范围**：`packages/types`（taxonomy 出口 + 语言枚举提升 + curated 地区）；`apps/api`（`/videos` genre/lang + `/search` lang 音频对齐）；`apps/web-next`（共享 FilterArea/GridSortBar + Nav 联动 + 页面接入 + i18n）。
 - **依赖**：方案 + 设计草图已用户验收（`docs/designs/filter-area-unified-redesign_20260624.html` v4）；用户确认 taxonomy 契约 6 条边界（2026-06-24）。
@@ -3153,9 +3153,10 @@
    - 范围：routes/videos.ts QuerySchema 加 genre/lang（z.enum taxonomy）；VideoService.list 加 genre/lang；db/queries/videos.ts VideoListFilters 加 lang + `EXISTS(video_sources.audio_language)` 子查询（**genre 条件已存在 / sort 已通**）；migration 127 video_sources(audio_language) 索引（**mc.genres GIN 已存在 migration 031，不重建**）；单测 lang 命中/未命中/NULL。
    - 验收：`/videos?genre=&lang=` 生效；非法值 422；lang「任一 source 命中」语义；门禁 + 单测全过。
    - **完成备注（2026-06-24）**：arch-reviewer (claude-opus-4-8, agentId a2347b3c834694612) CONDITIONAL PASS → 3 必改全吸收（M1 复合部分索引 `idx_video_sources_audio_lang_active (audio_language, video_id) WHERE is_active AND deleted_at IS NULL` / **M2 关键发现** route↔listVideos genre 契约断链〔`category` 被 `...params` 丢弃致 genre 此前静默失效〕端到端打通 + 保留 category no-op / M3 lang 聚合语义 EXISTS(≥1 active 源命中)、NULL 不命中，ADR-199 D-199-7 未明示项裁定补充录 migration 头注 + architecture.md §5.2）。`@resovo/types`→`@/types` 修复 api 解析陈旧产物。门禁：typecheck=0（api tsc 直跑=0）/ lint=0（含 api#lint）/ test:changed 等价 vitest --changed 79 文件 1078 测 / verify:adr-contracts=0 / 定向 29 测（route 24+query 5）。详见 changelog [HANDOFF-38]。
-3. HANDOFF-39 — 共享 FilterArea + GridSortBar 组件 + i18n（状态：⬜）
+3. HANDOFF-39 — 共享 FilterArea + GridSortBar 组件 + i18n（状态：✅ 2026-06-24）
    - 范围：components/browse/FilterArea.tsx → shared/filter/FilterArea.tsx（5 维消费 taxonomy / 删 rating_min·status 行 / 删 lockedDims / type↔nav 联动）；新建 GridSortBar；layout/Nav.tsx + NavMoreMenu.tsx 联动；messages/zh-CN+en 加 genre 20 项 + 维度/排序标签。
    - 验收：组件消费 taxonomy 零硬编码；type↔nav 双向联动；URL-param 驱动；门禁全过。
+   - **完成备注（2026-06-24）**：arch-reviewer (claude-opus-4-8, agentId a6ef6d7cbe3030a8b) CONDITIONAL PASS → 6 必改全吸收。**契约扩展**（HANDOFF-37 实装缺口回填，Opus 定稿 + commit trailer）：FilterAreaProps 加 `typeOptions: readonly VideoType[]`（消费方从 ALL_CATEGORIES 注入，组件对 categories+VIDEO_TYPES **双零依赖**，保 valueSource='category' 意图）+ `activeType?: VideoType|null`（category 模式 type 在 pathname 段、受控高亮）。**新组件**：`shared/filter/FilterArea.tsx`（5 维消费 FILTER_TAXONOMY 零 switch(dim)、type 双模式分流 category=onTypeChange 回调/search=?type= 自管、其余 4 维 URL 驱动）+ `GridSortBar.tsx`（SORT_OPTIONS、默认 latest 删 param、计数防御）。i18n filter 命名空间（zh+en 各 37 key，lang 用中文规范词 key 对齐 URL/后端值）。**D6 过渡态**：本卡只建新组件、**不碰页面、不删旧 browse/FilterArea**（HANDOFF-40 负责切换+删旧+E2E），临时双 FilterArea。**D7 Nav 无代码改动**（双向联动经现有 pathname 单源自动达成）。门禁：typecheck=0/lint=0/变更测试 21（FilterArea 14+GridSortBar 7）/i18n zh-en 37 key 对齐。详见 changelog [HANDOFF-39]。
 4. HANDOFF-40 — 分类/搜索页接入 + E2E（状态：⬜）
    - 范围：[type]/page.tsx（FilterArea 无 lockedDims + GridSortBar）；search/SearchPage.tsx（加 FilterArea + GridSortBar，移除 type tab）；BrowseGrid 无需改；e2e browse-category-routes/browse-tvshow/search-page 更新。
    - 验收：两页筛选区一致；互斥单选 + reset page；排序切换；e2e:search + e2e:video 过。

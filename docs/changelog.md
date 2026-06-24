@@ -2921,3 +2921,21 @@
 - **文件**：✏️ `apps/api/src/routes/videos.ts`（QuerySchema 加 genre/lang enum）｜✏️ `apps/api/src/services/VideoService.ts`（list 形参补 genre/lang）｜✏️ `apps/api/src/db/queries/videos.ts`（VideoListFilters 加 lang + EXISTS 条件）｜🆕 `apps/api/src/db/migrations/127_video_sources_audio_language_index.sql`｜✏️ `docs/architecture.md` §5.2（lang 筛选语义 + 索引）｜✏️ `tests/unit/api/videos.test.ts`（route 透传 + 422）｜🆕 `tests/unit/api/videos-list-query.test.ts`（query 层 SQL 生成断言）。
 - **门禁**：typecheck=0（api tsc 直跑=0）/ lint=0（含 api#lint）/ test:changed 等价 `vitest run --changed HEAD` 79 文件 1078 测全过（npm `test:changed` 失败纯属 worktree 缺 `node_modules/.bin/vitest` 软链，环境产物）/ verify:adr-contracts=0 / 定向单测 29 通过（route 24 + query 5）。**关键路径**公开 `/videos` 列表查询，route+query 测试覆盖。
 - **执行模型**：claude-opus-4-8（主循环）｜**子代理**：arch-reviewer（claude-opus-4-8，EXISTS 聚合语义 + migration 127 复核，agentId a2347b3c834694612）。
+
+---
+
+## [HANDOFF-39] 分类/搜索页统一筛选区 — 共享 FilterArea + GridSortBar 组件 + i18n（SEQ-20260624-01 Card 2）
+
+- **范围（前端共享组件，纯加性）**：把现状 4 维 `browse/FilterArea`（rating_min/status + lockedDims + 折叠）泛化为消费 `FILTER_TAXONOMY` 的统一 5 维筛选区（type/genre/country/lang/year），新增网格左上排序条 `GridSortBar`，两页共用契约。
+- **arch-reviewer (claude-opus-4-8, agentId a6ef6d7cbe3030a8b) CONDITIONAL PASS → 6 必改全吸收**：
+  - **M1 契约扩展（HANDOFF-37 实装缺口回填）**：`FilterAreaProps` 加 `typeOptions: readonly VideoType[]` + `activeType?: VideoType|null`。Opus 定稿 + commit `Subagents: arch-reviewer` trailer（共享组件 API 契约强制 Opus）。
+  - **M2 type 数据流**：type 选项由消费方经 `typeOptions` 注入（从 ALL_CATEGORIES 派生），组件对 `lib/categories.ts` 与 `VIDEO_TYPES` **双零依赖**，保 taxonomy valueSource='category' 契约意图（值源自 categories SSOT，ADR-048）；label 用 `t('videoType.<v>')`。
+  - **M3 country locale**：`useParams().locale` fallback `'en'`（routing.ts defaultLocale，禁 `'zh'`），直喂 `formatCountryName(code, locale)`。
+  - **M4 i18n**：新建 `filter` 命名空间（zh-CN+en 各 37 key）：`filter.dim.*` / `filter.genre.<20>` / `filter.lang.<5 中文规范词 key>`（key=规范词对齐 URL/后端值，value 本地化 国语→Mandarin 等）/ `filter.sort.*` / `filter.allOption` / `filter.sortLabel` / `filter.countCategory|countSearch`。
+  - **M5 GridSortBar 防御**：`total`/`totalLabelKey` 均 optional，二者齐备才渲染计数；sort 激活态 `searchParams.get('sort') ?? 'latest'`，选 DEFAULT_SORT(latest) 删 param 走后端默认。
+  - **M6 措辞澄清**：D6 双 FilterArea 过渡态 / D7 Nav 无代码改动（见下）。
+- **type 双模式分流（D2 裁定）**：分类页 `CategoryPageContent` 是 Server Component **不能传回调** → category 模式 type 选择经 `onTypeChange` 由页面/包装器跳路由、激活态读 `activeType`（pathname 段解析）；search 模式（SearchPage 本身 client）type 走 `?type=` URL 自管。其余 4 维恒走 URL param。
+- **D6 过渡态**：本卡**只新建** `shared/filter/FilterArea.tsx` + `GridSortBar.tsx`，**不碰页面、不删旧 `browse/FilterArea.tsx`**（HANDOFF-40 负责切换消费方 + 删旧 + E2E），临时双 FilterArea 是 39→40 过渡。**D7**：Nav.tsx/NavMoreMenu.tsx **无代码改动**——双向联动经现有 pathname 单源自动达成（FilterArea→路由跳转→pathname 变→Nav 重算高亮）。
+- **文件**：✏️ `apps/web-next/src/components/shared/filter/types.ts`（FilterAreaProps 扩展）｜🆕 `shared/filter/FilterArea.tsx`（5 维 taxonomy 驱动）｜🆕 `shared/filter/GridSortBar.tsx`｜✏️ `apps/web-next/messages/zh-CN.json` + `en.json`（filter 命名空间）｜🆕 `tests/unit/components/shared/filter/FilterArea.test.tsx`（14 测）+ `GridSortBar.test.tsx`（7 测）。
+- **门禁**：typecheck=0（8 workspace）/ lint=0（含 web-next）/ 变更测试 `vitest --changed HEAD` 21 测全过（FilterArea 14 + GridSortBar 7）/ i18n zh-en 各 37 key 对齐（无 parity 测试，脚本核验）。纯前端组件加性，e2e 归 HANDOFF-40。
+- **执行模型**：claude-opus-4-8（主循环）｜**子代理**：arch-reviewer（claude-opus-4-8，FilterArea 实装设计 + 契约扩展定稿，agentId a6ef6d7cbe3030a8b）。

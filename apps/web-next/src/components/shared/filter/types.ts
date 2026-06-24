@@ -17,9 +17,26 @@ export interface FilterAreaProps {
   readonly mode: 'category' | 'search'
 
   /**
+   * type 维度选项值集合（VideoType 枚举值，不含 'all'；顺序即展示顺序）。
+   * 由消费方从 ALL_CATEGORIES 派生注入 —— 共享组件不 import lib/categories.ts，
+   * 保 taxonomy valueSource='category' 契约意图（值源自 categories SSOT，ADR-048）。
+   * label 由组件内 t(`videoType.${value}`) 取（labelSource='videoType'）。
+   * （HANDOFF-39 实装缺口回填，arch-reviewer Opus 定稿。）
+   */
+  readonly typeOptions: readonly VideoType[]
+
+  /**
+   * category 模式当前激活的 type（受控高亮）：分类页 type 在 pathname 段而非 ?type=，
+   * 组件读不到且禁持 categories 路由知识，故由包装器解析 videoType 传入。
+   * search 模式忽略此 prop（type 激活由组件读 ?type= 自管）。null=无。
+   * （HANDOFF-39 实装缺口回填，arch-reviewer Opus 定稿。）
+   */
+  readonly activeType?: VideoType | null
+
+  /**
    * type 维度选择回调（仅传 API 枚举值，不传 URL slug；null=「全部」）。
    * category 模式：页面据此 + 自持 locale/categories 做路由跳转（URL 映射知识留在页面）。
-   * search 模式：可省略；组件内部把 type 写入 URL param。
+   * search 模式：可省略；组件内部把 type 写入 URL param（不调此回调）。
    * ⚠ 共享组件不 import lib/categories.ts，不持有路由知识（边界：core 不写业务逻辑）。
    */
   readonly onTypeChange?: (videoType: VideoType | null) => void
