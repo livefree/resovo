@@ -6,7 +6,7 @@
 import type { Pool } from 'pg'
 import type { Redis } from 'ioredis'
 import type { Client as ESClient } from '@elastic/elasticsearch'
-import type { Video, VideoCard, VideoType, VideoStatus, VisibilityStatus, Pagination, CountByTypeItem, ExternalRefSummary, BangumiEntrySummary } from '@/types'
+import type { Video, VideoCard, VideoType, VideoGenre, VideoStatus, VisibilityStatus, Pagination, CountByTypeItem, ExternalRefSummary, BangumiEntrySummary, AudioLanguageCanonical } from '@/types'
 import * as videoQueries from '@/api/db/queries/videos'
 // ADR-172 AMENDMENT 3 / D-172-AMD3-3：admin 详情注入外部源并集 + bangumi 条目级
 import * as externalDataQueries from '@/api/db/queries/externalData'
@@ -117,6 +117,8 @@ export class VideoService {
   async list(params: {
     type?: VideoType
     category?: string
+    genre?: VideoGenre
+    lang?: AudioLanguageCanonical
     year?: number
     country?: string
     ratingMin?: number

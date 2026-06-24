@@ -2906,3 +2906,18 @@
 - **门禁**：typecheck 8 workspace=0 / lint 4 successful（仅既有 server-next warning）/ 全量单测 604 文件 8235 测全过（受影响 `source-language-resolver` 17/17）。纯类型/枚举加性，e2e N/A。
 - **执行模型**：claude-opus-4-8（主循环）｜**子代理**：arch-reviewer（claude-opus-4-8，taxonomy 出口 + Props 契约定稿，agentId a98649503cc1d410e）。
 - **follow-up**：`CURATED_FILTER_COUNTRIES` 10 国清单待产品确认（非阻塞，实装前确认）。
+
+---
+
+## [HANDOFF-38] 分类/搜索页统一筛选区 — 后端 `/videos` genre/lang 补齐（PostgreSQL，SEQ-20260624-01 Card 1）
+
+- **范围（三层加性，零删除/零改名）**：公开 `GET /videos` 补题材(genre)、音频语音(lang) 两维筛选，统一筛选区用。
+- **arch-reviewer (claude-opus-4-8) CONDITIONAL PASS → 3 必改全吸收**：
+  - **M1 索引**：lang 支撑索引用复合部分索引 `idx_video_sources_audio_lang_active (audio_language, video_id) WHERE is_active=true AND deleted_at IS NULL`（over 单列部分索引：双等值谓词一次定位 + 部分谓词排除死源/软删源，对热门语言选择性更好）。
+  - **M2 契约断链（关键发现）**：route 收 `category`、`VideoService.list` 形参也是 `category?`，但 `listVideos` 只读 `filters.genre` → `...params` 展开丢弃 `category` → **genre 筛选此前从未真正生效**。本卡端到端打通 genre 通路（route 加 `genre` enum → service 形参补 `genre` → 透传 listVideos 既有 `mc.genres @> ARRAY[$N]` 条件）；`category` 保留不删（CLAUDE.md 禁删 API 参数，维持兼容，仍为 no-op）。
+  - **M3 聚合语义裁定**：lang 筛选 = `EXISTS(≥1 个 is_active=true AND deleted_at IS NULL 的 source 其 audio_language=选定值)`（镜像 SOURCE_COUNT_SUBQUERY 活跃源过滤）；NULL=未知按 SQL 三值逻辑自然不命中（全 source NULL 的 video 仅在「全部」出现）。属 ADR-199 D-199-7 未明示项，本卡裁定补充，录 migration 127 头注 + architecture.md §5.2。
+- **EXISTS over JOIN+DISTINCT（裁定）**：半连接命中即短路、不膨胀基数，对 listVideos 的 COUNT(*)+rows 双查询（共用 WHERE）+ hot 排序子查询零副作用。
+- **真源约束（O2）**：route `z.enum(VIDEO_GENRES)` / `z.enum(AUDIO_LANGUAGE_CANONICALS)` 直引 `@/types` 真源常量，不重写字面量。**注意**：`@resovo/types` 在 apps/api 解析到陈旧产物（缺 HANDOFF-37 新增的 AUDIO_LANGUAGE_CANONICALS，且 apps/api 无独立 `typecheck` 脚本、只有 `lint` 跑 tsc 故 root typecheck 漏查 api）→ 改用 `@/types`（显式映射到 packages/types/src，同 SourceLanguageResolver/VideoService 约定）。`@resovo/types` 陈旧产物解析为预存仓库 install/build 卫生问题，非本卡范围。
+- **文件**：✏️ `apps/api/src/routes/videos.ts`（QuerySchema 加 genre/lang enum）｜✏️ `apps/api/src/services/VideoService.ts`（list 形参补 genre/lang）｜✏️ `apps/api/src/db/queries/videos.ts`（VideoListFilters 加 lang + EXISTS 条件）｜🆕 `apps/api/src/db/migrations/127_video_sources_audio_language_index.sql`｜✏️ `docs/architecture.md` §5.2（lang 筛选语义 + 索引）｜✏️ `tests/unit/api/videos.test.ts`（route 透传 + 422）｜🆕 `tests/unit/api/videos-list-query.test.ts`（query 层 SQL 生成断言）。
+- **门禁**：typecheck=0（api tsc 直跑=0）/ lint=0（含 api#lint）/ test:changed 等价 `vitest run --changed HEAD` 79 文件 1078 测全过（npm `test:changed` 失败纯属 worktree 缺 `node_modules/.bin/vitest` 软链，环境产物）/ verify:adr-contracts=0 / 定向单测 29 通过（route 24 + query 5）。**关键路径**公开 `/videos` 列表查询，route+query 测试覆盖。
+- **执行模型**：claude-opus-4-8（主循环）｜**子代理**：arch-reviewer（claude-opus-4-8，EXISTS 聚合语义 + migration 127 复核，agentId a2347b3c834694612）。

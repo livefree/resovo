@@ -147,6 +147,33 @@ describe('GET /v1/videos', () => {
     const res = await app.inject({ method: 'GET', url: '/v1/videos?type=invalid' })
     expect(res.statusCode).toBe(422)
   })
+
+  // ── HANDOFF-38：genre / lang 维筛选透传 ──────────────────────────
+  it('genre 过滤：透传 genre 给查询层', async () => {
+    mockQ.listVideos.mockResolvedValue({ rows: [], total: 0 })
+    const res = await app.inject({ method: 'GET', url: '/v1/videos?genre=action' })
+    expect(res.statusCode).toBe(200)
+    const callArgs = mockQ.listVideos.mock.calls[0][1] as { genre: string }
+    expect(callArgs.genre).toBe('action')
+  })
+
+  it('lang 过滤（音频语音）：透传 lang 给查询层', async () => {
+    mockQ.listVideos.mockResolvedValue({ rows: [], total: 0 })
+    const res = await app.inject({ method: 'GET', url: '/v1/videos?lang=' + encodeURIComponent('粤语') })
+    expect(res.statusCode).toBe(200)
+    const callArgs = mockQ.listVideos.mock.calls[0][1] as { lang: string }
+    expect(callArgs.lang).toBe('粤语')
+  })
+
+  it('无效 genre 参数 → 422（非 VIDEO_GENRES 枚举）', async () => {
+    const res = await app.inject({ method: 'GET', url: '/v1/videos?genre=not_a_genre' })
+    expect(res.statusCode).toBe(422)
+  })
+
+  it('无效 lang 参数 → 422（非 AUDIO_LANGUAGE_CANONICALS 枚举）', async () => {
+    const res = await app.inject({ method: 'GET', url: '/v1/videos?lang=' + encodeURIComponent('火星语') })
+    expect(res.statusCode).toBe(422)
+  })
 })
 
 // ═══════════════════════════════════════════════════════════════

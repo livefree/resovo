@@ -61,6 +61,7 @@ export {
 export interface VideoListFilters {
   type?: VideoType
   genre?: string
+  lang?: string
   year?: number
   country?: string
   ratingMin?: number
@@ -96,6 +97,17 @@ export async function listVideos(
   if (filters.ratingMin !== undefined) {
     conditions.push(`mc.rating >= $${idx++}`)
     params.push(filters.ratingMin)
+  }
+  // lang = 音频语音（audio_language，video_sources 行级，Migration 112）。
+  // 聚合语义：≥1 active 未软删 source 命中（ADR-199 D-199-7 / HANDOFF-38 裁定）；
+  // NULL=未知按 SQL 三值逻辑自然不命中。镜像 SOURCE_COUNT_SUBQUERY 的活跃源过滤。
+  if (filters.lang) {
+    conditions.push(`EXISTS (
+      SELECT 1 FROM video_sources
+      WHERE video_id = v.id AND is_active = true AND deleted_at IS NULL
+        AND audio_language = $${idx++}
+    )`)
+    params.push(filters.lang)
   }
 
   const orderBy: Record<string, string> = {

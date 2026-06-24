@@ -3135,9 +3135,9 @@
 
 ## [SEQ-20260624-01] FILTER-UNIFY — 分类/搜索页统一筛选过滤区（5 维 + 排序条 + 共享组件 + 后端补齐）
 
-- **状态**：🔄 执行中（HANDOFF-37 ✅ / 38 起）
+- **状态**：🔄 执行中（HANDOFF-37 ✅ / 38 ✅ / 39 起）
 - **创建时间**：2026-06-24
-- **最后更新时间**：2026-06-24（HANDOFF-37 交付）
+- **最后更新时间**：2026-06-24（HANDOFF-38 交付：/videos genre/lang 后端补齐）
 - **目标**：分类页与搜索页共用同一筛选区（类型/题材/地区/语言/年份 5 维行内互斥单选）+ 网格左上排序条（添加时间/人气/评分）；类型行与顶部导航双向联动；后端 `/videos` 补 genre/lang 查询；筛选项值集合走 `@resovo/types` taxonomy SSOT（前台零硬编码）。
 - **范围**：`packages/types`（taxonomy 出口 + 语言枚举提升 + curated 地区）；`apps/api`（`/videos` genre/lang + `/search` lang 音频对齐）；`apps/web-next`（共享 FilterArea/GridSortBar + Nav 联动 + 页面接入 + i18n）。
 - **依赖**：方案 + 设计草图已用户验收（`docs/designs/filter-area-unified-redesign_20260624.html` v4）；用户确认 taxonomy 契约 6 条边界（2026-06-24）。
@@ -3149,9 +3149,10 @@
    - 强制：arch-reviewer (Opus) 定稿 taxonomy 出口结构 + Props 契约（新共享 API + 跨 4 消费方）。
    - 验收：types 单出口导出 taxonomy；SourceLanguageResolver 引用同一真源零重复；typecheck/lint 全过；Props 契约 Opus PASS。
    - **完成备注（2026-06-24）**：arch-reviewer (claude-opus-4-8) CONDITIONAL PASS → 5 必改全吸收（单一 FILTER_TAXONOMY valueSource/labelSource 双判别 / type 维 source='category' 不持值列表防 types→web-next 反依赖 / 语言枚举+派生 type 一并提升 + api re-export 兜底 / country curated 占位 + labelSource='country-name' / Props onTypeChange(VideoType|null)+mode+hiddenDimensions 替代 lockedDims）。门禁：typecheck 8 workspace=0 / lint 4 successful / 全量单测 604 文件 8235 测全过（source-language-resolver 17/17）。纯加性 e2e N/A。follow-up：CURATED_FILTER_COUNTRIES 10 国待产品确认。详见 changelog [HANDOFF-37]。
-2. HANDOFF-38 — 后端 `/videos` genre/lang 补齐（PostgreSQL）（状态：⬜）
-   - 范围：routes/videos.ts QuerySchema 加 genre/lang（z.enum taxonomy）；VideoService.list 加 genre/lang；db/queries/videos.ts VideoListFilters 加 lang + `EXISTS(sources.audio_language)` 子查询（**genre 条件已存在 / sort 已通**）；migration 127 sources(audio_language) 索引 + mc.genres GIN（若未建）；单测 lang 命中/未命中/NULL。
+2. HANDOFF-38 — 后端 `/videos` genre/lang 补齐（PostgreSQL）（状态：✅ 2026-06-24）
+   - 范围：routes/videos.ts QuerySchema 加 genre/lang（z.enum taxonomy）；VideoService.list 加 genre/lang；db/queries/videos.ts VideoListFilters 加 lang + `EXISTS(video_sources.audio_language)` 子查询（**genre 条件已存在 / sort 已通**）；migration 127 video_sources(audio_language) 索引（**mc.genres GIN 已存在 migration 031，不重建**）；单测 lang 命中/未命中/NULL。
    - 验收：`/videos?genre=&lang=` 生效；非法值 422；lang「任一 source 命中」语义；门禁 + 单测全过。
+   - **完成备注（2026-06-24）**：arch-reviewer (claude-opus-4-8, agentId a2347b3c834694612) CONDITIONAL PASS → 3 必改全吸收（M1 复合部分索引 `idx_video_sources_audio_lang_active (audio_language, video_id) WHERE is_active AND deleted_at IS NULL` / **M2 关键发现** route↔listVideos genre 契约断链〔`category` 被 `...params` 丢弃致 genre 此前静默失效〕端到端打通 + 保留 category no-op / M3 lang 聚合语义 EXISTS(≥1 active 源命中)、NULL 不命中，ADR-199 D-199-7 未明示项裁定补充录 migration 头注 + architecture.md §5.2）。`@resovo/types`→`@/types` 修复 api 解析陈旧产物。门禁：typecheck=0（api tsc 直跑=0）/ lint=0（含 api#lint）/ test:changed 等价 vitest --changed 79 文件 1078 测 / verify:adr-contracts=0 / 定向 29 测（route 24+query 5）。详见 changelog [HANDOFF-38]。
 3. HANDOFF-39 — 共享 FilterArea + GridSortBar 组件 + i18n（状态：⬜）
    - 范围：components/browse/FilterArea.tsx → shared/filter/FilterArea.tsx（5 维消费 taxonomy / 删 rating_min·status 行 / 删 lockedDims / type↔nav 联动）；新建 GridSortBar；layout/Nav.tsx + NavMoreMenu.tsx 联动；messages/zh-CN+en 加 genre 20 项 + 维度/排序标签。
    - 验收：组件消费 taxonomy 零硬编码；type↔nav 双向联动；URL-param 驱动；门禁全过。

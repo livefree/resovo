@@ -359,6 +359,7 @@ META-06 新增字段：
   - `audio_language_source TEXT NOT NULL DEFAULT 'unknown' CHECK 5 值`：provenance（仿 quality_source 先例）——`source_name_token`（线路名行级 token，最精确）> `vod_lang` > `title_token` > `region_inferred`（CN·TW→国语 / HK→粤语 / JP→日语 / KR→韩语，country 规整复用 `COUNTRY_MAP`）> `unknown`。升级规则：后两级可被前三级覆盖，反向禁止（数据优先于推断）。
   - `subtitle_language_source TEXT NOT NULL DEFAULT 'unknown' CHECK 4 值`：同上但**无 region_inferred**（字幕无地区先验不推断）；双列因 audio/subtitle 同行 provenance 可不同。
   - 写入链路（五级推断链逐行求值）+ 存量回填脚本 = LANG-DIM-B；读侧 DTO 透出（`VideoSource.audioLanguage`/`subtitleLanguages` 可选字段已定契约 D-199-7）+ 前台 ≥2 语音才显示 + 跨集语言粘性 = LANG-DIM-C。
+  - **`/videos` 按 lang 筛选（Migration 127，HANDOFF-38）**：聚合语义 = `EXISTS(≥1 个 is_active=true AND deleted_at IS NULL 的 source 其 audio_language=选定值)`（镜像 source_count 活跃源过滤）；NULL=未知按 SQL 三值逻辑自然不命中（全 source NULL 的 video 仅在「全部」出现）。支撑索引 `idx_video_sources_audio_lang_active (audio_language, video_id) WHERE is_active=true AND deleted_at IS NULL`（复合部分索引，arch-reviewer 裁定 over 单列：双等值谓词一次定位 + 排除死源/软删源）。
 - 唯一去重约束：`uq_sources_video_episode_url`
 
 ### 5.2a host_health（Migration 108，SRCHEALTH-P3-3-B1）

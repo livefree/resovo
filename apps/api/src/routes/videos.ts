@@ -12,12 +12,15 @@ import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import { redis } from '@/api/lib/redis'
 import { VideoService } from '@/api/services/VideoService'
+import { VIDEO_GENRES, AUDIO_LANGUAGE_CANONICALS } from '@/types'
 
 const VideoTypeEnum = z.enum([
   'movie', 'series', 'anime', 'variety',
   'documentary', 'short', 'sports', 'music',
   'news', 'kids', 'other',
 ])
+const GenreEnum = z.enum(VIDEO_GENRES)
+const AudioLangEnum = z.enum(AUDIO_LANGUAGE_CANONICALS)
 const SortEnum = z.enum(['hot', 'rating', 'latest', 'updated'])
 const PeriodEnum = z.enum(['today', 'week', 'month'])
 
@@ -49,6 +52,8 @@ export async function videoRoutes(fastify: FastifyInstance) {
     const QuerySchema = z.object({
       type: VideoTypeEnum.optional(),
       category: z.string().optional(),
+      genre: GenreEnum.optional(),
+      lang: AudioLangEnum.optional(),
       year: z.coerce.number().int().min(1900).max(2100).optional(),
       country: z.string().max(2).optional(),
       rating_min: z.coerce.number().min(0).max(10).optional(),
