@@ -6,22 +6,6 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-### ⏸️ CARD-SIZE-E2E — 卡片尺寸体系 e2e spec + 全量回归门禁（ADR-214 D-214-4/7/9，SEQ-20260622-03 Phase 4 收官）
-
-- **状态**：⏸️ **spec 已交付 + 可跑门禁全绿**（commit 见 changelog [CARD-SIZE-E2E]；typecheck=0/lint=0/全量单测 602 文件 8216 测/verify:adr-contracts=0）·**待 e2e 实跑**（`npm run test:e2e` 须在具备 `.env.local`+DB(migration 124)+Redis 的主 checkout / CI 跑——= 合并 main 前 e2e gate 节点；worktree 缺 .env.local 起不来 dev server）——e2e 实跑属合并 gate 运维步、**不占单 🔄 槽** ｜ **创建/开始**：2026-06-23 ｜ **执行模型**：claude-opus-4-8（主循环；卡建议 sonnet）｜**子代理**：无（e2e spec + 跑门禁，非新架构决策/新契约）
-- **依据**：ADR-214 D-214-4/7（CardGrid 防溢出 + 桌面列数消费 DB 变量）/ D-214-9 R3（SSR 新鲜度有界 + admin PUT→公开读链路）。Phase 0–3 全交付（DB→types→service→public-cache→SSR→CardGrid→scroll→VideoCard→browse→featured→admin-ui）。
-- **问题理解**：卡片尺寸体系全栈代码已就绪，缺端到端 e2e 验证（SSR 注入值→前台渲染 + 网格视觉回归）。
-- **根因判断**：前序卡单测覆盖契约层（card-size-fetch/CardGrid/VideoCard/service/public-cache/admin-ui 单测），但 SSR 注入→真实页面渲染 CSS 变量→CardGrid 消费的端到端链路 + 窄容器/长标题视觉防溢出（D-214-4/7）仅 e2e 可验。
-- **⚠️ 环境约束（关键）**：worktree 隔离副本**缺 `.env.local`**（gitignore 本地文件、不随 worktree 复制）→ dev server 命令 `node --env-file=../../.env.local` 解析失败 → **apps/api / web-next / server-next dev server 均无法启动** → **playwright e2e 在本 worktree 背景会话不可实跑**（还需 DB migration 124 + Redis）。
-- **方案（务实拆解）**：
-  - ✅ **可交付**：① 新建 `tests/e2e-next/card-size-grid.spec.ts`（设计为仅依赖 `web` server；SSR fetch 失败降级 CARD_SIZE_DEFAULTS、值==seed 故断言稳定〔standard 5/16〕，不强依赖 apps/api 有 card_size_settings 表）：断言 SSR 注入 `<style data-card-size-vars>` + `:root` 变量〔D-214-6/9〕 / featured-grid 桌面 5 列消费 DB 变量〔D-214-7〕 / 长标题不溢出〔D-214-4 min-width:0〕 / 窄视口降 2 列响应式。② 全量单测 `npx vitest run`（PHASE COMPLETE 兜底节点）。③ typecheck/lint/verify:adr-contracts。
-  - ⏸️ **环境阻塞（登记须他处跑）**：`npm run test:e2e`（4 projects 实跑）须在具备 `.env.local`+DB(migration 124)+Redis 的主 checkout / CI 跑——**即合并 main 前的 e2e gate 节点**（CLAUDE.md「合并 main 前必跑 test:e2e」）。admin PUT→公开读新鲜度端到端（D-214-9 R3 mutation 侧）依赖 admin 鉴权 + DB 写，契约层已由 `card-size-admin.test.ts`（PUT→Redis unlink）+ `card-size-public.test.ts`（miss→setex 重读）单测覆盖；e2e 实跑随上述 gate。
-- **涉及文件**：`tests/e2e-next/card-size-grid.spec.ts`（新）。
-- **门禁**：typecheck/lint + **全量单测**（PHASE COMPLETE）+ verify:adr-contracts。**e2e 实跑环境阻塞、登记他处补跑**（非本 worktree 能力范围）。
-- **备注**：spec 严格仿 typography-layout/featured-row-sparse 既证范式（同 _fixtures + route mock + 选择器）以最大化正确性；本卡不修改产品代码。**Phase 4 性质 = 测试收口 + 门禁，e2e 实跑是合并 gate 节点、非 worktree 内必达**。
-
----
-
 ### ⏸️ IMGH-P4-A — 方案C worker：确定性出口写 checked_at + fetchImageDimensions 判别式 + A-SCAN 门（ADR-213，SEQ-20260621-02）
 
 - **状态**：⏸️ **代码已交付**（commit `968d4efb`，门禁全绿）·**待部署期跑 A-SCAN**（`scripts/run-imgh-ascan.ts` 落 `checked_at` 真值、排空初始 unknown 桶 → C 硬前置门）——A-SCAN 属运维步、非编码工作台占用，**不占单 🔄 槽**｜ **创建/开始**：2026-06-22 ｜ **执行模型**：claude-opus-4-8（主循环）｜**子代理**：无（实施按 ADR-213 D-213-5；worker 逻辑非新架构决策）
@@ -60,28 +44,8 @@ _（**SEQ-20260610-02 source-health v2 落地 🔄 15/17 — Phase 1 ✅ + Phase
 
 ---
 
-### ⏸️ CARD-SIZE-A1-E2E — card-size-grid.spec size-driven 重写 ✅ + 合并 gate 实跑登记（SEQ-20260623-01 Phase 7）
 
-- **状态**：⏸️ **spec 已交付 + 可跑门禁全绿**（card-size-grid.spec size-driven 重写，typecheck=0/lint=0；commit 见 changelog [CARD-SIZE-A1-E2E]）·**待 e2e 实跑**（`test:e2e` 4 projects + migration 125 冷启动 + 全量单测须主 checkout/CI 跑 = 合并 main 前 gate；worktree 缺 `.env.local` + node_modules 不完整起不来 dev server）——**不占活跃工作台槽**（环境阻塞性质，同 CARD-SIZE-E2E）｜ **执行模型**：claude-opus-4-8。
-- **已交付**：`card-size-grid.spec.ts` 重写 4 测（① SSR standard `--card-w-standard:200px` + compact 无残留 ② featured-grid size-driven auto-fill 卡宽~200/列数派生/gap16 ③ 长标题不溢出 ④ 窄视口保留 2 列）。
-- **合并 main 前 gate（须主 checkout/CI）**：① `migration 125` 冷启动实跑（六步顺序 + 约束名 + NOT NULL 回填）；② `test:e2e` 4 projects（card-size-grid + 详情/播放横滚视觉）；③ 全量单测 `npm run test -- --run`；④ admin PUT→公开读→SSR 新鲜度端到端。
-- **可选后续**：详情/播放横滚 e2e（`related-scroll` 渲染断言）补 spec；首页 ScrollRow 迁移 #8；RelatedVideos 提取 shared。
-
----
-
-_（**🎉 SEQ-20260623-01 CARD-SIZE-A1 代码全交付（#0–#7）2026-06-23**：#0 ADR Amendment A1 + Codex 审〔`61db5770`〕→ #1A/1B/3/4 尺寸线 size-driven 批次〔`67b0e36c`〕→ #2 ScrollRow〔`4a4f4393`〕→ #5 详情拆侧栏〔`784f8b81`〕→ #6 播放页横滚〔`06b86be3`〕→ #7 e2e spec。**两条核心诉求落地**：① standard 网格 column-driven→size-driven〔运营设卡片宽度 px、前台卡片随设定变〕+ compact 幽灵档退役；② 详情/播放页相关视频统一为全宽横滚〔退役 60px 侧栏竖列表、播放页新增〕。每步门禁绿〔typecheck/lint=0 + 全量单测 8221 + arch-reviewer + Codex 评审吸收〕。**剩合并 main 前 gate**：migration 125 冷启动 + test:e2e 4 projects + 全量单测〔worktree 环境受限须主 checkout/CI〕。worktree `worktree-card-size-a1` 6 commit 未 push/合 main。取下一任务前先查 🚨 BLOCKER。）_
-
----
-
-### 🔄 CARD-SIZE-A2-ADR — 落盘 ADR-214 Amendment A2（废分档→单一全局卡宽 + 全站精确定宽）+ Codex 审（SEQ-20260623-02 Phase A2-0）
-
-- **状态**：🔄 进行中 ｜ **创建/开始**：2026-06-23 ｜ **执行模型**：claude-opus-4-8（主循环，撰写 ADR 强制 Opus 级）｜ **子代理**：Codex 对抗审（非代码产物强制门）。
-- **依据**：**AskUserQuestion ×2 确认**——用户「统一卡片尺寸」真实含义 = 全站所有区域卡片显示同一尺寸（视觉精确一致），非分档可配。推翻 ADR-214 分档 + A1 size-driven。
-- **问题理解**：ADR-214（分档混合单位）+ A1（size-driven 分档）整条线为「分档可配」设计，根本不满足「全站统一成一样大」——standard 弹性网格 vs scroll 横滚定宽机制不同，即使设同值视觉也不一致。前三方案（治理/ADR-214/A1）均误解需求。
-- **方案**：① `docs/decisions.md` 落 **ADR-214 Amendment A2**（D-214-A2-1..7：废分档→单一全局 `--card-w` / 网格 `repeat(auto-fill,var(--card-w))` 精确定宽+居中 / 横滚 `width:var(--card-w)` / 手机列数由 W 决定 / migration 126 单行全局 / 后台单一表单 / A1 横滚化保留）；② Codex 对抗审，吸收 finding → Accepted 解锁 A2-1。
-- **涉及文件**：`docs/decisions.md`（A2 正文）、`docs/task-queue.md`（SEQ-20260623-02）、`docs/tasks.md`（本卡）。**纯 docs，不改产品代码**。
-- **门禁**：**Codex 对抗审通过**（非代码产物强制门）。
-- **备注**：A1 横滚化布局（#2/#5/#6）保留，分档卡宽体系（#0/#1A/#1B/#3/#4）推翻重做。Accepted 后删本卡、起 A2-1 SCHEMA。
+_（**🎉 卡片尺寸体系全交付合并 main `01b32abf`（2026-06-24）**：SEQ-20260622-03〔DB 驱动 3 档可配 + 后台「前台展示」Tab〕→ SEQ-20260623-01 Amendment A1〔standard size-driven + compact 退役 + ScrollRow 横滚原语 + 详情/播放页相关视频横滚化〕→ SEQ-20260623-02 Amendment A2〔废分档 → 单一全局 `--card-w` + 全站精确定宽 + 居中留白〕全线合并。合并 gate〔`chore/card-size-a1a2-gate-20260623`，9 commit〕全栈实跑：typecheck/lint/verify=0 · 全量单测 604 文件 8235 测 · migration 125+126 冷启动〔card_size_settings → 单行 global/160/16〕· test:e2e 180 passed / 32 skipped / 0 failed〔复用预热 web-next 规避并发首次编译损坏 .next 缓存〕。gate 修复〔`7e02d0e4`，仅测试层、A1/A2 生产代码未动〕：① card-size-grid ⑤ 改测「窄视口卡宽恒=W」② browse-tvshow `MOCK_TVSHOW` 补 subtitleLangs/posterStatus/posterBlurhash。**⚠️ 遗留**：① A2「手机 W=160→2 列」受 `app-shell min-width:1200`〔globals.css §7.2 桌面优先 / 低于此值整站横向滚动〕架构约束**未兑现**，如需移动端响应式 2 列须另起架构任务〔推翻 §7.2，超出 A1/A2 范围〕；② 视觉回归〔admin-visual project〕baseline 未入库，未在本 gate 跑，待单独生成 baseline 补跑。详见 changelog [CARD-SIZE-A1A2-GATE]。取卡前先查 🚨 BLOCKER。）_
 
 ---
 

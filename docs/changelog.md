@@ -2880,3 +2880,18 @@
 - **门禁**：typecheck=0 / lint 通过（仅既有无关 warning）/ card-size 单测 79（前台+API+Tab+seed+消费方）+ audit-log 148 全绿。**e2e 实跑环境阻塞**（worktree 缺 `.env.local`）→ `test:e2e` + migration 126 冷启动 + 全量单测 = 合并 main 前 gate（同 A1）。
 - **Codex 对抗审 round-2**：auto-fill→auto-fit 自纠 = SELF-CORRECTION CONDITIONALLY VALID（固定宽轨道下 auto-fill 保留空轨道致卡少不居中；auto-fit 折叠空轨道才真居中、无 1fr 不拉伸；原 R6「auto-fit 拉伸」理由仅对 minmax(W,1fr) 成立、A2 已弃 1fr 失效）。三边界已吸收。
 - **注意事项**：① A2 保留 A1 横滚化布局（#2/#5/#6），仅推翻分档卡宽体系。② A2-5 e2e 实跑 + 全量回归属合并 gate 运维步。③ 残余 desktop_columns 仅存 migration 124/125/126 自身（历史演进，正确）。
+
+## [CARD-SIZE-A1A2-GATE] A1+A2 卡片尺寸体系合并 gate 实跑 + 2 spec 修复 + 合并 main（SEQ-20260623-01/02 收官，2026-06-24）
+
+- **背景**：SEQ-20260623-01（Amendment A1）+ SEQ-20260623-02（Amendment A2）在 worktree `worktree-card-size-a1` 开发，因 worktree 缺 `.env.local` **从未真实跑过 e2e**。在主 checkout 建合并集成分支 `chore/card-size-a1a2-gate-20260623`（指向 worktree HEAD、ff 自 main，含 A1+A2 8 commit）执行完整合并 gate。
+- **执行模型**：claude-opus-4-8（主循环）｜**子代理**：无
+- **Gate 结果（全绿）**：typecheck=0 / lint=0 / verify:adr-contracts=0 · migration 125+126 增量 apply（dev 库 `card_size_settings` → A2 单行 `global`/160/16，`desktop_columns` 列删除）· 全量单测 604 文件 8235 测全过 · `test:e2e`（3 projects）180 passed / 32 skipped / 0 failed / 0 flaky。
+- **e2e 首跑暴露问题 + 诊断（均测试层、非 A1/A2 生产代码回归）**：
+  - **环境性全站 500（已排除非代码）**：首跑全站 SSR 500，诊断为 playwright `reuseExistingServer` + 自起 web-next dev 在 3-worker 并发首次编译下损坏 `.next` 缓存（retry 仍 500 = 持久坏状态）。复用预热健康 web-next 后全站 200、browse spec 4/4 pass，确认非代码问题。重跑策略：保留预热 web-next 供 e2e 复用，规避并发首次编译。
+  - **① card-size-grid.spec ⑤**：原断言「375 屏→2 列」假设 web-next 移动端响应式收缩；祖先链实测 `.app-shell { min-width: 1200px }`（globals.css §7.2「低于此值整站横向滚动」）→ 375 viewport 容器恒 ≥1152、auto-fit 列数同桌面（5 列）。**A2「手机 2 列」前提不成立**。改测真实不变量「窄视口卡宽恒 = W」。
+  - **② browse-tvshow.spec MOCK_TVSHOW**：缺 `subtitleLangs`/`posterStatus`/`posterBlurhash`；A1/A2 后 BrowseGrid 卡改渲 VideoCard navigate（读 `subtitleLangs.length`）→ undefined.length 抛错、卡不渲染（实证：缺字段 video-card=0 + pageerror，补字段 video-card=1 零错误）。补字段对齐 BrowseGrid.test fixture。真实 api 返回这些字段（生产无此问题）。
+- **修复 commit**：`7e02d0e4`（仅 `tests/e2e-next/card-size-grid.spec.ts` + `browse-tvshow.spec.ts`，A1/A2 生产代码未动）。
+- **合并**：`git merge --no-ff` gate 分支 → main（merge commit `01b32abf`）。
+- **⚠️ 遗留（用户已确认合并取舍）**：
+  - **A2「手机 W=160→2 列」未兑现**：受 `app-shell min-width:1200`（spec §7.2 桌面优先 / 整站横向滚动）架构约束，web-next 无移动端窄视口响应式。A2 的 ADR / Codex-A2-R3 算术建立在「容器随 viewport 收缩到 ~343」的错误前提上。如需移动端响应式 2 列，须**另起架构任务**改 `app-shell`（推翻 §7.2），远超 A1/A2 范围。
+  - **视觉回归（admin-visual project）未跑**：baseline 未入库（`PLAYWRIGHT_VISUAL=1` 触发），待单独生成 baseline 补跑。
