@@ -23992,3 +23992,62 @@ ADR-211（refine D-211-2「EXISTS 未解决事件」口径——读端改 event_
 - **R4-CONCERN（详情拆侧栏当布局迁移）→ 吸收**：非 surgical 组件替换，须同步 `.detail-lower-grid` 模板 + 删 `--detail-sidebar-*` 变量 + 响应式断点 + e2e 下半页断言（D-214-A1-6）。
 - **R5-BLOCKER（测试漂移清单不全）→ 吸收**：补 `card-size-admin` / `card-size-public` / `card-size-grid.spec`(e2e) / `CardSizeTab` 测到清单（隐藏破坏点 1 ⑤⑥⑦）。
 - **Codex 验证站得住**：播放器解耦（VideoCard navigate 为 plain Link、takeover 分支隔离、不耦合 GlobalPlayerHost full/mini/pip）+ scroll 行单位安全面 + 移动/平板 2/3 列保留方向。**5 项修订已全部落盘，方案可进 Phase 1 实现。**
+
+---
+
+## ADR-214 Amendment A2：废弃分档卡宽模型 → 单一全局卡宽 + 全站精确定宽（统一卡片显示尺寸，SEQ-20260623-02 / CARD-SIZE-A2-ADR）
+
+**状态**：**Accepted**（2026-06-23；Codex 对抗审 round-1〔3 BLOCKER + 3 CONCERN〕全数吸收，见文末摘要；待用户裁可后解锁 A2-1 实现）。**类型**：ADR-214 主 ADR 的 **Amendment A2**——**推翻分档核心模型**（D-214-2 分档枚举 / D-214-4 混合单位 / A1-1 size-driven 弹性 / A1-2 移动计数级联 / A1-3~5 分档 schema），重定义为**单一全局卡宽 + 全站精确定宽**。**关系**：A1 之后的需求澄清返工——A1 横滚化布局（#2/#5/#6）**保留**，分档卡宽体系（#0/#1A/#1B/#3/#4）**推翻重做**。
+
+**动机（需求澄清 — 纠正三次误解的根因）**：
+
+- 用户原始诉求「统一客户端卡片尺寸」的真实含义经 **AskUserQuestion 明确确认** = **全站所有区域卡片显示成同一尺寸（视觉精确一致）**，而非「分档各自可配」。
+- ADR-214（分档混合单位）+ A1（size-driven 分档）整条线为「分档可配」设计，**根本不满足「全站统一成一样大」**——standard 弹性网格（`auto-fill+1fr` 卡宽浮动 > 设定值）vs scroll 横滚定宽，机制不同，即使两档设同值视觉宽度也不一致。
+- 用户裁定（AskUserQuestion ×2）：① 全站统一一个卡宽 + 统一渲染机制；② 网格留白**居中**；③ 手机端列数由卡宽决定（**接受** W 大则手机 1 列）。
+
+### 决策
+
+- **D-214-A2-1（废弃分档 → 单一全局卡宽·推翻 D-214-2 / A1-3）**：废弃 `CardSizeClass` 分档枚举（standard/scroll/compact 全废）。**单一全局卡宽 `--card-w` + 全局间距 `--card-gap`**，全站所有卡片区域消费同一对变量。`card_size_settings` 收敛为单行全局配置。
+
+- **D-214-A2-2（全站精确定宽 + 统一机制·推翻 A1-1 size-driven）**：① 网格区（FeaturedRow 精选 / BrowseGrid 分类）：`grid-template-columns: repeat(auto-fill, var(--card-w))` **精确定宽**（**非** `minmax(…,1fr)` 弹性，杜绝卡宽浮动）+ `justify-content: center`（D-214-A2-3）；② 横滚区（Shelf / TopTenRow / DailyAnimeRow / RelatedVideos）：`width: var(--card-w)` 定宽。所有区域卡片 **border-box 宽恒 = W**、机制统一 → 视觉精确一致。**「精确一致」定义（Codex-A2-R1）= border-box 宽度像素级相等**；VideoCard 的 StackedPosterFrame 阴影是**视觉包络、超出 box 不计入**（设计如此）——A2-5 e2e 以 `getBoundingClientRect().width` 对比网格卡 vs 横滚卡断言相等。海报 2:3 不变（卡高 = W×1.5 派生一致）。**仍选 `auto-fill`（Codex-A2-R6，承 A1 推理）**：卡数 < 一行容量时 auto-fill 保留空轨道、卡宽恒 W；`auto-fit` 会折叠空轨道把少量卡拉伸撑满（破坏精确定宽）。**保留 overflow 防御 `repeat(auto-fill, min(var(--card-w,160px), 100%))`**：超窄容器（< W）卡宽收至 100% 不溢出。
+
+- **D-214-A2-3（网格留白居中·用户裁定 + Codex-A2-R6 对齐说明）**：精确定宽 → 末列留白必然（容器宽非卡宽整数倍）。用户裁定**网格区** `justify-content: center`（卡片整排居中、左右均匀留白）——含卡数 < 一行（首页精选 5 卡、搜索少量结果）时整排居中。**横滚区不受 center 影响**（单行 flex 左起 + 横滚，保持现有左对齐起点）。
+
+- **D-214-A2-4（手机端列数由 W 决定·用户接受·废弃 A1-2·Codex-A2-R3 BLOCKER 算术修正）**：全站 W 一致 → 各断点列数 = `⌊(内容宽+gap)/(W+gap)⌋`，由 `auto-fill` 自然派生（屏宽变→列数变、卡宽恒 W）。**废弃 A1-2「移动保留 2/3 列计数级联」**。**手机端真实算术（修正原"W=180 约 2 列"的错误叙述）**：viewport 375 − 左右 padding 32 = 内容宽 343，gap 8 → `⌊(343+8)/(W+8)⌋`：**W=180 → 1 列**（⌊351/188⌋=1）/ W=170 → 1 列 / **W=160 → 2 列**（⌊351/168⌋=2）/ W≤~167 才 2 列。**默认 W 取 160**（保证手机 2 列；桌面 1200 容器约 7 列）。运营调 W>167 则手机变 1 列大卡（**用户已接受单列大卡取舍**，设 W 时权衡）。不再有响应式断点列数硬编码。
+
+- **D-214-A2-5（DB schema 简化 + 严格步骤顺序·migration 126·Codex-A2-R2 BLOCKER）**：`card_size_settings` 从 standard/scroll 2 行 → **单行全局**（`size_class='global'`，`card_width_px`=全局卡宽 + `gap_px`）。**严格顺序（125 既有约束须先解除再改值/删列）**：(1) DROP 125 `card_size_settings_size_unit_check` IF EXISTS（含 desktop_columns 引用，不先删则后续删列失败）；(2) DROP 125 `card_size_settings_size_class_check` IF EXISTS（旧 `IN('standard','scroll')` 阻 global）；(3) `DELETE WHERE size_class='scroll'`；(4) `UPDATE SET size_class='global', card_width_px=160 WHERE size_class='standard'`（保留 id audit 锚点）；(5) ADD `size_class` CHECK `IN('global')`；(6) ADD 范围 CHECK `card_width_px BETWEEN 120 AND 400`；(7) `ALTER TABLE DROP COLUMN IF EXISTS desktop_columns`（已废）。全程 `IF EXISTS` 幂等 + down 注释（同 124/125）。默认 **W=160**（D-214-A2-4 手机 2 列）；W=160 ∈ [120,400] 安全。
+
+- **D-214-A2-6（types + API + 后台简化·Codex-A2-R5 明确合约）**：① `@resovo/types`：`CardSizeClass` **收敛为单值 `'global'`（保留类型而非删除）**——复用 ADR-181/182 home_section 配置表范式 + audit `targetId=row.id` 锚点 + 现有 GET `:sizeClass` param 查询/PUT 路由形状，**最小改动**（非纯 key-value 表，理由：与既有配置范式一致、保留 audit 行锚点、ADR-215 端点不动）；`CARD_SIZE_DEFAULTS = { global: { cardWidthPx: 160, gapPx: 16 } }`；② `CardSizeService`：单档查询/读写（GET 返单行数组 / PUT `:sizeClass='global'` 改卡宽+gap），ADR-215 端点保留、body `{cardWidthPx, gapPx}`；③ `CardSizeTab`：单一「卡片宽度 + 间距」表单 + 预览（全站统一示意 + **手机列数实时提示**：当前 W 在 375 屏几列）。
+
+- **D-214-A2-7（A1 横滚化布局保留 + 全栈分档变量回收·Codex-A2-R4 BLOCKER）**：#2 ScrollRow / #5 详情拆侧栏 / #6 播放横滚**布局保留**；仅卡宽来源从分档 → 全局 `--card-w`。**分档变量 `--card-w-scroll`/`--card-gap-scroll` 全栈回收**（A2-3 范围扩展）：① `.scroll-row__item` width → `var(--card-w, 160px)`；② **Shelf / TopTenRow / DailyAnimeRow 内联样式直接消费 `--card-w-scroll`/`--card-gap-scroll`**（Codex 实测 `Shelf.tsx:224-272` / `TopTenRow.tsx:178-258` / `DailyAnimeRow.tsx:79-184` + skeleton/placeholder）→ 改 `--card-w`/`--card-gap`；③ `card-size-fetch.ts` 遍历 `CARD_SIZE_CLASSES` 注入 `--card-w-{cls}` 的逻辑 → 改注入单一 `--card-w`+`--card-gap`；④ A1 全栈测试断言分档变量（standard/scroll）→ A2 回收单一 `--card-w`（A2-5 列清单）。
+
+### 返工序列（SEQ-20260623-02，Phase A2-0→A2-5）
+
+A2-0 本 ADR（docs + Codex）→ A2-1 SCHEMA（migration 126 单行全局 + types 废枚举 + 一致性测重写）→ A2-2 API（CardSizeService 单一配置 + admin/public 测重写）→ A2-3 CSS（CardGrid 精确定宽+居中 / ScrollRow 消费 --card-w / SSR 单一 --card-w + --card-gap / globals.css）→ A2-4 TAB（后台单一表单）→ A2-5 E2E（全站同宽断言重写）。
+
+### 与 A1/ADR-214 关系
+
+- **推翻**：D-214-2（分档枚举）/ D-214-4（混合单位）/ A1-1（size-driven 弹性）/ A1-2（移动计数级联）/ A1-3（compact——A2 全废分档）/ A1-4·5（desktop_columns 护栏 + migration 125 分档 schema）。
+- **保留**：A1-6（详情/播放横滚化 + ScrollRow）/ A1-7（搜索范围外）。
+- **ADR-215**：端点保留，body 语义简化为单一 `{cardWidthPx, gapPx}`。
+
+### 风险/取舍
+
+- 推翻 A1 刚交付的分档 schema/CSS/Tab（migration 125→126 再改、CardGrid size-driven→精确定宽、Tab 分档→单一）—— 一致性测大面积重写（A1 测断言分档 → A2 单一全局）。
+- 手机端 W 大→1 列（用户接受）；网格留白居中。
+- **隐藏破坏点**：A1 刚把全栈测试改成分档断言（standard --card-w-standard / scroll --card-w-scroll），A2 全部回收为单一 --card-w；migration 126 须处理 125 既有约束（size_class CHECK / size_unit_check）。
+
+**待用户裁可 → 解锁 A2-1 实现。**
+
+### Codex 对抗审摘要 round-1 2026-06-23（codex-rescue runtime 等效对抗审 / agentId aee949339603d7fe9）
+
+**3 BLOCKER + 3 CONCERN，全数吸收。** 方向（全站统一 / 单一全局卡宽 / 精确定宽 / 居中留白）不被质疑，但默认 W 算术、migration 顺序、资产清理范围被低估。
+
+- **R2-BLOCKER（migration 126 约束顺序）→ 吸收**：125 既有 `size_unit_check`（含 desktop_columns）+ `size_class CHECK IN('standard','scroll')` 须先解除再改 global 再删列 → D-214-A2-5 明确 7 步顺序 + down + IF EXISTS。
+- **R3-BLOCKER（手机列数算术错）→ 吸收**：W=180 手机实为 **1 列**（375−padding32=343 内容宽，⌊351/188⌋=1），非原述「约 2 列」；默认改 **W=160**（⌊351/168⌋=2 列）→ D-214-A2-4/5 修正算术。
+- **R4-BLOCKER（资产清理不全）→ 吸收**：Shelf/TopTenRow/DailyAnimeRow **内联**消费 `--card-w-scroll` + `card-size-fetch` 遍历 `CARD_SIZE_CLASSES` 注入逻辑，原不在 A2-3 清单 → D-214-A2-7 扩展全栈分档变量回收 + A2-5 列测试。
+- **R1-CONCERN（精确一致定义）→ 吸收**：明确 = border-box 宽像素级相等；StackedPosterFrame 阴影是视觉包络不计入；A2-5 e2e 以 `getBoundingClientRect` 对比网格/横滚卡（D-214-A2-2）。
+- **R5-CONCERN（是否真简化）→ 吸收**：`CardSizeClass` 收敛 `'global'` 单值**保留**（复用 home_section 配置范式 + audit 锚点 + ADR-215 端点不动），非纯 key-value 表（D-214-A2-6 明确合约）。
+- **R6-CONCERN（auto-fill/对齐/overflow）→ 吸收**：D-214-A2-2 补 `auto-fill`（非 auto-fit）理由 + `min(var(--card-w),100%)` overflow 保护；D-214-A2-3 补网格居中/横滚左起的分区对齐说明。
+
+**6 项修订全部落盘，方案可进 A2-1 实现。**

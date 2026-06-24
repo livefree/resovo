@@ -73,6 +73,18 @@ _（**🎉 SEQ-20260623-01 CARD-SIZE-A1 代码全交付（#0–#7）2026-06-23**
 
 ---
 
+### 🔄 CARD-SIZE-A2-ADR — 落盘 ADR-214 Amendment A2（废分档→单一全局卡宽 + 全站精确定宽）+ Codex 审（SEQ-20260623-02 Phase A2-0）
+
+- **状态**：🔄 进行中 ｜ **创建/开始**：2026-06-23 ｜ **执行模型**：claude-opus-4-8（主循环，撰写 ADR 强制 Opus 级）｜ **子代理**：Codex 对抗审（非代码产物强制门）。
+- **依据**：**AskUserQuestion ×2 确认**——用户「统一卡片尺寸」真实含义 = 全站所有区域卡片显示同一尺寸（视觉精确一致），非分档可配。推翻 ADR-214 分档 + A1 size-driven。
+- **问题理解**：ADR-214（分档混合单位）+ A1（size-driven 分档）整条线为「分档可配」设计，根本不满足「全站统一成一样大」——standard 弹性网格 vs scroll 横滚定宽机制不同，即使设同值视觉也不一致。前三方案（治理/ADR-214/A1）均误解需求。
+- **方案**：① `docs/decisions.md` 落 **ADR-214 Amendment A2**（D-214-A2-1..7：废分档→单一全局 `--card-w` / 网格 `repeat(auto-fill,var(--card-w))` 精确定宽+居中 / 横滚 `width:var(--card-w)` / 手机列数由 W 决定 / migration 126 单行全局 / 后台单一表单 / A1 横滚化保留）；② Codex 对抗审，吸收 finding → Accepted 解锁 A2-1。
+- **涉及文件**：`docs/decisions.md`（A2 正文）、`docs/task-queue.md`（SEQ-20260623-02）、`docs/tasks.md`（本卡）。**纯 docs，不改产品代码**。
+- **门禁**：**Codex 对抗审通过**（非代码产物强制门）。
+- **备注**：A1 横滚化布局（#2/#5/#6）保留，分档卡宽体系（#0/#1A/#1B/#3/#4）推翻重做。Accepted 后删本卡、起 A2-1 SCHEMA。
+
+---
+
 ## 工作流提示
 
 - 取新任务前先查 `docs/task-queue.md` 是否有 `🚨 BLOCKER`（当前无）。
