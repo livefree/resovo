@@ -175,6 +175,41 @@ describe('GET /v1/search', () => {
     const esBody = mockEs.search.mock.calls[0][0] as Record<string, unknown>
     expect(JSON.stringify(esBody)).toContain('subtitle_langs')
   })
+
+  // ── HANDOFF-40A：genre 暴露 + sort hot 对齐 ─────────────────────
+  it('genre 过滤：ES 查询包含 genres term（route 暴露 + SearchService 已支持）', async () => {
+    const res = await app.inject({ method: 'GET', url: '/v1/search?q=巨人&genre=action' })
+    expect(res.statusCode).toBe(200)
+    const esBody = mockEs.search.mock.calls[0][0] as Record<string, unknown>
+    const bodyStr = JSON.stringify(esBody)
+    expect(bodyStr).toContain('genres')
+    expect(bodyStr).toContain('action')
+  })
+
+  it('非法 genre → 422（非 VIDEO_GENRES 枚举）', async () => {
+    const res = await app.inject({ method: 'GET', url: '/v1/search?q=x&genre=not_a_genre' })
+    expect(res.statusCode).toBe(422)
+  })
+
+  it('sort=hot：不 422 且映射 rating_votes 排序（人气代理）', async () => {
+    const res = await app.inject({ method: 'GET', url: '/v1/search?q=巨人&sort=hot' })
+    expect(res.statusCode).toBe(200)
+    const esBody = mockEs.search.mock.calls[0][0] as Record<string, unknown>
+    expect(JSON.stringify(esBody)).toContain('rating_votes')
+  })
+
+  it('sort=latest/rating 仍生效（统一排序集合）', async () => {
+    await app.inject({ method: 'GET', url: '/v1/search?q=x&sort=latest' })
+    expect(JSON.stringify(mockEs.search.mock.calls[0][0])).toContain('created_at')
+    mockEs.search.mockClear()
+    await app.inject({ method: 'GET', url: '/v1/search?q=x&sort=rating' })
+    expect(JSON.stringify(mockEs.search.mock.calls[0][0])).toContain('"rating"')
+  })
+
+  it('非法 sort → 422', async () => {
+    const res = await app.inject({ method: 'GET', url: '/v1/search?q=x&sort=invalid' })
+    expect(res.statusCode).toBe(422)
+  })
 })
 
 // ═══════════════════════════════════════════════════════════════

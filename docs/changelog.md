@@ -2939,3 +2939,17 @@
 - **文件**：✏️ `apps/web-next/src/components/shared/filter/types.ts`（FilterAreaProps 扩展）｜🆕 `shared/filter/FilterArea.tsx`（5 维 taxonomy 驱动）｜🆕 `shared/filter/GridSortBar.tsx`｜✏️ `apps/web-next/messages/zh-CN.json` + `en.json`（filter 命名空间）｜🆕 `tests/unit/components/shared/filter/FilterArea.test.tsx`（14 测）+ `GridSortBar.test.tsx`（7 测）。
 - **门禁**：typecheck=0（8 workspace）/ lint=0（含 web-next）/ 变更测试 `vitest --changed HEAD` 21 测全过（FilterArea 14 + GridSortBar 7）/ i18n zh-en 各 37 key 对齐（无 parity 测试，脚本核验）。纯前端组件加性，e2e 归 HANDOFF-40。
 - **执行模型**：claude-opus-4-8（主循环）｜**子代理**：arch-reviewer（claude-opus-4-8，FilterArea 实装设计 + 契约扩展定稿，agentId a6ef6d7cbe3030a8b）。
+
+---
+
+## [HANDOFF-40A] 分类/搜索页统一筛选区 — 后端 `/search` 对齐（genre 暴露 + sort hot，SEQ-20260624-01 Card 3A）
+
+- **背景（HANDOFF-40 拆卡）**：用户决策方案 B「两页完全等价含 ES 后端改造」。搜索页接入暴露 `/search`（ES）能力缺口 → 原子化红线（route+service+UI 跨 3 层）拆 40A（后端）+ 40B（前端）。本卡 = 40A 后端对齐。
+- **范围（route+service 2 层，加性零删除）**：
+  - `routes/search.ts`：QuerySchema 加 `genre: z.enum(VIDEO_GENRES)`（引 @resovo/types）——**genre 断链同 HANDOFF-38 M2**：SearchService 早已支持 `filter.push({ term: { genres } })`，route 从未开口暴露 → genre 搜索此前静默失效，本卡打通。SortEnum 加 `'hot'`（→ relevance/rating/latest/hot，保留 relevance 兼容 suggest/其它调用）。
+  - `services/SearchService.ts`：`SearchFilters.sort` 加 `'hot'`；sortMap 加 `hot: [{ rating_votes: { order:'desc', missing:'_last' } }, { _score:{order:'desc'} }]`。
+- **hot=rating_votes 代理决策（vs source_count reindex）**：/videos 的 hot=source_count（活跃源数），但 ES 索引**无 source_count 字段**。选用 `rating_votes`（评分人数）作 popularity 代理——评分人数是更标准的「知名度/人气」信号，**无需 ES reindex**；用户面「人气高低」语义等价，底层字段差异（source_count vs rating_votes）对用户不可见。真正 source_count 精确等价需 ES reindex（index source_count 进 doc），成本与 lang 音频对齐（HANDOFF-41）同级，非本卡范围。
+- **文件**：✏️ `apps/api/src/routes/search.ts`（genre enum + SortEnum 加 hot）｜✏️ `apps/api/src/services/SearchService.ts`（SearchFilters.sort + sortMap hot）｜✏️ `tests/unit/api/search.test.ts`（+5 测）。
+- **门禁**：typecheck=0 / lint=0 / 变更测试 `vitest --changed HEAD` search.test 18 测全过（+5 新：genre 转发·非法 422 / sort=hot 映射 rating_votes / latest·rating / 非法 sort 422）/ verify:adr-contracts=0。**关键路径**公开 `/search`，route 测试覆盖。
+- **执行模型**：claude-opus-4-8（主循环）｜**子代理**：无（route+service 2 层、无 schema/reindex/新架构决策）。
+- **依赖**：40B（前端两页接入）依赖本卡后端就绪。lang 字幕→音频对齐仍归 HANDOFF-41。

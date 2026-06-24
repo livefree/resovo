@@ -3135,9 +3135,9 @@
 
 ## [SEQ-20260624-01] FILTER-UNIFY — 分类/搜索页统一筛选过滤区（5 维 + 排序条 + 共享组件 + 后端补齐）
 
-- **状态**：🔄 执行中（HANDOFF-37 ✅ / 38 ✅ / 39 ✅ / 40 起）
+- **状态**：🔄 执行中（HANDOFF-37 ✅ / 38 ✅ / 39 ✅ / 40A ✅ / 40B 起；40 已拆 A/B）
 - **创建时间**：2026-06-24
-- **最后更新时间**：2026-06-24（HANDOFF-39 交付：共享 FilterArea + GridSortBar + i18n）
+- **最后更新时间**：2026-06-24（HANDOFF-40A 交付：/search genre 暴露 + sort hot 对齐）
 - **目标**：分类页与搜索页共用同一筛选区（类型/题材/地区/语言/年份 5 维行内互斥单选）+ 网格左上排序条（添加时间/人气/评分）；类型行与顶部导航双向联动；后端 `/videos` 补 genre/lang 查询；筛选项值集合走 `@resovo/types` taxonomy SSOT（前台零硬编码）。
 - **范围**：`packages/types`（taxonomy 出口 + 语言枚举提升 + curated 地区）；`apps/api`（`/videos` genre/lang + `/search` lang 音频对齐）；`apps/web-next`（共享 FilterArea/GridSortBar + Nav 联动 + 页面接入 + i18n）。
 - **依赖**：方案 + 设计草图已用户验收（`docs/designs/filter-area-unified-redesign_20260624.html` v4）；用户确认 taxonomy 契约 6 条边界（2026-06-24）。
@@ -3157,9 +3157,15 @@
    - 范围：components/browse/FilterArea.tsx → shared/filter/FilterArea.tsx（5 维消费 taxonomy / 删 rating_min·status 行 / 删 lockedDims / type↔nav 联动）；新建 GridSortBar；layout/Nav.tsx + NavMoreMenu.tsx 联动；messages/zh-CN+en 加 genre 20 项 + 维度/排序标签。
    - 验收：组件消费 taxonomy 零硬编码；type↔nav 双向联动；URL-param 驱动；门禁全过。
    - **完成备注（2026-06-24）**：arch-reviewer (claude-opus-4-8, agentId a6ef6d7cbe3030a8b) CONDITIONAL PASS → 6 必改全吸收。**契约扩展**（HANDOFF-37 实装缺口回填，Opus 定稿 + commit trailer）：FilterAreaProps 加 `typeOptions: readonly VideoType[]`（消费方从 ALL_CATEGORIES 注入，组件对 categories+VIDEO_TYPES **双零依赖**，保 valueSource='category' 意图）+ `activeType?: VideoType|null`（category 模式 type 在 pathname 段、受控高亮）。**新组件**：`shared/filter/FilterArea.tsx`（5 维消费 FILTER_TAXONOMY 零 switch(dim)、type 双模式分流 category=onTypeChange 回调/search=?type= 自管、其余 4 维 URL 驱动）+ `GridSortBar.tsx`（SORT_OPTIONS、默认 latest 删 param、计数防御）。i18n filter 命名空间（zh+en 各 37 key，lang 用中文规范词 key 对齐 URL/后端值）。**D6 过渡态**：本卡只建新组件、**不碰页面、不删旧 browse/FilterArea**（HANDOFF-40 负责切换+删旧+E2E），临时双 FilterArea。**D7 Nav 无代码改动**（双向联动经现有 pathname 单源自动达成）。门禁：typecheck=0/lint=0/变更测试 21（FilterArea 14+GridSortBar 7）/i18n zh-en 37 key 对齐。详见 changelog [HANDOFF-39]。
-4. HANDOFF-40 — 分类/搜索页接入 + E2E（状态：⬜）
-   - 范围：[type]/page.tsx（FilterArea 无 lockedDims + GridSortBar）；search/SearchPage.tsx（加 FilterArea + GridSortBar，移除 type tab）；BrowseGrid 无需改；e2e browse-category-routes/browse-tvshow/search-page 更新。
-   - 验收：两页筛选区一致；互斥单选 + reset page；排序切换；e2e:search + e2e:video 过。
+**HANDOFF-40 拆卡（2026-06-24，用户决策方案 B「两页完全等价含 ES 后端改造」+ 原子化红线 route+service+UI 跨 3 层）**：搜索页 `/search` 暴露能力缺口（genre 未在 route 暴露但 SearchService 已支持 / sort=hot 不支持直接转发会 422 / lang 仍映射字幕归 41）。拆为 40A（后端对齐）+ 40B（前端接入）。
+
+4A. HANDOFF-40A — 后端 `/search` 对齐（genre 暴露 + sort hot）（状态：✅ 2026-06-24）
+   - 范围：routes/search.ts QuerySchema 加 `genre: z.enum(VIDEO_GENRES)`（SearchService 已支持 `term:{genres}`，断链同 HANDOFF-38 M2）；SortEnum 加 `hot`（保留 relevance/rating/latest，API 兼容）；SearchService sortMap 加 `hot`=`rating_votes` DESC 人气代理（**ES 无 source_count、用 rating_votes 评分人数作 popularity 代理，无需 reindex**；用户面等价「人气」语义，底层字段差异不可见）+ tiebreak；单测 genre 转发 + sort=hot 映射。
+   - 验收：`/search?genre=&sort=hot` 生效不 422；hot 按 rating_votes 排序；门禁 + 单测过。**无 schema/reindex → 无需 Opus**。
+   - **完成备注（2026-06-24）**：route genre（引 @resovo/types VIDEO_GENRES，genre 自动透传到 SearchService 既有 `term:{genres}` ES filter）+ SortEnum 加 hot（保 relevance 兼容 suggest）；SearchService.SearchFilters.sort 加 'hot' + sortMap `hot: rating_votes DESC missing:_last + _score tiebreak`（rating_votes 评分人数 popularity 代理，ES 无 source_count，无 reindex）。门禁：typecheck=0/lint=0/变更测试 search.test 18 测（+5 新：genre 转发·422 / sort=hot 映射 rating_votes / latest·rating / 422）/verify:adr-contracts=0。hot=rating_votes 代理决策（非 source_count 精确等价、用户面语义等价）记 changelog。详见 changelog [HANDOFF-40A]。
+4B. HANDOFF-40B — 分类/搜索页接入 + 删旧 FilterArea + E2E（状态：⬜）
+   - 范围：[type]/page.tsx（client 包装器持 categories 路由知识 → 新 FilterArea category 模式 + activeType + GridSortBar）；search/SearchPage.tsx（加 FilterArea search 模式 + GridSortBar，移除 type tab，转发 genre/country/lang/year/sort 到 /search，计数迁 GridSortBar）；GridSortBar 置 BrowseGrid 内取 total；**删旧** `browse/FilterArea.tsx` + 其单测；e2e browse-category-routes/browse-tvshow/search-page 更新。
+   - 验收：两页筛选区一致；互斥单选 + reset page；排序切换；type↔nav 联动；e2e:search + e2e:video 过。依赖 40A（搜索页后端就绪）。
 5. HANDOFF-41 — `/search` lang 字幕→音频对齐（ES，follow-up）（状态：⬜）
    - 范围：SearchService lang subtitle_langs→audio_language；es_mapping.json + elasticsearch.ts mapping + 重建索引；routes/search.ts 枚举对齐 taxonomy。
    - 验收：搜索页 lang 命中音频语音；ES 重建脚本；门禁过。

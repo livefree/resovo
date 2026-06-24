@@ -32,7 +32,7 @@ export interface SearchFilters {
   director?: string
   actor?: string
   writer?: string
-  sort?: 'relevance' | 'rating' | 'latest'
+  sort?: 'relevance' | 'rating' | 'latest' | 'hot'
   page: number
   limit: number
 }
@@ -79,6 +79,9 @@ export class SearchService {
       relevance: [{ _score: { order: 'desc' } }, { updated_at: { order: 'desc' } }],
       rating: [{ rating: { order: 'desc', missing: '_last' } }, { _score: { order: 'desc' } }],
       latest: [{ created_at: { order: 'desc' } }],
+      // HANDOFF-40A：人气排序——ES 无 source_count（/videos hot 字段），用 rating_votes
+      // 评分人数作 popularity 代理（更标准的人气信号，无需 reindex）。
+      hot: [{ rating_votes: { order: 'desc', missing: '_last' } }, { _score: { order: 'desc' } }],
     }
     const sort = sortMap[filters.sort ?? 'relevance']
     const from = (filters.page - 1) * filters.limit

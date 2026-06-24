@@ -11,10 +11,12 @@ import { z } from 'zod'
 
 import { es } from '@/api/lib/elasticsearch'
 import { SearchService } from '@/api/services/SearchService'
-import { VIDEO_TYPES, VIDEO_STATUSES } from '@resovo/types'
+import { VIDEO_TYPES, VIDEO_STATUSES, VIDEO_GENRES } from '@resovo/types'
 
 const VideoTypeEnum = z.enum(VIDEO_TYPES)
-const SortEnum = z.enum(['relevance', 'rating', 'latest'])
+const GenreEnum = z.enum(VIDEO_GENRES)
+// HANDOFF-40A：加 'hot'（GridSortBar 统一排序 latest/hot/rating），保留 relevance 兼容
+const SortEnum = z.enum(['relevance', 'rating', 'latest', 'hot'])
 
 export async function searchRoutes(fastify: FastifyInstance) {
   const searchService = new SearchService(es)
@@ -50,6 +52,7 @@ export async function searchRoutes(fastify: FastifyInstance) {
       q: z.string().max(200).optional(),
       type: VideoTypeEnum.optional(),
       category: z.string().optional(),
+      genre: GenreEnum.optional(),
       year: z.coerce.number().int().min(1900).max(2100).optional(),
       rating_min: z.coerce.number().min(0).max(10).optional(),
       lang: z.string().optional(),
