@@ -1,11 +1,12 @@
 'use client'
 
 /**
- * RelatedVideos — 详情页「一行相关视频横滚」（ADR-214 Amendment A1 D-214-A1-6 / CARD-SIZE-A1-DETAIL）
+ * RelatedVideos — 详情页/播放页共用「一行相关视频横滚」（ADR-214 Amendment A1 D-214-A1-6 / CARD-SIZE-A1-DETAIL/-WATCH）
  *
- * 退役原 320px 侧栏 60px 竖向缩略列表（SidebarList）→ 全宽 ScrollRow 横滚 + VideoCard(navigate)，
- * 与播放页相关行统一（#6）。数据仅相关 trending（无筛选/排序/加载更多，D-214-A1-6 ④）；
- * VideoCard navigate 整卡纯跳详情、不耦合播放器状态机。
+ * 退役原详情页 320px 侧栏 60px 竖向缩略列表（SidebarList）→ 全宽 ScrollRow 横滚 + VideoCard(navigate)；
+ * 详情页（VideoDetailClient）+ 播放页（watch page.tsx，#6 直接复用本组件）统一同款。
+ * 数据仅相关 trending（无筛选/排序/加载更多，D-214-A1-6 ④）；VideoCard navigate 整卡纯跳详情、不耦合播放器状态机。
+ * 注：组件目录 components/detail 为历史归属，逻辑通用（详情+播放共用）；提取至 shared 为可选后续。
  */
 
 import { useEffect, useState } from 'react'

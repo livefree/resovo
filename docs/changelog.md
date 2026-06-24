@@ -2838,3 +2838,11 @@
 - **改动**：① `VideoDetailClient` 拆下方 `1fr + 320px` 双栏（`.detail-lower-grid` + `<aside>` 侧栏）→ 主内容全宽 + 相关视频全宽横滚（`detail-cascade-3` 入场动画保留）；② `RelatedVideos` 退役 `SidebarList`（60px 硬编码竖列表 + 自绘 Link）→ `<ScrollRow aria-label="相关推荐">` + `VideoCard interaction="navigate"`，数据 `trending?type=&exclude=` limit 8→12（D-214-A1-6 仅相关、无加载更多）；③ `globals.css` 删 `.detail-lower-grid` 段 + `--detail-sidebar-w`/`--detail-sidebar-gap` 死 CSS/token（拆后零消费方）；④ 新增 `tests/unit/web-next/related-videos.test.tsx` 4 测。
 - **门禁**：typecheck=0 / lint=0 / test:changed（related-videos 4〔URL limit=12 / items navigate / empty / 失败降级〕+ 详情 fetch-sources 7 + ScrollRow 9 全过）。**VIDEO e2e 详情布局回归须主 checkout/CI 跑**（worktree 受限，登记 #7）。
 - **注意事项**：① 相关卡 `navigate` 整卡纯跳详情、不耦合 GlobalPlayerHost 状态机。② 数据仅相关、无筛选/排序/加载更多。③ 详情页下半部视觉大改（侧栏竖列表 → 全宽横滚行），真实视觉验证靠 #7 e2e。
+
+## [CARD-SIZE-A1-WATCH] Phase 6：播放页新增一行相关视频横滚（ADR-214 Amendment A1 D-214-A1-6，SEQ-20260623-01）
+
+- **日期**：2026-06-23 ｜ **类型**：前端页面（播放页新增区）｜ **执行模型**：claude-opus-4-8（主循环）｜ **子代理**：无（复用 #2 ScrollRow + #5 RelatedVideos）。
+- **依据**：ADR-214 Amendment A1 D-214-A1-6（播放页新增相关视频横滚行，与详情页统一）。
+- **改动**：① `watch/[slug]/page.tsx` PlayerShell 下方新增相关视频横滚区（`max-w-feature` 容器 + `<RelatedVideos>`）；② **复用 `detail/RelatedVideos`**（详情 + 播放共用同款横滚，注释更新说明通用归属）；③ `initialVideo`（server `fetchVideoDetail`）传入。播放页此前无相关视频区。
+- **门禁**：typecheck=0 / lint=0 / 相关测 20 绿（**npx vitest 替代**：related-videos 4 + scroll-row 9 + 详情 fetch-sources 7）。**`test:changed` 脚本 spawn worktree-local `node_modules/.bin/vitest` ENOENT**（worktree node_modules 不完整环境约束，同 `.env.local` 缺失）→ 用 `npx vitest`（解析主仓 vitest）替代验证。PLAYER e2e 须主 checkout/CI（登记 #7）。
+- **注意事项**：① 相关卡 `navigate` 纯跳新视频详情、**不耦合 GlobalPlayerHost full/mini/pip 状态机**（严守 D-214-A1-6）。② 滚动吸顶 mini 播放器为可选后续（D-214-A1-6 ⑤，本卡不做）。③ RelatedVideos 提取至 shared（消 components/detail 历史归属）为可选后续。
