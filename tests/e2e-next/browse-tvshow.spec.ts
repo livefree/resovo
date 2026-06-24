@@ -18,6 +18,11 @@ const MOCK_TVSHOW = {
   title: '测试综艺',
   titleEn: 'Test TV Show',
   coverUrl: null,
+  // CARD-SIZE-BROWSE-MIGRATE：BrowseGrid 卡改渲 VideoCard navigate（StackedPosterFrame/TagLayer），
+  // 需 posterStatus/posterBlurhash/subtitleLangs（读 subtitleLangs.length）；对齐 BrowseGrid.test fixture。
+  posterStatus: null,
+  posterBlurhash: null,
+  subtitleLangs: ['zh-CN'],
   type: 'variety',
   rating: 7.5,
   year: 2024,

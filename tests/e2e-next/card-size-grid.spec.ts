@@ -168,12 +168,17 @@ test.describe('卡片尺寸体系 SSR→精确定宽视觉链路（ADR-214 Amend
     expect(Math.round(cardWidth)).toBe(injected)
   })
 
-  test('⑤ 手机端列数由 W 派生：375 屏 W=160 → 2 列 + 无溢出（D-214-A2-4）', async ({ page }) => {
+  test('⑤ 窄视口卡宽恒 = W：web-next 桌面优先（app-shell min-width:1200 / spec §7.2 整站横滚），列数由容器非 viewport 派生（D-214-A2-2）', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 800 })
     const grid = page.locator('[data-testid="featured-grid"]')
     const cols = await grid.evaluate((el) => getComputedStyle(el).gridTemplateColumns)
-    // auto-fit 在 375 屏内容宽（约 343）下 W=160/gap16 → 2 列（D-214-A2-4 算术）
-    expect(tracks(cols).length).toBe(2)
+    const t = tracks(cols)
+    // web-next 无移动端窄视口响应式：app-shell min-width:1200（globals.css §7.2「低于此值整站横向滚动」）
+    // → 375 viewport 下容器不收缩、featured-grid 恒 ≥1152。auto-fit 轨道宽恒 = W（卡片精确同宽，
+    // A2 核心保证 D-214-A2-2），列数由 ≥1200 容器派生（非 viewport）→ 同桌面 ≥3。
+    // 故 A2 原设想「手机 W=160→2 列」在 §7.2 桌面优先架构下不成立；本断言改测「卡宽恒 = W」这一真实不变量。
+    expect(t[0]).toBe(EXPECT_CARD_W)
+    expect(t.length).toBeGreaterThanOrEqual(3)
     const noOverflow = await grid.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)
     expect(noOverflow).toBe(true)
   })
