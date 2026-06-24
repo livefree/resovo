@@ -28,8 +28,20 @@ export function MoreMenu({ locale, currentType, label }: MoreMenuProps) {
   const t = useTranslations('nav')
   const [open, setOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
+  // 延时关闭定时器（hover-intent）：离开 wrapper 不立即关，给指针穿越「按钮↔菜单」间隙的时间，
+  // 抵达菜单（wrapper 后代）触发 mouseenter → 取消关闭。彻底兜底几何死区——Nav header `items-center`
+  // 致按钮垂直居中、其下方约 8px 为非 wrapper 后代的 header 空隙，鼠标下移穿越即触发 onMouseLeave。
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const active = currentType !== null && MORE_KEYS.has(currentType)
+
+  // 卸载清理延时关闭定时器（防泄漏 / setState on unmounted）
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current)
+    },
+    [],
+  )
 
   // 点击外部 + ESC 关闭（touch 模式下需要）
   useEffect(() => {
@@ -49,16 +61,29 @@ export function MoreMenu({ locale, currentType, label }: MoreMenuProps) {
     }
   }, [open])
 
+  function cancelScheduledClose() {
+    if (closeTimerRef.current !== null) {
+      clearTimeout(closeTimerRef.current)
+      closeTimerRef.current = null
+    }
+  }
+
   function handleMouseEnter() {
     // hover 展开仅用于 pointer: fine（桌面鼠标）设备（I-5）
     if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
+      cancelScheduledClose()
       setOpen(true)
     }
   }
 
   function handleMouseLeave() {
     if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
-      setOpen(false)
+      // 延时关闭：留出指针穿越间隙抵达菜单的时间，期间 re-enter（wrapper 后代）取消关闭。
+      cancelScheduledClose()
+      closeTimerRef.current = setTimeout(() => {
+        setOpen(false)
+        closeTimerRef.current = null
+      }, 200)
     }
   }
 
