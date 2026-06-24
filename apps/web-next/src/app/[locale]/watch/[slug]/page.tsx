@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import { WatchPageClient } from './WatchPageClient'
 import { PlayerShell } from '@/components/player/PlayerShell'
 import { fetchVideoDetail, fetchVideoSources } from '@/lib/video-detail'
+import { RelatedVideos } from '@/components/detail/RelatedVideos'
 
 interface Props {
   params: Promise<{ locale: string; slug: string }>
@@ -31,6 +32,13 @@ export default async function WatchPage({ params }: Props) {
       <Suspense>
         <PlayerShell slug={slug} initialVideo={initialVideo} initialSources={initialSources} />
       </Suspense>
+      {/* 相关视频横滚（Amendment A1 D-214-A1-6：播放页新增、与详情页统一；navigate 纯跳详情、不耦合播放器状态机） */}
+      <div
+        className="max-w-feature mx-auto w-full px-6"
+        style={{ paddingBottom: 'var(--detail-section-gap)' }}
+      >
+        <RelatedVideos video={initialVideo} />
+      </div>
     </div>
   )
 }

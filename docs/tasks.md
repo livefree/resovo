@@ -60,6 +60,31 @@ _（**SEQ-20260610-02 source-health v2 落地 🔄 15/17 — Phase 1 ✅ + Phase
 
 ---
 
+### ⏸️ CARD-SIZE-A1-E2E — card-size-grid.spec size-driven 重写 ✅ + 合并 gate 实跑登记（SEQ-20260623-01 Phase 7）
+
+- **状态**：⏸️ **spec 已交付 + 可跑门禁全绿**（card-size-grid.spec size-driven 重写，typecheck=0/lint=0；commit 见 changelog [CARD-SIZE-A1-E2E]）·**待 e2e 实跑**（`test:e2e` 4 projects + migration 125 冷启动 + 全量单测须主 checkout/CI 跑 = 合并 main 前 gate；worktree 缺 `.env.local` + node_modules 不完整起不来 dev server）——**不占活跃工作台槽**（环境阻塞性质，同 CARD-SIZE-E2E）｜ **执行模型**：claude-opus-4-8。
+- **已交付**：`card-size-grid.spec.ts` 重写 4 测（① SSR standard `--card-w-standard:200px` + compact 无残留 ② featured-grid size-driven auto-fill 卡宽~200/列数派生/gap16 ③ 长标题不溢出 ④ 窄视口保留 2 列）。
+- **合并 main 前 gate（须主 checkout/CI）**：① `migration 125` 冷启动实跑（六步顺序 + 约束名 + NOT NULL 回填）；② `test:e2e` 4 projects（card-size-grid + 详情/播放横滚视觉）；③ 全量单测 `npm run test -- --run`；④ admin PUT→公开读→SSR 新鲜度端到端。
+- **可选后续**：详情/播放横滚 e2e（`related-scroll` 渲染断言）补 spec；首页 ScrollRow 迁移 #8；RelatedVideos 提取 shared。
+
+---
+
+_（**🎉 SEQ-20260623-01 CARD-SIZE-A1 代码全交付（#0–#7）2026-06-23**：#0 ADR Amendment A1 + Codex 审〔`61db5770`〕→ #1A/1B/3/4 尺寸线 size-driven 批次〔`67b0e36c`〕→ #2 ScrollRow〔`4a4f4393`〕→ #5 详情拆侧栏〔`784f8b81`〕→ #6 播放页横滚〔`06b86be3`〕→ #7 e2e spec。**两条核心诉求落地**：① standard 网格 column-driven→size-driven〔运营设卡片宽度 px、前台卡片随设定变〕+ compact 幽灵档退役；② 详情/播放页相关视频统一为全宽横滚〔退役 60px 侧栏竖列表、播放页新增〕。每步门禁绿〔typecheck/lint=0 + 全量单测 8221 + arch-reviewer + Codex 评审吸收〕。**剩合并 main 前 gate**：migration 125 冷启动 + test:e2e 4 projects + 全量单测〔worktree 环境受限须主 checkout/CI〕。worktree `worktree-card-size-a1` 6 commit 未 push/合 main。取下一任务前先查 🚨 BLOCKER。）_
+
+---
+
+### 🔄 CARD-SIZE-A2-ADR — 落盘 ADR-214 Amendment A2（废分档→单一全局卡宽 + 全站精确定宽）+ Codex 审（SEQ-20260623-02 Phase A2-0）
+
+- **状态**：🔄 进行中 ｜ **创建/开始**：2026-06-23 ｜ **执行模型**：claude-opus-4-8（主循环，撰写 ADR 强制 Opus 级）｜ **子代理**：Codex 对抗审（非代码产物强制门）。
+- **依据**：**AskUserQuestion ×2 确认**——用户「统一卡片尺寸」真实含义 = 全站所有区域卡片显示同一尺寸（视觉精确一致），非分档可配。推翻 ADR-214 分档 + A1 size-driven。
+- **问题理解**：ADR-214（分档混合单位）+ A1（size-driven 分档）整条线为「分档可配」设计，根本不满足「全站统一成一样大」——standard 弹性网格 vs scroll 横滚定宽机制不同，即使设同值视觉也不一致。前三方案（治理/ADR-214/A1）均误解需求。
+- **方案**：① `docs/decisions.md` 落 **ADR-214 Amendment A2**（D-214-A2-1..7：废分档→单一全局 `--card-w` / 网格 `repeat(auto-fill,var(--card-w))` 精确定宽+居中 / 横滚 `width:var(--card-w)` / 手机列数由 W 决定 / migration 126 单行全局 / 后台单一表单 / A1 横滚化保留）；② Codex 对抗审，吸收 finding → Accepted 解锁 A2-1。
+- **涉及文件**：`docs/decisions.md`（A2 正文）、`docs/task-queue.md`（SEQ-20260623-02）、`docs/tasks.md`（本卡）。**纯 docs，不改产品代码**。
+- **门禁**：**Codex 对抗审通过**（非代码产物强制门）。
+- **备注**：A1 横滚化布局（#2/#5/#6）保留，分档卡宽体系（#0/#1A/#1B/#3/#4）推翻重做。Accepted 后删本卡、起 A2-1 SCHEMA。
+
+---
+
 ## 工作流提示
 
 - 取新任务前先查 `docs/task-queue.md` 是否有 `🚨 BLOCKER`（当前无）。

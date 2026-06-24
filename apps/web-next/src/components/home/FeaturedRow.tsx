@@ -2,17 +2,17 @@
 
 /**
  * FeaturedRow — 首页精选推荐区块（HANDOFF-22）
- *   （CARD-SIZE-SYSTEM Phase 2 / ADR-214 D-214-8：1.6fr 异宽 → CardGrid standard 等宽网格归一）
+ *   （CARD-SIZE-SYSTEM / ADR-214 Amendment A2：1.6fr 异宽 → CardGrid global 全站等宽网格归一）
  *
  * 数据源：GET /home/modules?slot=featured → HomeModule[]
- * 布局：CardGrid standard 档等宽网格（DB 注入 --card-cols-standard-desktop / --card-gap-standard，
- *       默认 5 列/16px；移动/平板按 2/3 契约派生）。归一前为 1.6fr+3×1fr 首列大卡异宽。
+ * 布局：CardGrid global 档全站等宽网格（DB 注入全局 --card-w / --card-gap，auto-fill 精确定宽 +
+ *       居中留白，D-214-A2-2）。归一前为 1.6fr+3×1fr 首列大卡异宽。
  *
  * 策略：
  *   - Section 始终以"精选推荐"身份渲染，不替换为其他 section
  *   - 无运营模块时：以趋势视频填充 grid（保持标题与布局不变）
  *   - 有运营模块时：显示编辑精选内容（当前仍以趋势填位，TODO: 待后端实现）
- *   - loading 时：FeaturedGridSkeleton（CardGrid standard 骨架，无闪烁）
+ *   - loading 时：FeaturedGridSkeleton（CardGrid global 骨架，无闪烁）
  *
  * TODO(featured-videos-endpoint): 待后端实现 /home/featured-videos 批量端点（类似 /home/top10）
  * 以返回运营选定的 VideoCard 列表，替换当前趋势视频填位逻辑。
@@ -27,7 +27,7 @@ import { useBrand } from '@/hooks/useBrand'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import type { HomeModule, VideoCard as VideoCardType, ApiResponse } from '@resovo/types'
 
-// 精选展示槽位：对齐 standard 档默认列数（DB 默认 5）。列数 DB 可配，此为 JS 侧取数/骨架上限。
+// 精选展示槽位：JS 侧取数/骨架上限（A2 列数由容器宽/卡宽派生，此为内容条数上限非列数）。
 const FEATURED_SLOTS = 5
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ function RowHeader({
 
 function FeaturedGridSkeleton() {
   return (
-    <CardGrid sizeClass="standard">
+    <CardGrid sizeClass="global">
       {Array.from({ length: FEATURED_SLOTS }).map((_, i) => (
         <Skeleton
           key={i}
@@ -98,7 +98,7 @@ function FeaturedGrid({ videos }: { readonly videos: VideoCardType[] }) {
   // 等宽 standard 网格：minmax(0,1fr) + CardGrid `> * { min-width:0 }` 结构上消除挤垮，
   // 故无需归一前的 sparse-fill 空占位（占位机制亦与 DB 可配列数不兼容）。卡 <列数 时末行自然留空。
   return (
-    <CardGrid sizeClass="standard" data-testid="featured-grid">
+    <CardGrid sizeClass="global" data-testid="featured-grid">
       {videos.slice(0, FEATURED_SLOTS).map((video) => (
         <VideoCard key={video.id} video={video} />
       ))}

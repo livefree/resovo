@@ -5,13 +5,13 @@
  *   （CARD-SIZE-FEATURED-NORMALIZE / ADR-214 D-214-8：top10-row / featured-grid 死模板已删，仅存 poster-row）
  *
  * template：
- *   poster-row     — 横向滚动，portrait 卡 var(--card-w-scroll) 170px，2:3 比例
+ *   poster-row     — 横向滚动，portrait 卡 var(--card-w) 170px，2:3 比例
  *   （注：首页 TOP10 用独立 TopTenRow 组件、精选用 FeaturedRow→CardGrid standard，非本组件模板）
  *
  * Token 消费：
- *   横滚 gap       → var(--card-gap-scroll)        16px（CARD-SIZE-SCROLL：DB 注入）
+ *   横滚 gap       → var(--card-gap)        16px（CARD-SIZE-SCROLL：DB 注入）
  *   bottom padding → var(--shelf-bottom-padding)   8px
- *   portrait 宽    → var(--card-w-scroll)          170px
+ *   portrait 宽    → var(--card-w)          170px
  *   empty opacity  → var(--shelf-empty-opacity)    0.32
  *
  * 不变量：
@@ -221,7 +221,7 @@ function HorizontalTrackSkeleton({ cardWidth, aspectRatio, testId }: {
       data-testid={testId}
       style={{
         display: 'flex',
-        gap: 'var(--card-gap-scroll)',
+        gap: 'var(--card-gap)',
         paddingBottom: 'var(--shelf-bottom-padding)',
         overflowX: 'hidden',
       }}
@@ -253,7 +253,7 @@ function PosterTrack({ videos, testId }: { readonly videos: VideoCardType[]; rea
         data-testid={testId}
         style={{
           display: 'flex',
-          gap: 'var(--card-gap-scroll)',
+          gap: 'var(--card-gap)',
           overflowX: 'auto',
           scrollSnapType: 'x mandatory',
           scrollbarWidth: 'none',
@@ -263,13 +263,13 @@ function PosterTrack({ videos, testId }: { readonly videos: VideoCardType[]; rea
         {videos.map((video) => (
           <div
             key={video.id}
-            style={{ width: 'var(--card-w-scroll)', flexShrink: 0, scrollSnapAlign: 'start' }}
+            style={{ width: 'var(--card-w)', flexShrink: 0, scrollSnapAlign: 'start' }}
           >
             <VideoCard video={video} />
           </div>
         ))}
         {Array.from({ length: empties }).map((_, i) => (
-          <EmptyPlaceholderCard key={`empty-${i}`} width="var(--card-w-scroll)" aspectRatio="2/3" />
+          <EmptyPlaceholderCard key={`empty-${i}`} width="var(--card-w)" aspectRatio="2/3" />
         ))}
       </div>
       {canRight && <TrackNavButton direction="next" onClick={scrollNext} />}
@@ -325,7 +325,7 @@ export function ShelfRow({
     return () => { cancelled = true }
   }, [query, shelfSection, brand.slug])
 
-  const cardWidth = 'var(--card-w-scroll)'
+  const cardWidth = 'var(--card-w)'
   const aspectRatio = '2/3'
 
   return (

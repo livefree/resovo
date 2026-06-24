@@ -6,9 +6,9 @@
  * 布局：
  *   Hero（max-w-feature，双栏 280px+1fr）
  *   EpisodePicker（max-w-feature，repeat(10,1fr)，选集范围切换）→ 点击直接跳 /watch
- *   下方双栏（1fr + --detail-sidebar-w 320px，gap --detail-sidebar-gap 40px）
- *     主列：剧情简介（折叠）+ 演职员列表
- *     侧栏：RelatedVideos（竖向列表）
+ *   下方区（全宽，Amendment A1 D-214-A1-6：拆原 1fr+320px 侧栏布局）
+ *     主内容：剧情简介（折叠）+ 演职员列表
+ *     相关视频：全宽一行横滚（ScrollRow + VideoCard navigate，替代原侧栏 60px 竖列表）
  *
  * section 间距：var(--detail-section-gap) 48px
  * 简介↔主创间距：var(--detail-desc-cast-gap) 28px
@@ -300,23 +300,20 @@ export function VideoDetailClient({ slug, showEpisodes, initialVideo, initialSou
         </div>
       )}
 
-      {/* 下方区：主内容 + 侧栏 */}
+      {/* 下方区：主内容（全宽）+ 相关视频横滚行（Amendment A1 D-214-A1-6：拆原 320px 侧栏） */}
       <div
         className="max-w-feature mx-auto px-6"
         style={{ paddingTop: 'var(--detail-section-gap)', paddingBottom: 'var(--detail-section-gap)' }}
       >
-        {/* mobile=单列，≥1024=1fr + 侧栏 */}
-        <div className="detail-lower-grid items-start">
-          {/* 主列 */}
-          <div className="min-w-0">
-            <DescriptionBlock description={video.description} />
-            <CastBlock director={video.director} cast={video.cast} />
-          </div>
+        {/* 主内容全宽 */}
+        <div className="min-w-0">
+          <DescriptionBlock description={video.description} />
+          <CastBlock director={video.director} cast={video.cast} />
+        </div>
 
-          {/* 侧栏：相关推荐 */}
-          <aside className="detail-cascade-3">
-            <RelatedVideos video={video} />
-          </aside>
+        {/* 相关视频：全宽一行横滚（detail-cascade-3 入场动画保留） */}
+        <div className="detail-cascade-3">
+          <RelatedVideos video={video} />
         </div>
       </div>
     </>

@@ -2,13 +2,13 @@
 
 /**
  * BrowseGrid — HANDOFF-15 对齐 docs/frontend_design_spec_20260423.md §12.4
- *   （CARD-SIZE-SYSTEM Phase 2：网格切共享 CardGrid standard 档、卡切 VideoCard navigate）
+ *   （CARD-SIZE-SYSTEM / ADR-214 Amendment A2：网格切共享 CardGrid global 档、卡切 VideoCard navigate）
  *
- * 从 URL searchParams 读取 page + 筛选条件，请求 API 后渲染 CardGrid standard 网格 + 分页控件。
+ * 从 URL searchParams 读取 page + 筛选条件，请求 API 后渲染 CardGrid 全局网格 + 分页控件。
  *
- * Token 消费（CARD-SIZE-SYSTEM Phase 2 / ADR-214）：
- *   网格列数/gap   → CardGrid sizeClass="standard"（DB 注入 --card-cols-standard-desktop /
- *                    --card-gap-standard，移动/平板按 2/3 契约派生；默认 5 列/16px 与原口径一致）
+ * Token 消费（CARD-SIZE-SYSTEM / ADR-214 Amendment A2）：
+ *   网格卡宽/gap   → CardGrid sizeClass="global"（DB 注入全局 --card-w / --card-gap，
+ *                    auto-fill 精确定宽 + justify-content:center 居中，列数由容器派生，D-214-A2-2）
  *   分页-网格间距  → var(--browse-pagination-mt)  48px
  *   分页项 gap     → var(--browse-pagination-gap) 8px
  *   分页按钮尺寸   → var(--browse-pagination-btn) 36px
@@ -32,7 +32,7 @@ const SKELETON_COUNT = 10
 
 function BrowseGridSkeleton() {
   return (
-    <CardGrid sizeClass="standard" data-testid="browse-grid-skeleton">
+    <CardGrid sizeClass="global" data-testid="browse-grid-skeleton">
       {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
         <Skeleton
           key={i}
@@ -115,7 +115,7 @@ export function BrowseGrid({ initialType }: BrowseGridProps) {
 
   return (
     <div>
-      <CardGrid sizeClass="standard" data-testid="browse-grid">
+      <CardGrid sizeClass="global" data-testid="browse-grid">
         {videos.map((video) => (
           <VideoCard key={video.id} video={video} interaction="navigate" />
         ))}
