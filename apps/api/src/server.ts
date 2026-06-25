@@ -29,6 +29,7 @@ import { adminCrawlerDashboardRoutes } from '@/api/routes/admin/crawlerDashboard
 import { adminDashboardRoutes } from '@/api/routes/admin/dashboard'
 import { adminExternalResourcesRoutes } from '@/api/routes/admin/external-resources'
 import { setupMetrics } from '@/api/plugins/metrics'
+import { setupVisitorCookie } from '@/api/plugins/visitorCookie'
 import { userRoutes } from '@/api/routes/users'
 import { danmakuRoutes } from '@/api/routes/danmaku'
 import { registerVerifyWorker } from '@/api/workers/verifyWorker'
@@ -167,6 +168,8 @@ async function start() {
 
   setupAuthenticate(fastify)
   setupMetrics(fastify)
+  // ADR-216 D-216-7 / STATS-03-A1：匿名 visitor 身份单一边界（须在 @fastify/cookie 注册后；fail-safe 全局 onRequest）
+  setupVisitorCookie(fastify)
 
   await fastify.register(authRoutes, { prefix: '/v1' })
   await fastify.register(videoRoutes, { prefix: '/v1' })

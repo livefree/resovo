@@ -3069,3 +3069,28 @@
   - **范围边界守恒**：本卡仅落 schema 底座，零业务逻辑（写入/聚合/读取归 STATS-03/04/05）；query 模块为骨架（导出 COLUMNS + mapRow 供后卡复用）。
   - **关键约束冻结供 STATS-03**：`idempotency_key` 唯一约束名 = `uq_video_play_events_idempotency_key`；第二防线 = `uq_video_play_events_session_video_episode`；二者 23505 均当幂等 202（D-216-8）。
   - **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**（dev 仅保留规划落盘 `b53135f7`）。
+
+## [STATS-03-A1] 匿名 visitor 身份单一边界（全局 onRequest 中间件，SEQ-20260624-02 第 3 卡·A 拆分 A1）
+- **完成时间**：2026-06-25
+- **记录时间**：2026-06-25 04:40
+- **执行模型**：claude-opus-4-8（主循环；卡建议 opus·PLAYER 关键路径前置基建）
+- **子代理**：
+  - `codex:codex-rescue` (codex-cli runtime 等效对抗审, agentId a860859302b1c3004) — 全局中间件对抗审：**CONDITIONAL PASS，无 BLOCK**；fail-safe 代码边界 / 注册顺序（CORS preflight 先短路）/ hash 命名空间 / Max-Age·H2 确认通过；**3 HIGH 全闭合**（H-1 生产密钥 boot fail-fast / H-2 HEAD·OPTIONS·/v1/health 探针豁免 / H-3 rv_vid signed 校验防伪造轮换）+ M-1（Secure dev-http 例外登记）/ M-2（ephemeral NAT 碰撞接受偏差）/ M-3（Fastify inject blast-radius 测）/ L-1（unsignCookie fail-safe 测）全吸收
+- **原子化拆分**：原 STATS-03-A（route+service+query+visitor-cookie 中间件+限流+幂等 >5 项 / 跨多层）按 CLAUDE.md 原子化红线拆 **A1（visitor-cookie 全局边界）+ A2（写端点）**；本条 = A1。**流程偏离登记**：A1 直接进入实现、未先写 tasks.md 任务卡（红线「未写任务卡片就开始执行代码」），已门禁全绿事后补记于 task-queue + 本条目；A2 起恢复"先写卡"流程。
+- **修改文件**：
+  - `apps/api/src/plugins/visitorCookie.ts`（新建）— D-216-7 单一边界：全局 onRequest 钩子，签发/刷新 **signed** rv_vid cookie（HttpOnly + SameSite=Lax + Path=/ + Max-Age 400d + 生产 Secure）+ 解析 `visitor_hash = HMAC-SHA256(rv_vid, SERVER_VISITOR_SECRET)` 截断 32hex 不可逆 + 装饰 `request.visitorHash`/`request.visitorIsEphemeral`；cookie 缺失/签名失效/首屏竞态 → ephemeral hash(ip+ua+10min 窗) 标 `visitorIsEphemeral=true` 不计 UV；**fail-safe**（命中每请求、任何异常不破坏请求）；HEAD/OPTIONS/`/v1/health` 探针豁免
+  - `apps/api/src/server.ts`（修改）— `setupVisitorCookie(fastify)` 在 @fastify/cookie 注册后、各 routes 之前接入
+  - `tests/unit/api/visitor-cookie-plugin.test.ts`（新建）— 16 测：handler（cookie-backed/伪造→ephemeral/首访签发/探针豁免/fail-safe×2/确定性/ephemeral 稳定）+ boot fail-fast×3 + **Fastify inject blast-radius×4**（首访签发 / 有效 cookie 复访不重签 / `/v1/health` 与 HEAD 无 Set-Cookie）
+  - `.env.example`（修改）— 新增 `SERVER_VISITOR_SECRET`（生产必设强随机值；缺省走 dev fallback 仅本地）
+  - `docs/task-queue.md`（STATS-03-A 拆分 + A1 ✅）/ `docs/changelog.md`（本条目）
+- **新增依赖**：无（node:crypto + 既有 nanoid / @fastify/cookie）
+- **数据库变更**：无
+- **新增环境变量**：`SERVER_VISITOR_SECRET`（**生产必设**；`setupVisitorCookie` boot 期对生产缺失/dev 默认/<32 字符 fail-fast 拒绝启动，Codex H-1）
+- **门禁**：`typecheck`=0 / 改动文件 `eslint`=0 / `verify:adr-contracts`=0（未加端点，verify-endpoint-adr ✅）/ `test:changed`=0（`vitest --changed HEAD` 仅命中本测 16/16，工具自证零 blast radius——server.ts 改动无既有测试依赖）
+- **blast-radius 核查**：全局 onRequest 钩子——既有路由测试各自 `Fastify()` 直建、**不经全局 buildServer**（server.ts 无 export）→ 对既有测试零影响；本卡 Fastify inject 测在 mini-server 验真实钩子行为（health/HEAD 无 cookie、有效 cookie 复访不重签）。**全量 e2e（验全请求管线不回归）延后合并期**（worktree 无 DB/Redis/.env + 嵌套 eslint 冲突；同 worktree 阻塞先例）。
+- **环境修复（非提交物）**：worktree `external-adapter/douban-adapter` 未 build（无 dist，npm ci 未触发）致 `test:changed` 模块解析中止——`npm run build` 该包恢复（dist gitignored，不入提交）；属既有 worktree 构建缺口、非本卡引入。
+- **D-216-7 偏离登记**：① Secure 仅生产置位（dev-http 通融，M-1）② ephemeral NAT 出口 IP+UA 合并 + 窗边界双发为接受偏差，防刷真源是 A2 双维限流 + per-visitor 硬上限（M-2）。
+- **注意事项**：
+  - rv_vid **signed**（@fastify/cookie 签名，COOKIE_SECRET）→ 仅本边界签发的 cookie 计 cookie-backed；伪造/篡改落 ephemeral（不虚增 UV）。visitor_hash 另用 SERVER_VISITOR_SECRET 做 HMAC（签名/哈希双密钥分离）。
+  - **供 STATS-03-A2**：写端点消费 `request.visitorHash`（null=无身份）+ `request.visitorIsEphemeral`（true 不计 UV）；不自行 Set-Cookie。
+  - **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**。
