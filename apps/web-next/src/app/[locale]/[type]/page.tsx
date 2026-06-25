@@ -1,5 +1,4 @@
 import { notFound } from 'next/navigation'
-import { getTranslations } from 'next-intl/server'
 import { PageTransition } from '@/components/primitives/page-transition/PageTransition'
 import { CategoryFilterBar } from '@/components/browse/CategoryFilterBar'
 import { BrowseGrid } from '@/components/browse/BrowseGrid'
@@ -24,25 +23,6 @@ export async function CategoryPageContent({
   const videoType = VALID_TYPES[type]
   if (!videoType) notFound()
 
-  const t = await getTranslations({ locale, namespace: 'nav' })
-
-  // 分类标题映射
-  const TYPE_LABELS: Record<string, string> = {
-    movie:        t('catMovie'),
-    series:       t('catSeries'),
-    anime:        t('catAnime'),
-    tvshow:       t('catVariety'),
-    documentary:  t('catDocumentary'),
-    short:        t('catShort'),
-    sports:       t('catSports'),
-    music:        t('catMusic'),
-    news:         t('catNews'),
-    kids:         t('catKids'),
-    other:        t('catOther'),
-  }
-
-  const typeLabel = TYPE_LABELS[type] ?? type
-
   return (
     <PageTransition transitionKey={type} variant="sibling">
       {/* HANDOFF-15: max-w-page(1280px) + px-6(24px) + pt-8(32px) + pb-20(80px) — spec §12.1 */}
@@ -50,21 +30,8 @@ export async function CategoryPageContent({
         className="max-w-page mx-auto w-full px-6"
         style={{ paddingTop: '32px', paddingBottom: '80px' }}
       >
-        {/* 标题区 — spec §12.2 */}
-        <div style={{ marginBottom: '24px' }}>
-          <h1
-            style={{
-              fontSize: '24px',
-              fontWeight: 700,
-              color: 'var(--fg-default)',
-              letterSpacing: '-0.02em',
-            }}
-          >
-            {typeLabel}
-          </h1>
-        </div>
-
-        {/* 统一筛选区 — 5 维（type 行显示全类型 + 与顶部导航双向联动，HANDOFF-40B） */}
+        {/* 统一筛选区 — 5 维（type 行显示全类型 + 与顶部导航双向联动，HANDOFF-40B）。
+            分类标题已移除——筛选区 type 行已承载当前分类高亮（用户 2026-06-24）。 */}
         <div style={{ marginBottom: '24px' }}>
           <CategoryFilterBar locale={locale} videoType={videoType} />
         </div>
