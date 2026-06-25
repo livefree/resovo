@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import { usePlayerStore } from '@/stores/playerStore'
 import { apiClient } from '@/lib/api-client'
+import { createQualifiedPlayDetector, reportVideoPlayEvent } from '@/lib/play-stats'
 import { extractShortId } from '@/lib/short-id'
 import { buildEpisodeUrl } from '@/lib/episode-url'
 import { getVideoDetailHref } from '@/lib/video-route'
@@ -223,14 +224,52 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
   const videoIdRef = useRef<string | null>(video?.id ?? null)
   videoIdRef.current = video?.id ?? null
 
+  // STATS-03-B（ADR-216）：full 播放器 Qualified Play 上报。
+  // detector 累计真实观看时长（排除 seek/续播跳跃）；reportedRef 同步去重（防 async 竞态/请求风暴，Codex HIGH-2）。
+  const playDetectorRef = useRef(createQualifiedPlayDetector())
+  const playReportedRef = useRef<Set<string>>(new Set())
+
+  const maybeReportQualifiedPlay = useCallback(
+    (currentTime: number, duration: number) => {
+      // preview 守卫（沿用现有 feedback 上报同范式）；无 shortId 不上报
+      if (!isPlaybackFeedbackEnabled(previewMode) || !shortId) return
+      const { watchSeconds, qualified } = playDetectorRef.current.track(
+        currentTime,
+        duration > 0 ? duration : null,
+      )
+      if (!qualified) return
+      const sessionId = usePlayerStore.getState().ensurePlaySessionId(shortId)
+      const dedupeKey = `${sessionId}|${shortId}|${currentEpisode}`
+      if (playReportedRef.current.has(dedupeKey)) return
+      playReportedRef.current.add(dedupeKey) // 同步写入，after-await 不再重复发起
+      const sourceId = activeLineRef.current?.episodes.get(currentEpisode)?.id ?? null
+      void reportVideoPlayEvent(apiClient, {
+        shortId,
+        sourceId,
+        episodeNumber: currentEpisode, // 前端口径统一（line-matrix 归一，电影=1）
+        playSessionId: sessionId,
+        watchSeconds,
+        durationSeconds: duration > 0 ? duration : null,
+        locale,
+      })
+    },
+    [previewMode, shortId, currentEpisode, locale],
+  )
+
   const handleTimeUpdate = useCallback(
     (t: number, d: number) => {
       setCurrentTime(t)
       setDuration(d)
       if (t > 0 && shortId) saveProgress(shortId, currentEpisode, t)
+      maybeReportQualifiedPlay(t, d)
     },
-    [setCurrentTime, setDuration, shortId, currentEpisode]
+    [setCurrentTime, setDuration, shortId, currentEpisode, maybeReportQualifiedPlay]
   )
+
+  // STATS-03-B：切集 / 切视频重置观看累计（新的 qualified 判定窗口；reportedRef 不清——key 含 session|short|ep 自然隔离）
+  useEffect(() => {
+    playDetectorRef.current.reset()
+  }, [currentEpisode, shortId])
 
   const handleTheaterChange = useCallback(
     (theater: boolean) => {

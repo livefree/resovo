@@ -3115,3 +3115,24 @@
 - **延后合并期**：公共端点不被 `verify:endpoint-adr` 覆盖（ADR-216 §契约门禁，靠端点测 + 文字契约守护）；全链路 e2e（真实 DB/Redis 限流·cookie·幂等）延后（worktree 无 DB/Redis/.env）。
 - **关键约束（供 STATS-04 聚合）**：events 表 ingested_at 显式写入；rate-limit/marker 仅 Redis、不入计数真源；聚合仍只读 `aggregated_at IS NULL` raw events。
 - **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**（dev 仅保留规划落盘 `b53135f7`）。
+
+## [STATS-03-B] 前端 Qualified Play 上报 helper + PlayerShell/MiniPlayer 双接入（SEQ-20260624-02 第 3 卡·B）
+- **完成时间**：2026-06-25
+- **记录时间**：2026-06-25
+- **执行模型**：claude-opus-4-8（卡建议 opus·PLAYER 关键路径）
+- **子代理**：
+  - Codex 对抗审（`codex exec` codex-cli 0.125.0，任务卡落盘后实现前，task-queue 行 3193 要求）— **2 BLOCK + 3 HIGH + 3 MEDIUM + 1 LOW 全吸收**：① BLOCK preview 守卫（现网 preview 未接线、无 `previewMode={true}` 消费方）→ 沿用现有 feedback 上报同范式保持一致、接线缺口登记 follow-up（下沉 host state 超本卡范围）② BLOCK `watchSeconds=floor(currentTime)` 误判（断点续播/seek 即 qualified）→ `createQualifiedPlayDetector` 累计**真实观看时长**（正向小增量、排除 seek/续播跳跃）③ HIGH session 生命周期未闭环 → `ensurePlaySessionId` 集中收敛（prev.shortId 原子比较，覆盖 initPlayer/enter/hydrate 全路径）④ HIGH async sha256 去重竞态 → 跨阈值**同步**写 reportedRef 再 await ⑤ HIGH mini 接入点写错（真实 timeupdate 在 `useMiniPlayerVideo` 非 `MiniPlayer.tsx`，且丢 matched source id）→ 改接 hook + 补存 source id ⑥ MEDIUM crypto 能力检测 ⑦ MEDIUM episode 口径统一用 currentEpisode ⑧ MEDIUM 注释式 fire-and-forget catch ⑨ LOW 字段边界明确
+- **修改文件**：
+  - `apps/web-next/src/lib/play-stats.ts`（新建）— 共享 helper 单一真源：阈值常量（`QUALIFIED_PLAY_MIN_SECONDS=20`/`SHORT_MEDIA_MAX_SECONDS=25`/`SHORT_MEDIA_QUALIFY_RATIO=0.8`/`QUALIFIED_PLAY_EVENT_TYPE`，与 API service 同名，D-216-1）+ `buildPlaySessionId`（crypto.getRandomValues 24-hex，命中 zod min16/max32）+ `isQualifiedPlay({watchSeconds,duration})` + `createQualifiedPlayDetector`（真实观看时长累加器、排除 seek）+ `buildPlayEventIdempotencyKey`（async Web Crypto sha256，D-216-8 公式 + 能力检测）+ `reportVideoPlayEvent`（依赖注入 apiClient、fire-and-forget catch、不绕过 apiClient）
+  - `apps/web-next/src/stores/playerStore.ts`（修改）— 加 `playSessionId`/内部 `playSessionShortId` + `ensurePlaySessionId(shortId)` action（同 shortId 复用·变化换新·hydrate 恢复 mini = 新会话语义）；`releaseMiniPlayer` 清空 session
+  - `apps/web-next/src/components/player/PlayerShell.tsx`（修改）— full 接入：`handleTimeUpdate` 内 detector.track → qualified 同步去重 + fire-and-forget 上报；复用 `isPlaybackFeedbackEnabled(previewMode)` 守卫；切集/切视频 detector.reset
+  - `apps/web-next/src/app/[locale]/_lib/player/useMiniPlayerVideo.ts`（修改）— mini 接入（HIGH-3 正确点）：补存 matched `VideoSource.id`；`handleVideoTimeUpdate` 节流块内 detector + 同步去重 + 上报；mini 天然非 preview（preview 不 enter host）
+  - `tests/unit/web-next/play-stats.test.ts`（新建，17 测）— isQualifiedPlay 阈值/短媒体比例/duration null + detector（逐 tick 累加·**排除 seek 大跳跃**·断点续播不计起点·跨阈值 qualified·reset）+ playSessionId 长度命中 16–32 + idempotencyKey 确定性同输入同值/64hex/null↔0 归一/不同输入不同值 + reportVideoPlayEvent（端点路径·字段·watchSeconds 取整·可选字段省略·**post 抛错被吞不影响播放**）
+  - `docs/task-queue.md`（STATS-03-B 🔄→✅）/ `docs/tasks.md`（删卡）/ `docs/changelog.md`（本条目）
+- **新增依赖**：无（浏览器原生 `crypto.subtle`/`getRandomValues`，零新 npm 包；web-next 无 nanoid 故用原生）
+- **数据库变更**：无
+- **门禁**：`typecheck`=0（root + 6 workspace）/ 改动 4 文件 `eslint` clean（worktree 全量 `npm run lint` 失败为 worktree 嵌套父仓库 `.eslintrc` `resovo` 插件 cascade 冲突——环境 artifact，server-next 同失败为证；临时 root:true 隔离验证我的文件 EXIT=0 后还原）/ `test:changed`=0（16 文件 **150 测**全过，含 MiniPlayer 41 + player-shell 全套〔on-error/success-report/hydration/preview-mode/episode-url-sync〕回归 + play-stats 17）/ `verify:adr-contracts`=0
+- **延后合并期**：**PLAYER e2e 回归**（断点续播/线路切换/影院/字幕）——worktree 无 `.env.local` + eslint cascade，:3000 在跑为原仓库代码（复用无意义）；改动为 onTimeUpdate 末尾 fire-and-forget 上报、未触碰播放交互逻辑、单测已强覆盖回归（同 STATS-02 worktree 阻塞先例）
+- **遗留 follow-up（登记）**：① preview 禁写统计接线缺口（ADR-160 D-160-5 既有 tech debt，非本卡引入）② referrerPath v1 暂未采集 ③ full/mini detector 独立累计（已知接受偏差：playSessionId 共享 → 不双计〔后端幂等〕、不漏计〔任一实例达阈值即报〕；`full<20s 即切 mini` 场景 watchSeconds 仅单实例累计、略低估真实总时长，跨实例精确累加留 amendment）
+- **关键约束（供 STATS-04/05）**：watch_seconds 为单事件观看信号（非精确总时长）；前端口径 episodeNumber=currentEpisode（line-matrix 归一、电影=1）；idempotency_key 前端确定性构造、后端原样存
+- **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**
