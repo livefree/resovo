@@ -3046,3 +3046,26 @@
   - **关键决策冻结**（实现卡必守）：① hot_score 按窗口**全量重算**（数据源 hourly 表、非增量累加，Codex BLOCK）② occurred_at **非对称容差**（过去 −30min / 未来 +2min）+ 窗口查询 `bucket_hour ≤ now()`（Codex HIGH）③ 统计写端点限流 **fail-closed**（Codex HIGH）④ ephemeral visitor 用 `visitor_is_ephemeral` 列区分、不计 UV（arch H1）⑤ 错误码对齐现网（`422 VALIDATION_ERROR` / `404 NOT_FOUND`，arch B2）⑥ 公共端点**不被** `verify:endpoint-adr` 覆盖、靠 STATS-03-A 端点测试守护（arch B1）。
   - STATS schema 从 migration **128** 起（127 已被 `127_video_sources_audio_language_index` 占用）。
   - 分支 `stats-01-adr`（从 dev `d2c0cc71` 拉），完成后合回 dev。
+
+## [STATS-02-SCHEMA] migration 128 视频级播放统计 schema 底座（SEQ-20260624-02 第 2 卡）
+- **完成时间**：2026-06-25
+- **记录时间**：2026-06-25 03:51
+- **执行模型**：claude-opus-4-8（主循环；卡建议 opus·schema + hot-score 真源。ADR-216 schema 已 Opus arch-reviewer + Codex 双审冻结，本卡为忠实实现非新架构决策，未另起 Opus 设计代理）
+- **子代理**：
+  - `codex:codex-rescue` (codex-cli runtime 等效对抗审, agentId a71caf78a41b916e0) — 任务卡 + 具体 DDL/类型/集成测对抗审：**CONDITIONAL PASS，无 BLOCK**；A/B/D/E 维度（DDL 忠实度 / mapRow 类型转换 / schema 设计 / 范围边界）确认通过；吸收 1 MEDIUM（`idempotency_key` 唯一约束**显式命名** `uq_video_play_events_idempotency_key` 供 STATS-03 精确捕获 `err.constraint`）+ 2 HIGH/1 MEDIUM/1 LOW（集成测断言精确化：`pg_get_indexdef`/`pg_get_expr(indpred)`/`pg_get_constraintdef`/FK `confdeltype`，防 schema 漂移假阳性）
+- **修改文件**：
+  - `apps/api/src/db/migrations/128_video_play_stats.sql`（新建）— 6 表：`video_play_events`（append-only 真源，双唯一防线〔`uq_video_play_events_idempotency_key` 显式命名 + `uq_video_play_events_session_video_episode` null-safe `COALESCE(episode_number,0)`〕 + `visitor_is_ephemeral BOOLEAN NOT NULL DEFAULT false` + `event_type CHECK IN ('qualified_play')` + pending partial/video_time/occurred_at 索引 + FK video_id CASCADE·source_id/user_id SET NULL）/ `video_play_hourly`/`video_play_daily`/`video_play_daily_visitors`〔bucket_date 清理索引〕/`video_play_totals`/`video_hot_scores`〔NUMERIC hot_score + 嵌套窗口计数〕
+  - `packages/types/src/video-play-stats.types.ts`（新建）+ `packages/types/src/index.ts`（导出）— 6 域类型 camelCase
+  - `apps/api/src/db/queries/videoPlayStats.ts`（新建，**骨架**）— Db 行类型 + COLUMNS（timestamptz/date `::TEXT`）+ mapRow（BIGINT/NUMERIC `parseInt`/`Number`）；写入/聚合/读取查询函数留 STATS-03/04/05
+  - `tests/integration/api/video-play-stats-schema.test.ts`（新建）— schema 集成测，只读 catalog 精确断言（独立 integration config，不入 test:changed）
+  - `docs/architecture.md` — §5.20 视频级播放量统计体系 schema 同步
+  - `docs/task-queue.md`（STATS-02 ⬜→✅）/ `docs/tasks.md`（删卡）/ `docs/changelog.md`（本条目）
+- **新增依赖**：无
+- **数据库变更**：migration **128**（6 表 + 索引 + 约束）；**冷启动延后合并期**（worktree 无 `.env.local`，按「不合 dev」隔离意图不动 live dev 库，同 CARD-SIZE-A1A2-GATE / IMGH-P4-A worktree 阻塞先例）
+- **门禁**：`typecheck`=0（root + 6 workspace）/ 改动文件 `eslint`=0（`npm run lint` 聚合受 worktree 嵌套父仓库 `.eslintrc` `resovo` 插件冲突阻塞——环境artifact、命中未触碰的 web-next/server-next，顶层检出区不触发）/ `verify:adr-contracts`=0（`verify-endpoint-adr` ✅ 未加 admin 端点、`verify-sql-schema-alignment` ✅）/ `test:changed` **零回归**（升全量 8262 测；121 失败全为既有 worktree 环境失败〔Fastify app 夹具 undefined + `douban-adapter` 工作区包解析〕，`moderationBatch` 已 stash 验证 pristine HEAD 同失败、与本卡无关）
+- **延后合并期**：① migration 128 冷启动 ② schema 集成测执行（需 DB migrate ≥128 + DATABASE_URL；测试文件本卡已写并强化、就绪）③ `npm run lint` 聚合（非嵌套检出区运行）
+- **时序说明**：Codex 卡审在实现后、commit 前执行（覆盖卡 + 具体 DDL/类型/集成测，信号高于抽象计划），满足 workflow-rules「非代码产物落盘后、定稿 commit 前」原则。
+- **注意事项**：
+  - **范围边界守恒**：本卡仅落 schema 底座，零业务逻辑（写入/聚合/读取归 STATS-03/04/05）；query 模块为骨架（导出 COLUMNS + mapRow 供后卡复用）。
+  - **关键约束冻结供 STATS-03**：`idempotency_key` 唯一约束名 = `uq_video_play_events_idempotency_key`；第二防线 = `uq_video_play_events_session_video_episode`；二者 23505 均当幂等 202（D-216-8）。
+  - **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**（dev 仅保留规划落盘 `b53135f7`）。
