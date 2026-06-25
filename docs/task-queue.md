@@ -6,7 +6,7 @@
 > source_of_truth: yes
 > supersedes: none
 > superseded_by: none
-> last_reviewed: 2026-05-23
+> last_reviewed: 2026-06-24
 >
 > 用途：提前规划多个任务序列，避免”走一步看一步”；同时作为 BLOCKER/PHASE COMPLETE 通知的写入位置。
 > 关系：本文件负责”任务规划 + 状态追踪 + 通知”；`docs/tasks.md` 负责”当前单任务工作台（完成即清空）”；`docs/changelog.md` 负责”完成历史日志”。
@@ -3179,3 +3179,21 @@
 - **强制 Opus**：HANDOFF-37 taxonomy 出口 + FilterArea/GridSortBar Props 契约（新共享 API + 跨 4 消费方）→ arch-reviewer 定稿。
 - **lang 音频聚合**：`audio_language` 在 sources 层（Migration 112），按「任一 source 命中」EXISTS 子查询；NULL=未知不命中（HANDOFF-38 需 Opus 复核 SQL）。
 - **类型行不锁定**：分类/搜索页均显示全类型，点 type 与顶部导航双向联动（分类页 = 路由跳转）；`lockedDims` 取消。
+
+---
+
+## [SEQ-20260624-03] 文档治理 T1 — README 索引全面更新 + 退役口吻对齐（doc-governance 规范例跑）
+
+- **状态**：✅ 已完成
+- **创建时间**：2026-06-24 23:55
+- **最后更新时间**：2026-06-24 23:55
+- **目标**：清理 README 索引过期信息（decisions ADR 范围 / 活跃设计文档列表 / audit 台账 / admin-module-template 退役口吻），刷新各活文档 last_reviewed。
+- **范围**：docs only（README.md / tasks.md / task-queue.md / changelog.md），零业务代码、**零 git mv 归档**（盘点判定无符合 14 天窗口候选）。
+- **依赖**：无（用户指令插队，T1 阶段收尾；先例 SEQ-20260610-01）
+
+### 任务列表
+
+1. CHORE-DOCS-CLEANUP-20260624 — README 索引更新 + last_reviewed 刷新（状态：✅）
+   - 创建时间：2026-06-24 23:55
+   - 完成时间：2026-06-24 23:55
+   - 验收要点：README §1/§2/§4 过期项修正；活区零真实断链确认；归档判定无候选（本轮零 git mv）；verify:docs-format 无新增问题。完成备注见 changelog [CHORE-DOCS-CLEANUP-20260624]。

@@ -6,7 +6,7 @@
 > source_of_truth: yes
 > supersedes: none
 > superseded_by: none
-> last_reviewed: 2026-06-18
+> last_reviewed: 2026-06-24
 
 > 本文件仅记录 SEQ-20260613-01（META-24）及以后的活跃变更。
 > 历史 changelog 已分段归档（四段）：
@@ -2999,3 +2999,28 @@
   - **audio_language 列无 CHECK 约束**（migration 112 TEXT NULL，封闭性靠应用层 SourceLanguageResolver/ADR-199 D-199-2）：理论脏值（非枚举音频语言）会进 audio_langs 数组，但因 route z.enum 收窄不可达 → 无召回风险（死数据）。Opus 建议 reindex 时可附 `SELECT DISTINCT audio_language ... NOT IN (枚举)` 健康检查日志（非阻塞，未实装）。
   - subtitle_langs 与 audio_langs 数据血缘不同（前者 ES 取自 `subtitles` 表，后者取自 `video_sources.audio_language`），二者正交，本卡不触碰 subtitle 逻辑。
   - **SEQ-20260624-01 全交付**（37/38/39/40A/40B/41 ✅）：分类/搜索两页统一筛选区主体 + ES lang 音频对齐收口完成。
+
+---
+
+## [CHORE-DOCS-CLEANUP-20260624] 文档治理 T1：README 索引全面更新 + 退役口吻对齐（SEQ-20260624-03）
+- **完成时间**：2026-06-24
+- **记录时间**：2026-06-24 23:56
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无
+- **触发**：用户指令「整理项目文档，清理过期信息，更新关键信息」插队（doc-governance T1·阶段收尾，先例 SEQ-20260610-01）
+- **盘点结论（Step 1 / 4 / 5）**：
+  - **引用健康（Step 5）**：活区 R1/R2 断链扫描 **零真实断链**——R1 报的 `docs/manual/` 内 `./P-*.md` / `./W*.md` / Picker 文件全部实际存在，系治理脚本对相对路径（`./`、`../`）解析的局限（仅查 `$p` 与 `docs/$p`，不含源文件目录），非文档错误。
+  - **活文档行数（T5）**：task-queue 3181 行 / changelog 活跃段约 2900 行，均 < 4000 行阈值 → 不触发分段归档。
+  - **归档判定（Step 1 + §4）**：`docs/designs/` 14 份方案文档**无符合归档窗口候选**——`videos-sources-responsibility-redesign_20260601` 虽 ≥14 天但被 decisions.md 引用作 ADR 定档输入（保留）；`moderation-console-ux-plan_20260610`（SEQ-20260610-03 ✅ 2026-06-11）距今 13 天差 1 天未满窗口（保留）；其余均 <14 天或有活跃 SEQ/follow-up（保留）。**本轮零 git mv**。
+  - **冲突检测（Step 4·K3）**：README §4 第 6 条 `admin-module-template.md` 仍以「含 v1 冻结章 + v2 真源章」现行口吻描述，与 CLAUDE.md「v1 已退役」声明不一致 → 已修正为退役标注。
+- **修改文件**：
+  - `docs/README.md` — §1 第 3 条 decisions ADR 范围 `100..180`→`100..215`；§1 第 6 条 task-queue 活跃序列范围补至最新 `SEQ-20260624-02`；§2 第 4 条活跃设计文档列表补全 6 份缺失（notification-task-log / moderation-console / source-health-feedback-loop / metadata-source-ux / image-health ×2）+ 更新 client-video-card-sizing-audit 状态（卡片尺寸体系已落地合并 `01b32abf`）+ videos-sources 标注 decisions 引用保留 + 补 design_reference_v2.1 stub 说明；§2 第 5 条 audit 台账补 4 份（admin-cutover-parity / cross-season-merge / identity-recall-grayzone / metadata-enrichment）+ 新增 §2 第 6 条 research 调研纪要 2 份；§4 第 6 条 admin-module-template 补退役标注（K3 修复）；last_reviewed 6-18→6-24
+  - `docs/tasks.md` — last_reviewed 6-06→6-24
+  - `docs/task-queue.md` — last_reviewed 5-23→6-24；尾部追加 SEQ-20260624-03 序列卡
+  - `docs/changelog.md` — last_reviewed 6-18→6-24；本条目
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本轮纯索引更新，零归档 / 零 git mv；下轮治理（≥2026-06-25）`moderation-console-ux-plan_20260610` 满 14 天可进归档判定。
+  - `verify:docs-format` 残留（非本轮引入，存量债务）：[4] 23 项 frontmatter 缺失全在 `docs/archive/**`（历史快照，doc-governance §6 禁改 archive 内容）；[5] README 主题判重（`manual/README.md` 与 `docs/README.md` 同名不同 scope）为按文件名判重的误报，二者 scope 正交（manual navigation vs docs navigation），不修。
+  - dev working tree 有未提交的 `video-play-stats-structure_20260624.md`（位于 `docs/designs/`，SEQ-20260624-02 进行中产物，未合并 main）→ 本轮 worktree 基于 main 不含该文件，README 活跃设计列表暂未纳入，待该序列合并后由其登记。
