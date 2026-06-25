@@ -58,4 +58,11 @@ export interface GridSortBarProps {
   readonly total?: number
   /** 总数文案 i18n key，约束在 filter 命名空间（分类页/搜索页各一）。 */
   readonly totalLabelKey?: 'filter.countCategory' | 'filter.countSearch'
+  /**
+   * 页面模式，承载排序「无 ?sort= 时默认高亮」差异（与 FilterAreaProps.mode 对齐）：
+   *   'category'（默认）— 无 ?sort= 时高亮 DEFAULT_SORT(latest)，即后端分类默认排序；选 latest 删 param 回默认。
+   *   'search'         — 无 ?sort= 时不高亮任何按钮（relevance 为搜索隐式默认、无对应按钮）；选任何排序均显式写 param 高亮。
+   * 修复「搜索页高亮 latest 但后端按 relevance 排」的前后端默认不一致（HANDOFF-40B 已知项收口）。
+   */
+  readonly mode?: 'category' | 'search'
 }

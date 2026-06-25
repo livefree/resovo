@@ -53,17 +53,22 @@ function SortButton({ value, label, isActive, onClick }: SortButtonProps) {
 
 // ── GridSortBar ───────────────────────────────────────────────────────────────
 
-export function GridSortBar({ total, totalLabelKey }: GridSortBarProps) {
+export function GridSortBar({ total, totalLabelKey, mode = 'category' }: GridSortBarProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const t = useTranslations()
 
-  const activeSort: SortOption = (searchParams.get('sort') as SortOption | null) ?? DEFAULT_SORT
+  // category：无 ?sort= 时高亮 DEFAULT_SORT(latest)，与后端分类默认排序一致。
+  // search：无 ?sort= 时不高亮任何按钮（relevance 是搜索隐式默认、无对应按钮）—— 消除
+  //         「UI 高亮 latest 但后端按 relevance 排」的前后端默认不一致（HANDOFF-40B 已知项）。
+  const activeSort: SortOption | null =
+    (searchParams.get('sort') as SortOption | null) ?? (mode === 'search' ? null : DEFAULT_SORT)
 
   function selectSort(value: SortOption) {
     const next = new URLSearchParams(searchParams.toString())
     next.delete('page')
-    if (value === DEFAULT_SORT) next.delete('sort')
+    // category 选 DEFAULT_SORT 删 param 回后端默认；search 无隐式 latest 默认，选任何排序均显式写 param。
+    if (mode !== 'search' && value === DEFAULT_SORT) next.delete('sort')
     else next.set('sort', value)
     router.push('?' + next.toString())
   }

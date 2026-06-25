@@ -67,6 +67,26 @@ describe('GridSortBar（网格排序条，HANDOFF-39）', () => {
     expect(screen.getByTestId('sort-rating').getAttribute('aria-checked')).toBe('true')
   })
 
+  it('search 模式：无 ?sort= 时不高亮任何按钮（relevance 隐式默认，消前后端不一致）', () => {
+    render(<GridSortBar mode="search" />)
+    expect(screen.getByTestId('sort-latest').getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByTestId('sort-hot').getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByTestId('sort-rating').getAttribute('aria-checked')).toBe('false')
+  })
+
+  it('search 模式：点 latest 显式写 ?sort=latest（不删 param，保高亮）', () => {
+    render(<GridSortBar mode="search" />)
+    fireEvent.click(screen.getByTestId('sort-latest'))
+    const url = mockPush.mock.calls[0][0] as string
+    expect(url).toContain('sort=latest')
+  })
+
+  it('search 模式：有 ?sort= 时正常高亮（与 category 一致）', () => {
+    mockSearchParams.set('sort', 'hot')
+    render(<GridSortBar mode="search" />)
+    expect(screen.getByTestId('sort-hot').getAttribute('aria-checked')).toBe('true')
+  })
+
   it('total + totalLabelKey 提供时渲染计数', () => {
     render(<GridSortBar total={42} totalLabelKey="filter.countSearch" />)
     const count = screen.getByTestId('grid-sort-count')
