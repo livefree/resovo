@@ -3184,9 +3184,9 @@
 
 ## [SEQ-20260624-02] VIDEO-PLAY-STATS — 视频级播放量统计 + 热度排序 + 后台趋势分析
 
-- **状态**：🟡 规划中
+- **状态**：🔄 执行中
 - **创建时间**：2026-06-24 22:49
-- **最后更新时间**：2026-06-24 22:49
+- **最后更新时间**：2026-06-25（STATS-01-ADR 起草启动）
 - **目标**：建立 Resovo 视频级播放量统计体系，覆盖匿名播放事件、累计总数、时间趋势、跨前台/搜索一致热度排序与后台运营分析。
 - **范围**：`apps/api` public write/read route + service + DB queries、`apps/worker` 批量聚合、`apps/web-next` 播放器上报与展示、Elasticsearch 索引同步、`server-next` 后台 analytics。**不复用** `/feedback/playback` source-health 信号；**不把** `watch_history` 当视频播放量真源。
 - **来源**：`docs/designs/video-play-stats-structure_20260624.md`（方案合并稿，已吸收 P0/P1/P2 复核意见）。
@@ -3197,7 +3197,7 @@
 
 | 卡 | 状态 | 内容 | 范围项 | 建议模型 | 依赖 | 门禁 |
 |---|---|---|---|---|---|---|
-| **STATS-01-ADR** | ⬜ 待开始 | 起草并定稿视频播放统计 ADR：Qualified Play 阈值、匿名 visitor cookie 归属、确定性 `idempotency_key` 公式、`UNIQUE(play_session_id, video_id, COALESCE(episode_number,0))` 第二防线、`occurred_at` 服务端 clamp 策略、hot-score 物化表、ES 同步策略、retention、`watch_history` 边界、admin endpoint 独立 ADR 门禁。 | docs | **opus** | 无 | ADR Accepted；arch-reviewer (Opus) PASS；Codex 对抗审 BLOCK 全处理；明确 Open Decision 1-10；不写实现代码。 |
+| **STATS-01-ADR** | ✅ 已完成（ADR-216 **Accepted** 2026-06-25；arch-reviewer Opus CONDITIONAL PASS + Codex 对抗审 1B/2H/2M/1L 全处理） | 起草并定稿视频播放统计 ADR：Qualified Play 阈值、匿名 visitor cookie 归属、确定性 `idempotency_key` 公式、`UNIQUE(play_session_id, video_id, COALESCE(episode_number,0))` 第二防线、`occurred_at` 服务端 clamp 策略、hot-score 物化表、ES 同步策略、retention、`watch_history` 边界、admin endpoint 独立 ADR 门禁。 | docs | **opus** | 无 | ADR Accepted；arch-reviewer (Opus) PASS；Codex 对抗审 BLOCK 全处理；明确 Open Decision 1-10；不写实现代码。 |
 | **STATS-02-SCHEMA** | ⬜ 待开始 | migration 127/128：创建 `video_play_events` / `video_play_hourly` / `video_play_daily` / `video_play_daily_visitors` / `video_play_totals` / `video_hot_scores`；补 pending/time/date/hot 索引；`video_play_daily_visitors(bucket_date)` 清理索引；新增 DB query 模块骨架与类型；同步 `docs/architecture.md`。 | DB/types/docs ≤5 | **opus**（schema + hot-score 真源） | STATS-01 Accepted | migration 冷启动；schema 集成测；`verify:adr-contracts`；`architecture.md` §schema 同步；测试覆盖两个唯一约束存在与 `occurred_at` trusted 字段约束。 |
 | **STATS-03-A-WRITE-ENDPOINT** | ⬜ 待开始 | `POST /videos/:id/play-events`：route 只校验并返回 `202`；service 解析 short_id、校验公开可见与 source、消费 middleware visitor_hash、hash IP/UA、clamp `occurredAt`、visitor+IP 双维限流、幂等插入。命中 `idempotency_key` 或 session/video/episode 任一唯一约束均视为幂等成功，不得 500。 | API route/service/queries ≤5（跨 2 层，契约闭环） | **opus** | STATS-02 | route/service/query 单测；重复 `idempotency_key` 返回 202 且不二插；同 session/video/episode 但不同 key 返回 202 且不 500；恶意未来/远古 `occurredAt` 被 clamp/回退；匿名路径不访问 `users`；visitor+IP rate-limit 命中；`verify:endpoint-adr` 公共端点对齐。 |
 | **STATS-03-B-PLAYER-REPORTING** | ⬜ 待开始 | 前端上报 helper：`buildPlaySessionId`、确定性 `buildPlayEventIdempotencyKey`、`isQualifiedPlay`、`reportVideoPlayEvent(apiClient)`；`PlayerShell` 主接入，复用 `previewMode` 写保护；mini-player 仅在能独立跨 qualified threshold 时接入；失败不影响播放。 | web-next player/helper/tests ≤5 | **opus**（PLAYER 关键路径） | STATS-03-A 契约冻结 | helper 单测；`PlayerShell` preview 不上报；同 play_session/video/episode 只上报一次；source 切换不单独计数；PLAYER e2e 回归；不得绕过 `apiClient`。 |

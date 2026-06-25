@@ -3024,3 +3024,25 @@
   - 本轮纯索引更新，零归档 / 零 git mv；下轮治理（≥2026-06-25）`moderation-console-ux-plan_20260610` 满 14 天可进归档判定。
   - `verify:docs-format` 残留（非本轮引入，存量债务）：[4] 23 项 frontmatter 缺失全在 `docs/archive/**`（历史快照，doc-governance §6 禁改 archive 内容）；[5] README 主题判重（`manual/README.md` 与 `docs/README.md` 同名不同 scope）为按文件名判重的误报，二者 scope 正交（manual navigation vs docs navigation），不修。
   - dev working tree 有未提交的 `video-play-stats-structure_20260624.md`（位于 `docs/designs/`，SEQ-20260624-02 进行中产物，未合并 main）→ 本轮 worktree 基于 main 不含该文件，README 活跃设计列表暂未纳入，待该序列合并后由其登记。
+
+---
+
+## [STATS-01-ADR] ADR-216 起草定稿：视频级播放量统计体系（SEQ-20260624-02 第 1 卡）
+- **完成时间**：2026-06-25
+- **记录时间**：2026-06-25 02:57
+- **执行模型**：claude-opus-4-8（主循环；撰写即将成为 ADR 的决策文档，CLAUDE.md 强制 Opus 路由）
+- **子代理**：
+  - `arch-reviewer` (claude-opus-4-8, agentId a17bf370fb4489a22) — ADR-216 独立架构评审：CONDITIONAL PASS，2 BLOCKER + 3 HIGH + 3 MEDIUM + 2 LOW（L2 确认通过）全吸收
+  - `codex:codex-rescue` (codex-cli 0.125.0 runtime 等效对抗审, agentId a84f77e18db6811cc) — Codex 对抗独立审核：1 BLOCK + 2 HIGH + 2 MEDIUM + 1 LOW 全处理（`/codex:adversarial-review` 配 disable-model-invocation 不可自动触发，自动模式走 codex-rescue 等效，同 ADR-214 先例）
+- **修改文件**：
+  - `docs/decisions.md` — 新增 ADR-216（**Accepted**）：逐条决议 Open Decision 1–10（Qualified Play 阈值 / today·week·month 语义 / hot_score 公式 + 滑窗全量重算 / ES 同步 / user_id 边界 / retention / 匿名 visitor cookie / idempotency 双防线 / occurred_at 非对称容差 / batch 调度）+ 公共写端点 `POST /videos/:id/play-events` 契约 + 契约门禁说明 + schema 起号 128 + watch_history 边界 + 双评审记录
+  - `docs/task-queue.md` — SEQ-20260624-02 状态 🟡→🔄；STATS-01-ADR ⬜→✅
+  - `docs/tasks.md` — 删除 STATS-01-ADR 进行中卡（完成即删）
+  - `docs/changelog.md` — 本条目
+- **新增依赖**：无
+- **数据库变更**：无（纯决策文档；schema 实现归 STATS-02，从 migration 128 起）
+- **注意事项**：
+  - **ADR 序号核验**：decisions.md 现最大 ADR-215（210→215 连续无空洞），全仓 216/217/218 零占用；本卡占 **ADR-216**；STATS-07 admin analytics 端点另起 **ADR-217**（已预留）。
+  - **关键决策冻结**（实现卡必守）：① hot_score 按窗口**全量重算**（数据源 hourly 表、非增量累加，Codex BLOCK）② occurred_at **非对称容差**（过去 −30min / 未来 +2min）+ 窗口查询 `bucket_hour ≤ now()`（Codex HIGH）③ 统计写端点限流 **fail-closed**（Codex HIGH）④ ephemeral visitor 用 `visitor_is_ephemeral` 列区分、不计 UV（arch H1）⑤ 错误码对齐现网（`422 VALIDATION_ERROR` / `404 NOT_FOUND`，arch B2）⑥ 公共端点**不被** `verify:endpoint-adr` 覆盖、靠 STATS-03-A 端点测试守护（arch B1）。
+  - STATS schema 从 migration **128** 起（127 已被 `127_video_sources_audio_language_index` 占用）。
+  - 分支 `stats-01-adr`（从 dev `d2c0cc71` 拉），完成后合回 dev。
