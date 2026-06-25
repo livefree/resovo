@@ -3182,6 +3182,50 @@
 
 ---
 
+## [SEQ-20260624-02] VIDEO-PLAY-STATS — 视频级播放量统计 + 热度排序 + 后台趋势分析
+
+- **状态**：🟡 规划中
+- **创建时间**：2026-06-24 22:49
+- **最后更新时间**：2026-06-24 22:49
+- **目标**：建立 Resovo 视频级播放量统计体系，覆盖匿名播放事件、累计总数、时间趋势、跨前台/搜索一致热度排序与后台运营分析。
+- **范围**：`apps/api` public write/read route + service + DB queries、`apps/worker` 批量聚合、`apps/web-next` 播放器上报与展示、Elasticsearch 索引同步、`server-next` 后台 analytics。**不复用** `/feedback/playback` source-health 信号；**不把** `watch_history` 当视频播放量真源。
+- **来源**：`docs/designs/video-play-stats-structure_20260624.md`（方案合并稿，已吸收 P0/P1/P2 复核意见）。
+- **依赖**：无 BLOCKER；`dev` 当前 schema 最新号为 migration 126，STATS schema 从 **127** 起号；若 `127_video_sources_audio_language_index` 已先合入当前执行分支，则顺延 **128**。执行前必须先完成 STATS-01 ADR 定稿。任务卡写入后、开始实现前按 workflow-rules 对任务卡执行 Codex 对抗性审核。
+- **原子化判据**：全序列跨 schema / API-service / worker / UI / ES / admin 五域，强制拆卡。STATS-03 与 STATS-05 已按 P2 复核拆 A/B，避免单卡混合 route+service+frontend 或 read model+排序策略超阈值。串行主链为 `01→02→03A→03B→04→05A→05B→06→07`；STATS-03B 可在 03A 契约冻结后与 04 部分并行做前端 helper，但真正联调依赖 03A。
+
+### 任务列表（按执行顺序）
+
+| 卡 | 状态 | 内容 | 范围项 | 建议模型 | 依赖 | 门禁 |
+|---|---|---|---|---|---|---|
+| **STATS-01-ADR** | ⬜ 待开始 | 起草并定稿视频播放统计 ADR：Qualified Play 阈值、匿名 visitor cookie 归属、确定性 `idempotency_key` 公式、`UNIQUE(play_session_id, video_id, COALESCE(episode_number,0))` 第二防线、`occurred_at` 服务端 clamp 策略、hot-score 物化表、ES 同步策略、retention、`watch_history` 边界、admin endpoint 独立 ADR 门禁。 | docs | **opus** | 无 | ADR Accepted；arch-reviewer (Opus) PASS；Codex 对抗审 BLOCK 全处理；明确 Open Decision 1-10；不写实现代码。 |
+| **STATS-02-SCHEMA** | ⬜ 待开始 | migration 127/128：创建 `video_play_events` / `video_play_hourly` / `video_play_daily` / `video_play_daily_visitors` / `video_play_totals` / `video_hot_scores`；补 pending/time/date/hot 索引；`video_play_daily_visitors(bucket_date)` 清理索引；新增 DB query 模块骨架与类型；同步 `docs/architecture.md`。 | DB/types/docs ≤5 | **opus**（schema + hot-score 真源） | STATS-01 Accepted | migration 冷启动；schema 集成测；`verify:adr-contracts`；`architecture.md` §schema 同步；测试覆盖两个唯一约束存在与 `occurred_at` trusted 字段约束。 |
+| **STATS-03-A-WRITE-ENDPOINT** | ⬜ 待开始 | `POST /videos/:id/play-events`：route 只校验并返回 `202`；service 解析 short_id、校验公开可见与 source、消费 middleware visitor_hash、hash IP/UA、clamp `occurredAt`、visitor+IP 双维限流、幂等插入。命中 `idempotency_key` 或 session/video/episode 任一唯一约束均视为幂等成功，不得 500。 | API route/service/queries ≤5（跨 2 层，契约闭环） | **opus** | STATS-02 | route/service/query 单测；重复 `idempotency_key` 返回 202 且不二插；同 session/video/episode 但不同 key 返回 202 且不 500；恶意未来/远古 `occurredAt` 被 clamp/回退；匿名路径不访问 `users`；visitor+IP rate-limit 命中；`verify:endpoint-adr` 公共端点对齐。 |
+| **STATS-03-B-PLAYER-REPORTING** | ⬜ 待开始 | 前端上报 helper：`buildPlaySessionId`、确定性 `buildPlayEventIdempotencyKey`、`isQualifiedPlay`、`reportVideoPlayEvent(apiClient)`；`PlayerShell` 主接入，复用 `previewMode` 写保护；mini-player 仅在能独立跨 qualified threshold 时接入；失败不影响播放。 | web-next player/helper/tests ≤5 | **opus**（PLAYER 关键路径） | STATS-03-A 契约冻结 | helper 单测；`PlayerShell` preview 不上报；同 play_session/video/episode 只上报一次；source 切换不单独计数；PLAYER e2e 回归；不得绕过 `apiClient`。 |
+| **STATS-04-AGGREGATE** | ⬜ 待开始 | `apps/worker` 批量聚合：每批 500-1000、单批单事务、`FOR UPDATE SKIP LOCKED` 取 `aggregated_at IS NULL`；upsert hourly/daily/daily_visitors/totals/hot_scores；commit 后标记 aggregated；retention job 不删未聚合事件。 | worker/queries/tests ≤5 | **opus** | STATS-02（可与 03B 部分并行） | worker 重跑不 double count；rollback 留 pending；commit 标 aggregated；daily UV 同 visitor/day/video 只加 1；batch LIMIT 生效；retention 按 `bucket_date` 索引清理 visitor 表；hot_scores 物化。 |
+| **STATS-05-A-PUBLIC-TYPES-READ** | ⬜ 待开始 | 公共读模型：`packages/types` `Video.playCount`；API video select/projection 左连 `video_play_totals` 并 `COALESCE(0)`；前台 cards/detail/watch/related 元信息展示播放次数；不改变排序语义。 | types/API read/web UI ≤5（跨 API/UI 两层，字段透传闭环；无 schema migration） | sonnet | STATS-04（至少 totals 可产出） | typecheck；projection 单测；无统计行显示 0；卡片/详情/播放页展示一致；VIDEO e2e；确认此次展示逻辑不需沉淀新共享组件或说明理由。 |
+| **STATS-05-B-PUBLIC-HOT** | ⬜ 待开始 | `/videos?sort=hot` 与 `/videos/trending` 改用 `video_hot_scores` / hourly/daily 聚合：排序 `hot_score DESC NULLS LAST, play_count_7d DESC, total_play_count DESC, updated_at DESC`；`period=today|week|month` 明确按 ADR today 语义；保留公开可见过滤。 | API queries/service/tests ≤5 | **opus**（排序语义变更） | STATS-04 + STATS-05-A | `/videos?sort=hot` 根据聚合改变顺序；trending today/week/month 使用聚合桶；无 hot_score 时稳定 fallback；VIDEO e2e；不再使用 active source count 作为 hot 真源。 |
+| **STATS-06-SEARCH-HOT** | ⬜ 待开始 | Elasticsearch 文档增加 `play_count_total` / `play_count_7d` / `hot_score`；索引同步或批量 updater 按 ADR 路径落地；`/search?sort=hot` 改用 ES play fields，与 `/videos?sort=hot` 语义对齐；提供 reindex/回填脚本。 | ES mapping/index sync/search service/script/tests ≤5 | **opus** | STATS-04 + STATS-05-B | mapping additive；SearchService hot 不再只看 `rating_votes`；reindex 脚本幂等且有收敛断言；SEARCH e2e；搜索与 `/videos` 对同一 hot_score 快照排序口径一致（允许 ADR 定义的同步延迟）。 |
+| **STATS-07-ADMIN-ANALYTICS** | ⬜ 待开始 | 独立 admin endpoint ADR 后落地 `/admin/analytics/video-plays/overview|trend|top-videos` 与后台 UI：period 7d/30d/90d、total plays、watch seconds、avg watch seconds、匿名/登录拆分、daily trend、top videos。只读 aggregate 表，不扫 raw events。ADR 定稿后若 API/service/UI 范围仍超 5 项，必须继续拆 `STATS-07-A/B`，不得单卡硬做。 | admin ADR gate + analytics 实施切分 | **opus** | STATS-04 + STATS-05-A + 独立 admin endpoint ADR PASS | 先起独立 ADR 并过 arch-reviewer；`verify:endpoint-adr` 必须识别新 admin routes；admin API 测；ModernDataTable 等后台规范组件；ADMIN e2e；确认 analytics 口径与 `watch_history` 不对账。 |
+
+### 关键约束与红线
+
+- **幂等闭环**：`idempotency_key` 必须确定性派生；DB 同时保 `idempotency_key UNIQUE` 与 `(play_session_id, video_id, COALESCE(episode_number,0))` 唯一约束；写路径必须把命中任一唯一约束的 `23505` 当幂等成功返回 `202`。
+- **时间可信化**：所有 bucket 使用服务端 trusted `occurred_at`；客户端 `occurredAt` 超出 ADR 容差窗口必须 clamp 或回退 `ingested_at`，不得污染未来/远古桶。
+- **匿名优先**：匿名 cookie 由统一 middleware 签发/刷新；写路径只消费。cookie 缺失 fallback 不能虚增 UV；未登录路径不得访问 `users` 表。
+- **限流不是计数真源**：Redis 限流同时包含 visitor_hash 与 ip_hash 维度；真正计数依赖唯一约束 + 聚合幂等。
+- **聚合事务边界**：每批 500-1000，单批事务自洽；不得把全部 pending 事件放进一个长事务。
+- **热度一致性**：`video_hot_scores` 是必需物化源，不能把 PG read-time score 留作最终方案；`/videos`、`/videos/trending`、`/search` 在 STATS-06 后共享同一热度口径。
+- **admin 端点门禁**：STATS-07 不能只依赖 STATS-01 总 ADR，必须另起 admin endpoint ADR 并取得 Opus PASS。
+- **watch_history 边界**：`watch_history` 只负责登录用户进度/续播；`video_play_events` 负责视频级统计，两者不做行级对账。
+
+### 合并 Gate
+
+- 每张实现卡至少跑 `npm run typecheck`、`npm run lint`、相关单测或 `npm run test:changed`、`npm run verify:adr-contracts`。
+- PLAYER / VIDEO / SEARCH / ADMIN 触达卡按域补跑对应 e2e；Phase complete 前跑全量单测 + `npm run test:e2e`。
+- schema 变更卡必须同步 `docs/architecture.md`；admin endpoint 卡必须通过 `verify:endpoint-adr`。
+
+---
+
 ## [SEQ-20260624-03] 文档治理 T1 — README 索引全面更新 + 退役口吻对齐（doc-governance 规范例跑）
 
 - **状态**：✅ 已完成
