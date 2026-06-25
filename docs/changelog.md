@@ -3136,3 +3136,27 @@
 - **遗留 follow-up（登记）**：① preview 禁写统计接线缺口（ADR-160 D-160-5 既有 tech debt，非本卡引入）② referrerPath v1 暂未采集 ③ full/mini detector 独立累计（已知接受偏差：playSessionId 共享 → 不双计〔后端幂等〕、不漏计〔任一实例达阈值即报〕；`full<20s 即切 mini` 场景 watchSeconds 仅单实例累计、略低估真实总时长，跨实例精确累加留 amendment）
 - **关键约束（供 STATS-04/05）**：watch_seconds 为单事件观看信号（非精确总时长）；前端口径 episodeNumber=currentEpisode（line-matrix 归一、电影=1）；idempotency_key 前端确定性构造、后端原样存
 - **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**
+
+## [STATS-04-A-AGGREGATE] apps/worker 视频播放事件批量聚合 job（drain 循环 + 单批单事务 + hot_score 全量重算，SEQ-20260624-02 第 4 卡·A）
+- **完成时间**：2026-06-25
+- **记录时间**：2026-06-25
+- **执行模型**：claude-opus-4-8（卡建议 opus·worker 聚合真源）
+- **拆卡**：母卡 STATS-04-AGGREGATE 含聚合 + retention 两独立 job（worker job×2 + queries + config/index + tests >5 项）→ 原子化判据拆 `-A`（聚合）/`-B`（retention）。本条 -A；retention 落 STATS-04-B。
+- **子代理**：
+  - Codex 对抗审（`codex exec` codex-cli，任务卡 + 聚合 SQL 落盘后 commit 前，task-queue 行 3193 要求）— **3 轮 BLOCK→PASS**：
+    - 轮 1（1 BLOCK + 2 HIGH + 2 MEDIUM + 1 LOW 全吸收）：① **BLOCK** hot_score 全量覆盖并发 lost update（两 worker/tick 处理同 video 不同桶，各自快照看不到对方未提交 hourly → 后提交者 `=EXCLUDED` 覆盖丢计数）→ 新增 step 2.5 per-video advisory xact lock 串行化重算；② HIGH `ROLLBACK` 自身失败吞原始错误 + 污染连接归还池 → `BatchRollbackError` + `client.release(err)` 销毁连接；③ HIGH node-cron 不等上轮 Promise（drain>60s 同进程并发突破 ≤10 事务节流 + 放大 lost update）→ `isRunning` guard；④ MEDIUM hot 下降测试只验初次计算 → 人为抬高 pc24 再重算断言覆盖下降；⑤ MEDIUM integration 全局 pending 干扰 → beforeEach TRUNCATE 隔离
+    - 轮 2（1 HIGH + 1 MEDIUM + 1 LOW 全吸收）：① HIGH 无保护 `TRUNCATE` 可能清空非 test 库 → beforeAll `current_database()` token 守卫 fail-fast；② MEDIUM advisory lock 按 video_id 排序而非实际锁资源 hashtext（碰撞时死锁不消除）→ SQL 直接算 `hashtext(prefix||video_id) AS lock_key` 并 `ORDER BY lock_key`、按真实锁资源排序加锁；③ LOW 端到端多进程并发测试需子进程（超单进程范围，注释承认 + 保留双 client advisory 阻塞机制测试）
+    - 轮 3：**PASS**（三项闭环、无新 BLOCK/HIGH；残留 LOW token 守卫子串边界顺手改 token 正则 `(^|[_-])test([_-]|$)` 防 `fastest_prod` 误放行）
+- **修改文件**：
+  - `apps/worker/src/jobs/play-stats-aggregate.ts`（新建）— `runPlayStatsAggregate(pool,log)`：`isRunning` 重入 guard → 单 client drain ≤`MAX_BATCHES_PER_TICK`(10) 个独立事务；`aggregateOneBatch` 单批 8 步内联 SQL（ADR-107 §4 worker 自包含）：`SELECT ... FOR UPDATE SKIP LOCKED LIMIT 500 ORDER BY ingested_at ASC` 取批 → per-video advisory xact lock（`hashtext(prefix||video_id)` 按 lock_key 升序）→ hourly/daily+UV/totals 增量 upsert（`+= EXCLUDED`，UV 仅 `NOT visitor_is_ephemeral`、`ON CONFLICT DO NOTHING RETURNING` 实插数）→ hot_scores 全量重算（hourly `SUM FILTER` 嵌套窗口 + `bucket_hour<=NOW()`、`=EXCLUDED` 覆盖）→ mark `aggregated_at`；常量 `HOT_SCORE_W24/W7/W30`+`BATCH_LIMIT`+`MAX_BATCHES_PER_TICK` 单一真源 export；`BatchRollbackError` 连接污染信号类
+  - `apps/worker/src/config.ts`（修改）— `cron.playStatsAggregate='* * * * *'`（env `WORKER_CRON_PLAY_STATS` 覆盖）
+  - `apps/worker/src/index.ts`（修改）— `playStatsAggregateTask` 注册（`{scheduled:false}` → startup `.start()` / shutdown `.stop()` + 启动日志加 cron 字段）
+  - `tests/unit/worker/jobs/play-stats-aggregate.test.ts`（新建，14 测）— mock client 编排：单 client / 事务序列 BEGIN→AFFECTED→LOCK→…→COMMIT / 空批 ROLLBACK 退出 / drain 上限 / advisory lock 按 lock_key 排序 + 每 key 一锁 / UV NOT ephemeral / hot EXCLUDED 覆盖+bucket_hour<=NOW() / 增量 += / mark / ROLLBACK 正常 release vs ROLLBACK 失败销毁 / isRunning 重入跳过 / processed metric
+  - `tests/integration/worker/play-stats-aggregate.test.ts`（新建，8 测，延后合并期）— 真 PG 数值：commit 标 aggregated+数值 / 重跑不 double-count / UV 跨批去重 / ephemeral 不计 UV / anon-logged_in 拆分 / hot 窗口 pc24<pc7 / hot 陈旧高值覆盖下降 / per-video advisory lock 串行阻塞机制；beforeAll test-DB token 守卫 + beforeEach TRUNCATE 隔离
+  - `docs/task-queue.md`（STATS-04 拆 -A/-B，-A 🔄→✅）/ `docs/tasks.md`（删卡）/ `docs/changelog.md`（本条目）/ `docs/audit/adr-d-status.json`（verify 自动更新）
+- **新增依赖**：无（node-pg + node-cron 既有；advisory lock 用 PG 内置 `pg_advisory_xact_lock`）
+- **数据库变更**：无（消费 STATS-02 migration 128 六表，零 schema 改动）
+- **门禁**：`typecheck`=0（root + 7 workspace 含 worker）/ 改动文件 `eslint` clean（worktree 全量 lint 为 `.eslintrc` resovo 插件 cascade 环境冲突，临时 root:true 隔离验证 EXIT=0 后还原）/ `test:changed`=43（含 14 编排单测 + 既有 worker 测试零回归）/ `verify:adr-contracts`=0（含 sql-schema-alignment 对齐）
+- **延后合并期**：**integration 数值测（8 例）**——需专用 test DB（库名含 test token）+ migrate ≥128，worktree 无 `.env.local`（同 STATS-02 schema 测试先例）；端到端多进程 lost update 由部署期验证（advisory lock 机制已由单测 + integration 阻塞测试证明）
+- **关键约束（供 STATS-04-B / 05）**：聚合表 hourly/daily/totals=增量累加、hot_scores=全量覆盖；hot_score 事件驱动重算（无新事件 video 短期 stale 为 ADR-216 v1 已知边界）；retention（STATS-04-B）须跳过 `aggregated_at IS NULL`；多 worker 实例并发安全靠 `FOR UPDATE SKIP LOCKED`（事件不重复）+ per-video advisory lock（hot_score 不丢）
+- **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**

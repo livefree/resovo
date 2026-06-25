@@ -6,6 +6,7 @@ import { runSourceHealthLevel1, runSourceHealthLevel2 } from './jobs/source-heal
 import { runFeedbackDrivenRecheck } from './jobs/feedback-driven-recheck'
 import { runAutoRetireLine } from './jobs/auto-retire-line'
 import { runBangumiDumpRefresh } from './jobs/bangumi-dump-refresh'
+import { runPlayStatsAggregate } from './jobs/play-stats-aggregate'
 
 const log = baseLogger
 
@@ -54,6 +55,13 @@ const bangumiDumpTask = cron.schedule(
   { scheduled: false },
 )
 
+// ADR-216 D-216-10：视频播放事件批量聚合（每 1min；独立 job，不并入 source-health feedback recheck）
+const playStatsAggregateTask = cron.schedule(
+  config.cron.playStatsAggregate,
+  () => runWithLogger('play-stats-aggregate', () => runPlayStatsAggregate(db, jobLogger('play-stats-aggregate'))),
+  { scheduled: false },
+)
+
 async function startup(): Promise<void> {
   log.info({ instanceId: config.workerInstanceId }, 'worker starting')
 
@@ -65,6 +73,7 @@ async function startup(): Promise<void> {
   feedbackTask.start()
   autoRetireLineTask.start()
   bangumiDumpTask.start()
+  playStatsAggregateTask.start()
   log.info(
     {
       level1_cron: config.cron.level1Probe,
@@ -72,6 +81,7 @@ async function startup(): Promise<void> {
       feedback_cron: config.cron.feedbackDriven,
       auto_retire_line_cron: config.cron.autoRetireLine,
       bangumi_dump_cron: config.cron.bangumiDumpRefresh,
+      play_stats_aggregate_cron: config.cron.playStatsAggregate,
     },
     'cron tasks started',
   )
@@ -88,6 +98,7 @@ async function shutdown(signal: string): Promise<void> {
   feedbackTask.stop()
   autoRetireLineTask.stop()
   bangumiDumpTask.stop()
+  playStatsAggregateTask.stop()
   await db.end()
   log.info('worker stopped')
   process.exit(0)
