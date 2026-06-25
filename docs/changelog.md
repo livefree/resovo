@@ -3094,3 +3094,24 @@
   - rv_vid **signed**（@fastify/cookie 签名，COOKIE_SECRET）→ 仅本边界签发的 cookie 计 cookie-backed；伪造/篡改落 ephemeral（不虚增 UV）。visitor_hash 另用 SERVER_VISITOR_SECRET 做 HMAC（签名/哈希双密钥分离）。
   - **供 STATS-03-A2**：写端点消费 `request.visitorHash`（null=无身份）+ `request.visitorIsEphemeral`（true 不计 UV）；不自行 Set-Cookie。
   - **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**。
+
+## [STATS-03-A2] 视频播放上报写端点 POST /videos/:id/play-events（SEQ-20260624-02 第 3 卡·A 拆分 A2）
+- **完成时间**：2026-06-25
+- **记录时间**：2026-06-25 05:30
+- **执行模型**：claude-opus-4-8（卡建议 opus）
+- **子代理**：
+  - `codex:codex-rescue` (codex-cli runtime 等效对抗审, agentId ade0729253171a6f1) — 公共写端点对抗审 **3 轮 BLOCK→PASS**：① round-1 BLOCK（限流在幂等之前→重试烧 INCR 计数违反 D-216-8）+ HIGH（数值无上限）+ MEDIUM（裸 sha256 / clamp 时钟偏差）② round-2 BLOCK（DB EXISTS 非原子→并发 TOCTOU）+ MEDIUM（密钥空串静默回退）+ HIGH（缺精确边界测）③ round-3 **PASS**（全闭合）
+- **原子化拆分**：原 STATS-03-A（route+service+query+中间件+限流+幂等 >5 项）拆 A1（visitor-cookie 中间件，commit `547e27ea`）+ **A2（写端点，本条）**——拆分**全部完成**。
+- **修改文件**：
+  - `apps/api/src/routes/videos.ts`（修改）— `POST /videos/:id/play-events`：`preHandler: optionalAuthenticate`（填 user_id 不查 users，D-216-5）；shortId 非法→404 / zod（含 episodeNumber≤9999·watchSeconds≤86400·durationSeconds≤86400 上限）失败→422 VALIDATION_ERROR；service 结果映射 ok→`202 {data:{received:true}}` / not_found→404 / invalid_source→422 INVALID_SOURCE / rate_limited→429 RATE_LIMITED。route 仅校验+映射、无业务逻辑。
+  - `apps/api/src/services/VideoPlayEventService.ts`（新建）— 编排：findVideoByShortId（复用 canonical 公开过滤）→not_found；isActiveSourceOfVideo→invalid_source；**原子 Redis SET NX 幂等 marker**（`pe:idem:{key}` EX 300 NX）置于限流前——并发/近期同 key 仅一个获取、其余幂等 202 **不烧 INCR**（关闭并发 TOCTOU），失败路径（限流拦截/插入瞬态错误）释放 marker 防丢事件；**双维 INCR 固定窗限流 fail-closed**（redis 错→429）；ip/ua/fallback visitor **HMAC**（含密钥防枚举）；occurredAt **非对称 clamp**（−30min/+2min，单一 `ingestedAt` 基准 + 显式写 ingested_at）；**双防线幂等插入**（ON CONFLICT idempotency_key + 捕获两约束名 23505→202，其余 23505 上抛）。**不查 users**。
+  - `apps/api/src/db/queries/videoPlayStats.ts`（修改）— `insertVideoPlayEvent`（含显式 ingested_at）+ `isActiveSourceOfVideo`。
+  - `tests/unit/api/video-play-events-service.test.ts`（新建，28 测）+ `tests/unit/api/video-play-events-route.test.ts`（新建，11 测）— 幂等双防线 / 原子 marker（SET NX 参数·duplicate 不烧限流·释放语义·成功不释放）/ 限流命中 + fail-closed / occurredAt clamp 精确边界（fake timers ±1ms）/ 匿名 userId 透传 / ip·ua 仅 hash / 数值边界 422 / 错误码映射 / optionalAuthenticate 实跑。
+  - `docs/task-queue.md`（A2 ✅，A 拆分全完成）/ `docs/tasks.md`（删卡）/ `docs/changelog.md`（本条目）
+- **新增依赖**：无（node:crypto + 既有 pg/ioredis）
+- **数据库变更**：无（复用 STATS-02 migration 128；insert 增显式 ingested_at 列写入）
+- **门禁**：`typecheck`=0 / 改动文件 `eslint`=0 / `verify:adr-contracts`=0（**verify-endpoint-adr ✅ 公共端点不误判为未注册 admin** / verify-sql-schema ✅ 新查询列对齐）/ `test:changed`=0（5 文件 **93 测**全过，零回归；vitest --changed 仅命中相关测试）
+- **环境修复（非提交物）**：worktree `external-adapter/douban-adapter` 未 build 致 `vitest --changed` 模块解析中止——`npm run build` 该包恢复（dist gitignored）；既有 worktree 构建缺口、非本卡引入。
+- **延后合并期**：公共端点不被 `verify:endpoint-adr` 覆盖（ADR-216 §契约门禁，靠端点测 + 文字契约守护）；全链路 e2e（真实 DB/Redis 限流·cookie·幂等）延后（worktree 无 DB/Redis/.env）。
+- **关键约束（供 STATS-04 聚合）**：events 表 ingested_at 显式写入；rate-limit/marker 仅 Redis、不入计数真源；聚合仍只读 `aggregated_at IS NULL` raw events。
+- **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**（dev 仅保留规划落盘 `b53135f7`）。

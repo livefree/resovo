@@ -8,6 +8,7 @@
 //   - node-pg 无全局 int8 type parser → BIGINT/NUMERIC 列返回 string，mapRow 用 parseInt/Number 转 number（同 analytics.ts）。
 //   - DATE/TIMESTAMPTZ 默认转 JS Date → COLUMNS 用 `::TEXT` 取 ISO string（同 card-size-settings.ts）。
 
+import type { Pool } from 'pg'
 import type {
   VideoPlayEvent,
   VideoPlayEventType,
@@ -195,4 +196,89 @@ export function mapVideoHotScoreRow(row: DbVideoHotScoreRow): VideoHotScore {
     playCount30d: parseInt(row.play_count_30d, 10),
     computedAt: row.computed_at,
   }
+}
+
+// ── 写入（STATS-03-A2）────────────────────────────────────────────────────────
+
+/** insertVideoPlayEvent 入参（occurredAt 为 service 端 trusted/clamp 后 ISO；visitor_hash 来自 A1 中间件）。 */
+export interface InsertVideoPlayEventInput {
+  /** D-216-8 第一防线：前端确定性 64hex key，API 原样存（不重算） */
+  idempotencyKey: string
+  videoId: string
+  sourceId: string | null
+  episodeNumber: number | null
+  playSessionId: string
+  visitorHash: string
+  visitorIsEphemeral: boolean
+  ipHash: string | null
+  /** D-216-5：optionalAuthenticate 填充，匿名为 null */
+  userId: string | null
+  watchSeconds: number
+  durationSeconds: number | null
+  locale: string | null
+  referrerPath: string | null
+  userAgentHash: string | null
+  /** D-216-9：trusted/clamp 后 ISO 时间字符串 */
+  occurredAt: string
+  /** 服务端 ingest 时刻（与 clamp 基准同源，显式写入以保 occurred_at 回退值 == ingested_at，Codex MEDIUM-C） */
+  ingestedAt: string
+}
+
+/**
+ * 幂等插入 video_play_events（D-216-8）。
+ * `ON CONFLICT (idempotency_key) DO NOTHING`：重复 key → 跳过、返回 `{ inserted:false }`（幂等命中）。
+ * 注：第二防线 `uq_video_play_events_session_video_episode` 冲突**不被本 ON CONFLICT 捕获** → 抛 23505，
+ *     由 VideoPlayEventService 校验 `err.constraint` 后当幂等成功处理（其余 23505 上抛 500，M1）。
+ */
+export async function insertVideoPlayEvent(
+  db: Pool,
+  input: InsertVideoPlayEventInput,
+): Promise<{ inserted: boolean }> {
+  const result = await db.query(
+    `INSERT INTO video_play_events (
+       idempotency_key, video_id, source_id, episode_number, event_type,
+       play_session_id, visitor_hash, visitor_is_ephemeral, ip_hash, user_id,
+       watch_seconds, duration_seconds, locale, referrer_path, user_agent_hash,
+       occurred_at, ingested_at
+     ) VALUES ($1, $2, $3, $4, 'qualified_play',
+       $5, $6, $7, $8, $9,
+       $10, $11, $12, $13, $14,
+       $15, $16)
+     ON CONFLICT (idempotency_key) DO NOTHING
+     RETURNING id`,
+    [
+      input.idempotencyKey,
+      input.videoId,
+      input.sourceId,
+      input.episodeNumber,
+      input.playSessionId,
+      input.visitorHash,
+      input.visitorIsEphemeral,
+      input.ipHash,
+      input.userId,
+      input.watchSeconds,
+      input.durationSeconds,
+      input.locale,
+      input.referrerPath,
+      input.userAgentHash,
+      input.occurredAt,
+      input.ingestedAt,
+    ],
+  )
+  return { inserted: (result.rowCount ?? 0) > 0 }
+}
+
+/** 校验 sourceId 是该 video 的 active（未软删）线路（端点 INVALID_SOURCE 守卫）。 */
+export async function isActiveSourceOfVideo(
+  db: Pool,
+  sourceId: string,
+  videoId: string,
+): Promise<boolean> {
+  const result = await db.query(
+    `SELECT 1 FROM video_sources
+     WHERE id = $1 AND video_id = $2 AND is_active = true AND deleted_at IS NULL
+     LIMIT 1`,
+    [sourceId, videoId],
+  )
+  return (result.rowCount ?? 0) > 0
 }
