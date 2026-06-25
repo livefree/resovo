@@ -10,6 +10,8 @@ export const config = {
     bangumiDumpRefresh: process.env.WORKER_CRON_BANGUMI_DUMP ?? '0 4 * * 0',
     // ADR-216 D-216-10：视频播放事件批量聚合（每 1min；drain ≤10 独立事务 / 批 LIMIT=500）
     playStatsAggregate: process.env.WORKER_CRON_PLAY_STATS ?? '* * * * *',
+    // ADR-216 D-216-6：播放统计 retention 清理（每日 04:15 UTC，避开 auto-retire 03:30 / bangumi 04:00）
+    playStatsRetention: process.env.WORKER_CRON_PLAY_STATS_RETENTION ?? '15 4 * * *',
   },
   // ops 维护的 Bangumi dump 文件路径（subject.jsonlines），应为绝对路径（worker CWD=apps/worker）。
   // 未配置 → cron 跳过（不设误导性相对默认值，避免标准启动下静默 no-op）。external-db/ 为 gitignore 本地产物。

@@ -3160,3 +3160,24 @@
 - **延后合并期**：**integration 数值测（8 例）**——需专用 test DB（库名含 test token）+ migrate ≥128，worktree 无 `.env.local`（同 STATS-02 schema 测试先例）；端到端多进程 lost update 由部署期验证（advisory lock 机制已由单测 + integration 阻塞测试证明）
 - **关键约束（供 STATS-04-B / 05）**：聚合表 hourly/daily/totals=增量累加、hot_scores=全量覆盖；hot_score 事件驱动重算（无新事件 video 短期 stale 为 ADR-216 v1 已知边界）；retention（STATS-04-B）须跳过 `aggregated_at IS NULL`；多 worker 实例并发安全靠 `FOR UPDATE SKIP LOCKED`（事件不重复）+ per-video advisory lock（hot_score 不丢）
 - **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**
+
+## [STATS-04-B-RETENTION] apps/worker 视频播放统计 retention maintenance job（未聚合永不删 + 三表批量清理，SEQ-20260624-02 第 4 卡·B）
+- **完成时间**：2026-06-25
+- **记录时间**：2026-06-25
+- **执行模型**：claude-opus-4-8（卡建议 opus）
+- **拆卡**：母卡 STATS-04-AGGREGATE 拆 `-A`（聚合，commit `8a062b22`）/`-B`（retention，本条）。STATS-04 全拆完成。
+- **子代理**：
+  - Codex 对抗审（`codex exec` codex-cli，任务卡 + retention SQL 落盘后 commit 前）— **1 轮 PASS**（无 BLOCK）：8 个对抗点全 verified——① 未聚合（`aggregated_at IS NULL`）永不删（双谓词 NULL 比较不会误纳）② `ctid IN (SELECT ... LIMIT)` 批量收敛 + autocommit 每批独立提交（crash 仅丢未删批）③ advisory lock 三路径（拿锁→unlock→release / 没拿锁→不 unlock→release / unlock 失败→release(err) 销毁）④ 严格 `<` 边界保守（恰好 cutoff 保留）⑤ daily/totals/hot_scores 不出现在任何 DELETE ⑥ MAX_DELETE_ITERATIONS 防活锁 ⑦ 多实例并发安全（advisory lock 防重复扫 + 删除幂等）⑧ integration 用旧未聚合 pending 行真实覆盖硬不变量。2 LOW 测试硬化吸收：单测加负向断言（events SQL 无 `OR`/`aggregated_at IS NULL` 旁路）+ integration 加 89/91d 近边界用例
+- **修改文件**：
+  - `apps/worker/src/jobs/play-stats-retention.ts`（新建）— `runPlayStatsRetention(pool,log)`：job-level `pg_try_advisory_lock`（多实例 skip + unlock 失败 `release(err)` 销毁，同 auto-retire 范式）→ `deleteInBatches`（`ctid IN (SELECT ... LIMIT RETENTION_DELETE_BATCH)` 循环至不满批，autocommit）顺序清三表：events `aggregated_at IS NOT NULL AND < NOW()-90d`（**未聚合永不删**）/ visitors `bucket_date < CURRENT_DATE-400`（按 bucket_date 索引）/ hourly `bucket_hour < NOW()-90d`；daily/totals/hot_scores 永久不动；常量 `EVENTS_RETENTION_DAYS=90`/`DAILY_VISITORS_RETENTION_DAYS=400`/`HOURLY_RETENTION_DAYS=90`/`RETENTION_DELETE_BATCH` + `MAX_DELETE_ITERATIONS` 防御
+  - `apps/worker/src/config.ts`（修改）— `cron.playStatsRetention='15 4 * * *'`（避开 auto-retire 03:30 / bangumi 04:00，env `WORKER_CRON_PLAY_STATS_RETENTION` 覆盖）
+  - `apps/worker/src/index.ts`（修改）— `playStatsRetentionTask` 注册（`{scheduled:false}` → start/stop + 启动日志 cron 字段）
+  - `tests/unit/worker/jobs/play-stats-retention.test.ts`（新建，9 测）— mock 编排：advisory lock 取/skip/unlock 失败销毁 / 三表删除顺序+参数 / events 双谓词 + 负向无 OR 旁路 / visitors·hourly 谓词 / 批量循环满批继续不满批停 / daily·totals·hot 不触碰 / deleted metric
+  - `tests/integration/worker/play-stats-retention.test.ts`（新建，5 测，延后合并期）— 真 PG：events 仅删过期 aggregated（未聚合含很旧 + 近期保留）/ events 89-91d 近边界 / visitors 按 bucket_date / hourly 按 bucket_hour / daily·totals·hot 永久不动；beforeAll test-DB token 守卫 + beforeEach TRUNCATE 隔离
+  - `docs/task-queue.md`（STATS-04-B 🔄→✅）/ `docs/tasks.md`（删卡）/ `docs/changelog.md`（本条目）/ `docs/audit/adr-d-status.json`（verify 自动更新）
+- **新增依赖**：无（PG 内置 `pg_try_advisory_lock` + node-cron 既有）
+- **数据库变更**：无（消费 STATS-02 migration 128 六表 + idx_video_play_daily_visitors_date）
+- **门禁**：`typecheck`=0（root + 7 workspace）/ 改动文件 `eslint` clean（worktree 全量 lint 为 resovo 插件 cascade 环境冲突，临时 root:true 隔离验证 EXIT=0 后还原）/ `test:changed`=38（含 9 编排单测 + 既有 worker 零回归）/ `verify:adr-contracts`=0
+- **延后合并期**：**integration 数值测（5 例）**——需专用 test DB（库名含 test token）+ migrate ≥128，worktree 无 `.env.local`（同 STATS-04-A 先例）
+- **主链进度**：`01→02→03A→03B→04A→04B` 全 ✅；下一主链 STATS-05-A-PUBLIC-TYPES-READ（公共读模型 playCount，sonnet）
+- **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**

@@ -7,6 +7,7 @@ import { runFeedbackDrivenRecheck } from './jobs/feedback-driven-recheck'
 import { runAutoRetireLine } from './jobs/auto-retire-line'
 import { runBangumiDumpRefresh } from './jobs/bangumi-dump-refresh'
 import { runPlayStatsAggregate } from './jobs/play-stats-aggregate'
+import { runPlayStatsRetention } from './jobs/play-stats-retention'
 
 const log = baseLogger
 
@@ -62,6 +63,13 @@ const playStatsAggregateTask = cron.schedule(
   { scheduled: false },
 )
 
+// ADR-216 D-216-6：播放统计 retention 清理（每日；未聚合事件永不删）
+const playStatsRetentionTask = cron.schedule(
+  config.cron.playStatsRetention,
+  () => runWithLogger('play-stats-retention', () => runPlayStatsRetention(db, jobLogger('play-stats-retention'))),
+  { scheduled: false },
+)
+
 async function startup(): Promise<void> {
   log.info({ instanceId: config.workerInstanceId }, 'worker starting')
 
@@ -74,6 +82,7 @@ async function startup(): Promise<void> {
   autoRetireLineTask.start()
   bangumiDumpTask.start()
   playStatsAggregateTask.start()
+  playStatsRetentionTask.start()
   log.info(
     {
       level1_cron: config.cron.level1Probe,
@@ -82,6 +91,7 @@ async function startup(): Promise<void> {
       auto_retire_line_cron: config.cron.autoRetireLine,
       bangumi_dump_cron: config.cron.bangumiDumpRefresh,
       play_stats_aggregate_cron: config.cron.playStatsAggregate,
+      play_stats_retention_cron: config.cron.playStatsRetention,
     },
     'cron tasks started',
   )
@@ -99,6 +109,7 @@ async function shutdown(signal: string): Promise<void> {
   autoRetireLineTask.stop()
   bangumiDumpTask.stop()
   playStatsAggregateTask.stop()
+  playStatsRetentionTask.stop()
   await db.end()
   log.info('worker stopped')
   process.exit(0)
