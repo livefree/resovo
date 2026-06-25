@@ -52,6 +52,7 @@
       "英语": "English"
     },
     "sort": {
+      "relevance": "Relevance",
       "latest": "Latest",
       "hot": "Popularity",
       "rating": "Rating"
