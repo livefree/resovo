@@ -42,6 +42,24 @@
 
 ---
 
+## [STATS-06-A-SEARCH-HOT-READ-BACKFILL] `/search?sort=hot` 改用 ES play fields + reindex 回填，跨 surface 热度口径对齐（ADR-216 D-216-3/D-216-4 / SEQ-20260624-02）
+- **完成时间**：2026-06-25
+- **执行模型**：claude-opus-4-8（主循环，卡建议 opus·对齐）；**子代理**：Codex 对抗审（任务卡 1 轮 + 实现 1 轮 + 确认轮超时）
+- **背景**：原 STATS-06-SEARCH-HOT。Codex 任务卡审 FAIL→**降格 STATS-06-A（读对齐层）**：批量 updater 路径（reindex + doc 投影携带 play fields），实时 ≤2min freshness 拆 **STATS-06-B**（D-216-4「聚合 commit 后增量更新」需 worker 自包含 ES 或 scheduler ~1min tick，>5 文件违 ≤5）。
+- **产出（5 项，正好 ≤5）**：
+  - **ES mapping**（`es_mapping.json`）：additive 加 `play_count_total`(long) / `play_count_7d`(long) / `hot_score`(double)。
+  - **index sync**（`VideoIndexSyncService.ts`）：doc 投影 SQL LEFT JOIN `video_play_totals`+`video_hot_scores`（PK video_id additive 不 fan-out）+ `ES_FIELDS` 加 `v.updated_at`；`buildDocument` 加 3 play 字段（**保留 null** `row.x==null?null:Number(x)`）+ `updated_at = row.updated_at`（**videos.updated_at 同源**，非索引时间）；新增 `syncVideoStrict`（ES 失败抛出，供 reindex 真实计数）。使 syncVideo/reconcile/reindex 全路径携带 play fields、全量 es.index 不再清空。
+  - **search service**（`SearchService.ts`）：`sortMap.hot` 从 `rating_votes` 改 4-key 链 `hot_score → play_count_7d → play_count_total → updated_at`（前 3 `missing:'_last'` ≡ PG NULLS LAST），与 `/videos?sort=hot`（STATS-05-B）逐字段对齐。
+  - **script**（`scripts/reindex-es-play-stats.ts`，新建）：putMapping 3 字段 + keyset 分页 `syncVideoStrict` 真实成功计数（失败 exit≠0）+ **覆盖断言**（synced==published，`--allow-drift` 容忍并发漂移）+ **3 形态数据收敛抽样**（有 hot / 无聚合→3 字段全 null / 仅 totals→total 匹配其余 null，重读 ES vs DB 非仅遍历计数）。`--dry-run` 支持。
+  - **tests**：`search.test.ts`（hot sort 4-key 链精确断言 + 无 rating_votes）+ `videoIndexSync.test.ts`（VIDEO_ROW 加 play 字段 + buildDocument 有值/无行 null/真实 0 区分/updated_at 同源 + syncVideoStrict 成功/skip/抛错）+ `play-stats-cross-surface-sort.test.ts`（新：双侧 emit 4-key 链 + 共享 spec 行为 + **两独立 comparator PG NULLS LAST ≡ ES missing:_last 同序** + null/0 区分 + isCommonVisible）。
+- **Codex 对抗审吸收**：
+  - 任务卡审 1 轮 **FAIL → 3 BLOCK + 4 HIGH 全吸收**：① 降格 -A 不声称 ≤2min；② `?? 0` → 保留 null（破 NULLS LAST 等价的混淆）；③ updated_at 改 videos.updated_at 同源 tiebreak（原 `new Date()` 索引时间分裂）；④ reindex syncVideo 假收敛 → syncVideoStrict + 数据收敛断言；⑤ cross-surface 行为断言非字符串 tautology；⑥ fixture 限共同可见集。
+  - 实现审 1 轮 **CONDITIONAL PASS（0 BLOCK）→ 2 HIGH + 2 MEDIUM 补强**：HIGH 1 reindex 补无聚合/仅 totals 两 null 收敛抽样；HIGH 2 补覆盖计数断言 + `--allow-drift`；MEDIUM 2 fixture 加可见性字段 + `every(isCommonVisible)` 断言；MEDIUM 1 加独立 ES 语义 comparator（-Infinity 映射）与 PG comparator 同序比对破 tautology。MEDIUM 3（加 id 第 5 tiebreak）**拒绝**——/videos 无、会偏离冻结 D-216-3 破坏 parity。确认轮 Codex infra 超时（非 finding），补强经单测 + 自审验证。
+- **门禁**：typecheck=0（8 workspace）/ 改动文件 eslint=0 / verify:adr-contracts EXIT=0（endpoint-adr 250 admin 路由对齐〔本卡零新 admin 路由〕+ **sql-schema-alignment ✅ 新 JOIN 引用 video_play_totals/video_hot_scores 列全对齐 migration 128**）/ **test:changed=692 passed**（含本卡 videoIndexSync 21 + cross-surface 10 + search 19）。
+- **延后合并期**：SEARCH e2e + `scripts/reindex-es-play-stats.ts` 实跑 + PG↔ES 同夹具 seed 排序对拍（worktree 无 ES + .env.local，同 STATS-02/03B/05 先例）。
+- **边界**：实时 ≤2min freshness = STATS-06-B（已登记 task-queue）；SearchResultRow playCount 展示（STATS-05-A 延后项）+ 两 surface 可见全集对账 非本卡。
+- **AI-CHECK**：✅ 正确性（null/0 语义 + tiebreak 同源 + 双侧口径对齐，单测覆盖）｜ ✅ 边界复用（复用 VideoIndexSyncService doc 投影单点 + reindex-es-audio-langs 范式）｜ ✅ 无越层（SearchService 读 ES、index sync 读聚合表，无 UI 直查 DB）｜ ✅ 收敛（5 文件，-B 拆分守 ≤5）。
+
 ## [STATS-05-B-PUBLIC-HOT] `/videos?sort=hot` 与 `/videos/trending` 改用播放聚合真源（ADR-216 / SEQ-20260624-02）
 - **完成时间**：2026-06-25
 - **记录时间**：2026-06-25

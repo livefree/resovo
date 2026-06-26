@@ -39,6 +39,17 @@ const AUDIO_LANGS_SUBQUERY = `(
     AND audio_language IS NOT NULL
 )`
 
+// ── 播放统计 LEFT JOIN（STATS-06-A / ADR-216 D-216-3·D-216-4）────────
+// ES 文档携带 play 排序字段（play_count_total / play_count_7d / hot_score），使 `/search?sort=hot`
+// 引用真实物化热度真源、与 `/videos?sort=hot`（STATS-05-B vpt+vhs LEFT JOIN）跨 surface 口径一致。
+// ⚠️ 必须 LEFT JOIN（PK video_id additive，无聚合行 → NULL）+ buildDocument 保留 NULL（禁 ?? 0）：
+//    `/videos` 用 `NULLS LAST`——「无聚合行」(NULL) 与「真实 0」排序不同；ES 写 0 会混淆二者、
+//    破坏 `missing:_last` ≡ `NULLS LAST` 等价（Codex 任务卡审 BLOCK 2）。
+const PLAY_STATS_JOIN = `
+  LEFT JOIN video_play_totals vpt ON vpt.video_id = v.id
+  LEFT JOIN video_hot_scores vhs ON vhs.video_id = v.id
+`
+
 // ── DB 行类型（补全 SearchService 依赖的全部字段）──────────────────
 
 interface VideoEsRow {
@@ -75,6 +86,16 @@ interface VideoEsRow {
   imdb_id: string | null
   tmdb_id: number | null
   created_at: string
+  updated_at: string
+  // STATS-06-A：node-pg 无 int8 parser → BIGINT/NUMERIC 返 string；LEFT JOIN 无聚合行 → null
+  total_play_count: string | null
+  play_count_7d: string | null
+  hot_score: string | null
+}
+
+/** STATS-06-A：node-pg BIGINT/NUMERIC string → number，保留 null（无聚合行，对齐 PG NULLS LAST）。 */
+function toNullableNumber(value: string | null): number | null {
+  return value == null ? null : Number(value)
 }
 
 // ── SQL ──────────────────────────────────────────────────────────
@@ -82,12 +103,13 @@ interface VideoEsRow {
 const ES_FIELDS = `
   v.id, v.short_id, v.slug, v.title, v.type, v.episode_count,
   v.is_published, v.content_rating, v.review_status, v.visibility_status,
-  v.catalog_id, v.created_at,
+  v.catalog_id, v.created_at, v.updated_at,
   mc.title_en, mc.title_original, mc.description, mc.cover_url,
   mc.genres, mc.year, mc.country, mc.rating, mc.rating_votes, mc.runtime_minutes,
   mc.status, mc.director, mc."cast", mc.writers,
   mc.aliases, mc.languages, mc.tags,
-  mc.imdb_id, mc.tmdb_id
+  mc.imdb_id, mc.tmdb_id,
+  vpt.total_play_count, vhs.play_count_7d, vhs.hot_score
 `
 
 const FETCH_SQL = `
@@ -95,7 +117,7 @@ const FETCH_SQL = `
          ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs,
          ${AUDIO_LANGS_SUBQUERY} AS audio_langs
   FROM videos v
-  JOIN media_catalog mc ON mc.id = v.catalog_id
+  JOIN media_catalog mc ON mc.id = v.catalog_id${PLAY_STATS_JOIN}
   WHERE v.id = $1
     AND v.deleted_at IS NULL
 `
@@ -105,7 +127,7 @@ const RECONCILE_SQL = `
          ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs,
          ${AUDIO_LANGS_SUBQUERY} AS audio_langs
   FROM videos v
-  JOIN media_catalog mc ON mc.id = v.catalog_id
+  JOIN media_catalog mc ON mc.id = v.catalog_id${PLAY_STATS_JOIN}
   WHERE v.is_published = true
     AND v.visibility_status = 'public'
     AND v.review_status = 'approved'
@@ -120,7 +142,7 @@ const STALE_UNPUBLISHED_SQL = `
          ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs,
          ${AUDIO_LANGS_SUBQUERY} AS audio_langs
   FROM videos v
-  JOIN media_catalog mc ON mc.id = v.catalog_id
+  JOIN media_catalog mc ON mc.id = v.catalog_id${PLAY_STATS_JOIN}
   WHERE v.deleted_at IS NULL
     AND v.updated_at >= NOW() - ($1 * INTERVAL '1 day')
     AND (v.is_published = false OR v.visibility_status != 'public' OR v.review_status != 'approved')
@@ -174,7 +196,13 @@ function buildDocument(row: VideoEsRow): Record<string, unknown> {
     imdb_id:          row.imdb_id,
     tmdb_id:          row.tmdb_id,
     created_at:       row.created_at,
-    updated_at:       new Date().toISOString(),
+    // STATS-06-A（Codex BLOCK 3）：updated_at = videos.updated_at（编辑时间，与 /videos hot tiebreak
+    // `v.updated_at DESC` 同源）；非索引时间 new Date()——否则前 3 个 hot key 相同时跨 surface 时序分裂。
+    updated_at:       row.updated_at,
+    // STATS-06-A（Codex BLOCK 2）：play 排序字段保留 null（无聚合行）——禁 ?? 0；与 /videos NULLS LAST 等价。
+    play_count_total: toNullableNumber(row.total_play_count),
+    play_count_7d:    toNullableNumber(row.play_count_7d),
+    hot_score:        toNullableNumber(row.hot_score),
   }
 }
 
@@ -203,6 +231,23 @@ export class VideoIndexSyncService {
     } catch (err) {
       baseLogger.warn({ err, videoId }, '[VideoIndexSyncService] syncVideo failed')
     }
+  }
+
+  /**
+   * STATS-06-A（Codex 任务卡审 HIGH 5）：严格同步——ES 写入失败 **抛出**（区别于 syncVideo 的
+   * warn-only 吞错），供 reindex 脚本按真实成功计数、任一失败 exit≠0，杜绝「遍历计数 == published 总数」
+   * 假收敛（syncVideo 吞错时遍历完成 ≠ ES 回填成功）。
+   * @returns 'synced'（写入成功）| 'skipped'（视频不存在 / 已软删，FETCH_SQL 无行）
+   */
+  async syncVideoStrict(videoId: string): Promise<'synced' | 'skipped'> {
+    const result = await this.db.query<VideoEsRow>(FETCH_SQL, [videoId])
+    if (!result.rows[0]) return 'skipped'
+    await this.es.index({
+      index: ES_INDEX,
+      id: result.rows[0].id,
+      document: buildDocument(result.rows[0]),
+    })
+    return 'synced'
   }
 
   /**
