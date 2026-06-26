@@ -3181,3 +3181,31 @@
 - **延后合并期**：**integration 数值测（5 例）**——需专用 test DB（库名含 test token）+ migrate ≥128，worktree 无 `.env.local`（同 STATS-04-A 先例）
 - **主链进度**：`01→02→03A→03B→04A→04B` 全 ✅；下一主链 STATS-05-A-PUBLIC-TYPES-READ（公共读模型 playCount，sonnet）
 - **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**
+
+## [STATS-05-A-PUBLIC-TYPES-READ] 公共读模型 Video.playCount 透传 + 前台三 surface 展示（SEQ-20260624-02 第 5 卡·A）
+- **完成时间**：2026-06-25
+- **记录时间**：2026-06-25
+- **执行模型**：claude-opus-4-8（**卡建议 sonnet，实际 opus 会话按全自动推进执行**——opus 胜任 sonnet 级字段透传、不触碰"主循环不擅自升级"红线，成本偏离登记）
+- **拆卡**：母卡 STATS-05 拆 `-A`（公共读模型 types+展示，本条）/`-B`（`/videos?sort=hot` 排序，opus）。
+- **子代理**：
+  - Codex 对抗审（`codex exec` codex-cli，落盘后 commit 前）— **2 轮 BLOCK→PASS**：
+    - 轮 1（2 BLOCK + 2 HIGH + 1 MEDIUM 全吸收）：① **BLOCK** 改错组件——detail 实际渲染 `DetailHero`（非我初改的 `VideoMeta`，后者 `<VideoMeta` 零渲染=死代码）→ 撤销 VideoMeta 改动、接 DetailHero meta 行；② **BLOCK** watch 非 N/A——实际渲染 `PlayerShell` 且已有 year/rating meta 行（初次 grep WatchPageClient 漏看 PlayerShell）→ PlayerShell meta 行接入；③ HIGH `playCount>0` 隐藏 0 违反验收"无统计行显示 0"→ 三处改**无条件渲染**（含 0）；④ HIGH 搜索卡片遗漏→明确边界：搜索用独立 `SearchResultRow`（ES 无 play 字段），播放次数延后 STATS-06；⑤ MEDIUM 缺组件渲染测试→补
+    - 轮 2：**PASS**（2 BLOCK + 2 HIGH 全闭环；SQL 层轮1 已 PASS 未重审；残留 MEDIUM 测试硬化已补：mock 加 playCount 防 `formatPlayCount(undefined)` 渲染 + detail/player 展示断言）
+- **修改文件**：
+  - `packages/types/src/video.types.ts`：`Video.playCount: number`（必填，PG 详情读路径总有）；`VideoCard = Pick<Video,...> & { playCount?: number }`（**可选**——ES 搜索卡片暂无、STATS-06 补，避免 breaking 所有手动构造点；前台 `?? 0` 兜底）
+  - `apps/api/src/db/queries/videos.internal.ts`：`VIDEO_JOIN` 加 `LEFT JOIN video_play_totals vpt ON vpt.video_id = v.id`（additive 一对零/一，不改行数 / COUNT）；`VIDEO_FULL_SELECT` 加 `COALESCE(vpt.total_play_count, 0) AS play_count`；`DbVideoRow.play_count?: string`；mapVideoRow + mapVideoCard 映射 `playCount: parseInt(row.play_count ?? '0', 10)`。**单点收敛**：改 VIDEO_JOIN/SELECT 一处覆盖全部前台读路径（listVideos/findVideoByShortId/listTrendingVideos/listVideosByTrendingTag/RatingDesc/CardsByIds 全配 VIDEO_JOIN 已验证；裸 `FROM videos v` 的 crawler UPDATE / countVideosByType 不用 VIDEO_FULL_SELECT 不受影响）
+  - `apps/web-next/src/components/video/VideoCard.tsx`：VideoCardMeta 无条件展示 `▶ {formatPlayCount(video.playCount ?? 0)}`（cards + related-via-VideoCard）
+  - `apps/web-next/src/components/detail/DetailHero.tsx`：meta 行无条件展示 `▶ {formatPlayCount(video.playCount)} 次播放`（detail 实际组件）
+  - `apps/web-next/src/components/player/PlayerShell.tsx`：标题 meta 行无条件展示（watch；仅加展示 span、未碰播放逻辑/状态机）
+  - `apps/web-next/src/lib/format-play-count.ts`（新建）：`formatPlayCount`（≥1万→"x.x万"，0→"0"）——3 处展示共用 DRY 单一真源
+  - `tests/unit/api/video-play-count-projection.test.ts`（新，7）：投影常量 + mapper 映射/COALESCE 0 容错
+  - `tests/unit/web-next/format-play-count.test.ts`（新，4）：格式化 + 0 显示
+  - `tests/unit/web-next/VideoCard.test.tsx`（改）：playCount 渲染断言（>0 万 / =0 显示 / 缺失 ??0）
+  - `tests/unit/web-next/detail-hero-line-names.test.tsx` + `player-shell-hydration.test.tsx`（改）：MOCK_VIDEO 加 playCount + detail-play-count/player-play-count 展示断言
+  - `docs/task-queue.md`（STATS-05-A 🔄→✅）/ `docs/tasks.md`（删卡）/ `docs/changelog.md`（本条目）/ `docs/audit/adr-d-status.json`（verify 自动更新）
+- **新增依赖**：无
+- **数据库变更**：无（消费 STATS-04 产出的 video_play_totals）
+- **门禁**：`typecheck`=0（root + 7 workspace）/ 改动文件 `eslint`=0（worktree 全量 lint 为 resovo cascade 环境冲突，临时 root:true 隔离验证后还原）/ **全量 `test:changed` 8379 passed**（types 基础包改动升全量 614 文件；唯一失败 `CrawlerRunsView.test.tsx`〔admin crawler ADR-150 status filter〕为**预存并发 flaky**——单独跑 33/33 passed、零 playCount/VideoCard 引用、与本卡无关，16 个 tests/unit 子目录穷举单跑全过）/ `verify:adr-contracts`=0（sql-schema-alignment 对齐）
+- **延后合并期**：**VIDEO/PLAYER e2e**——worktree；PlayerShell 仅 meta 行加展示 span 未碰播放交互（断点续播/线路切换/影院/字幕），player-shell-hydration 5 测 + layout/preview-mode 回归过
+- **边界（供 STATS-05-B / 06）**：本卡仅 PG 读路径展示（VideoCard from PG / DetailHero / PlayerShell）；ES 搜索卡片（SearchResultRow）playCount 展示延后 **STATS-06**（ES play fields + 同步）；不改排序语义（hot 排序 STATS-05-B）
+- **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**

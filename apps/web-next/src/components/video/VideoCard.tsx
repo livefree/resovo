@@ -26,6 +26,7 @@ import { videoCardToTagProps } from '@/lib/tag-mapping'
 import { getStackLevel } from '@/lib/video-stack-level'
 import type { VideoCard as VideoCardType } from '@resovo/types'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
+import { formatPlayCount } from '@/lib/format-play-count'
 
 export type VideoCardInteraction = 'takeover' | 'navigate'
 
@@ -106,6 +107,9 @@ function VideoCardMeta({
           {video.episodeCount > 1 && ` · ${video.episodeCount}集`}
         </p>
       )}
+      <p className="text-xs" style={{ color: 'var(--fg-muted)' }} data-testid="video-card-play-count">
+        ▶ {formatPlayCount(video.playCount ?? 0)}
+      </p>
     </div>
   )
 }

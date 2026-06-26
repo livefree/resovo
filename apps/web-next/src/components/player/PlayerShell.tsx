@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { usePlayerStore } from '@/stores/playerStore'
 import { apiClient } from '@/lib/api-client'
 import { createQualifiedPlayDetector, reportVideoPlayEvent } from '@/lib/play-stats'
+import { formatPlayCount } from '@/lib/format-play-count'
 import { extractShortId } from '@/lib/short-id'
 import { buildEpisodeUrl } from '@/lib/episode-url'
 import { getVideoDetailHref } from '@/lib/video-route'
@@ -644,6 +645,7 @@ export function PlayerShell({ slug: slugProp, portalMode = false, previewMode = 
             {video.rating !== null && (
               <span style={{ color: 'var(--accent-default)' }}>★ {video.rating.toFixed(1)}</span>
             )}
+            <span data-testid="player-play-count">▶ {formatPlayCount(video.playCount)} 次播放</span>
           </div>
         </div>
 
