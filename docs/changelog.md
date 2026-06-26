@@ -42,6 +42,33 @@
 
 ---
 
+## [STATS-07-B] 后台视频播放分析 UI：dashboard「视频播放」Tab（overview 卡片 + trend SVG 图 + top-videos DataTable）+ ADMIN e2e（ADR-217 / SEQ-20260624-02 主链第 7 卡 UI 侧）
+
+- **完成时间**：2026-06-26
+- **记录时间**：2026-06-26 00:30
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：Codex adversarial-review（codex-cli 0.125.0 / gpt-5.5）2 轮——任务卡审（方向成立、不拆 B1/B2、放置正确；1 BLOCK + 2 HIGH + 3 MEDIUM + LOW 全吸收）+ 代码审（无 BLOCK；HIGH-1 列 ⋯ 死交互 + 4 条测试增强全吸收）。**未另起 arch-reviewer**：纯消费既有 admin-ui 组件（DataTable/KpiCard/PageHeader/LoadingState/ErrorState）+ STATS-07-A 已冻结 DTO，零 admin-ui Props 契约改动、零 schema/API 改动。
+- **任务**：STATS-07-B（ADR-217 D-217-10/12 的 UI 侧实现，主链 `…07-A✅→07-B✅`，**STATS-07 全交付**）。UI 单层：新 dashboard Tab「视频播放」（放置「under existing analytics area」设计真源，镜像既有 `AnalyticsView` 范式），消费 STATS-07-A 三只读端点 + 3 DTO。
+- **实现（5 项）**：① `lib/video-plays/api.ts` 3 fetch（`apiClient` + **`@resovo/types`**〔server-next 共享类型入口，非 `@/types`〕 + `{ data }` 解包）；② `VideoPlaysAnalyticsView.tsx`——period 选择器（7d/30d/90d）+ overview 5 `KpiCard`（总播放/总观看秒/均观看秒/匿名/登录，标题消费 `overview.period` 回显）+ trend inline SVG 折线（镜像 `AreaChart`，**零图表库依赖**，恒 N 点 zero-fill、全 0 画可见 flat baseline、`<title>`/aria 含 period+点数+首尾 date、`data-video-plays-trend-line`）+ top-videos `admin-ui DataTable`（**server mode 直渲全行** + `pagination/toolbar` 隐藏 + `columnTriggerVisibility="never"` 抑制列 ⋯ 死交互，禁 v1 三件套）+ **stale guard**（`requestSeqRef` + `Promise.all` 原子 + 仅 latest seq setState）；③ `DashboardClient.tsx` 加 `'video-plays'` tab（`TabId` + `activeTab` 派生 + 按钮 + render 分支，additive）；④ 单测 7 测；⑤ ADMIN e2e 3 测（实跑延后）。
+- **Codex 两轮吸收**：
+  - **卡审（实现前）**：BLOCK-1 `@/types`→`@resovo/types`（server-next tsconfig `@/*`→`./src/*`）/ HIGH-2 e2e 路径 `tests/e2e-next/`→`tests/e2e/admin/`（admin-next-chromium 仅匹配 `**/e2e/admin/**`）+ `installAdminShellMocks` / HIGH-3 DataTable server mode 直渲不被 client 默认 pageSize=20 切片 / MEDIUM-4 stale guard / MEDIUM-5 trend 退化态 / MEDIUM-6 测精确钩子 / LOW-9 ADR 语义守卫（不对账/今日桶不稳定/avg=0 非 NaN/anon 含 ephemeral）。
+  - **代码审（实现后，无 BLOCK）**：HIGH-1 top-videos 列级 ⋯ 死交互（noop 打不开）→ 加 `toolbar={{hidden:true}}` + `columnTriggerVisibility="never"` / MEDIUM-1 period 切换测加 deferred stale 覆盖测（30d 先 resolve、7d 晚到丢弃）/ MEDIUM-2 行数测 2→25 行拦 pageSize 切片回归 + 断言无 `th-menu-trigger` / LOW-1 avg=0 精确断言卡 value='0' / LOW-2 标题改用 `overview.period` 回显。stale guard / trend SVG / api client / DashboardClient additive 经代码审确认正确。
+- **门禁**：typecheck EXIT=0（全工作区）；单测 **7 测全过**（VideoPlaysAnalyticsView）；test:changed EXIT=0（2 文件 23 测，含 DashboardClient 依赖，零回归）；`playwright --project=admin-next-chromium --list` **收集 3 e2e**（HIGH-2 spec 进对 project）；verify:adr-contracts EXIT=0（无新 route，endpoint-adr 不变）；自查零硬编码色 / 零 any / 无空 catch。next-lint workspace 报错为 worktree 嵌套 `.eslintrc` plugin 冲突环境问题、与本卡零关系（apps/api/server-next tsc typecheck 已覆盖）。ADMIN e2e 实跑延后合并期（worktree 无 `.env.local`/dev server，同 CARD-SIZE-E2E 先例）。
+- **修改文件**：
+  - `apps/server-next/src/lib/video-plays/api.ts`（新）— 3 fetch api client
+  - `apps/server-next/src/app/admin/_client/VideoPlaysAnalyticsView.tsx`（新）— 三视图 view（overview/trend/top-videos + period + stale guard）
+  - `apps/server-next/src/app/admin/_client/DashboardClient.tsx` — 加 video-plays tab（additive）
+  - `tests/unit/components/server-next/admin/VideoPlaysAnalyticsView.test.tsx`（新，7 测）
+  - `tests/e2e/admin/video-plays-analytics.spec.ts`（新，3 测，实跑延后）
+  - `docs/task-queue.md`（STATS-07 母卡全交付 ✅）/ `docs/tasks.md`（卡删除，净零）/ `docs/audit/adr-d-status.json`（verify 脚本自动）
+- **新增依赖**：无（trend 用 inline SVG，零图表库；全仓零第三方图表库依赖，引入即 BLOCKER）
+- **数据库变更**：无
+- **偏离登记**：① 单测路径放 `tests/unit/components/server-next/admin/`（仓库既有 server-next 组件单测约定）而非卡登记的 `tests/unit/server-next/`（实现手段对齐既有约定，契约未变）；② 代码审吸收时移除 `ErrorState` 上不被转发的 dead `data-video-plays-error` prop，错误态 e2e/测试钩子改用 ErrorState 真实渲染的 `[data-retry-btn]` / `[data-error-title]`。
+- **注意事项**：① ADMIN e2e（3 测）worktree 无 dev server → 延后合并期 `npm run test:e2e` 实跑；② 新 tab URL = `/admin?tab=video-plays`（沿用 IA-2 dashboard tab 容器、不新增 sidebar 入口）；③ top-videos 与 overview/trend **刻意不对账**（D-217-6），UI 无跨视图总和校验；④ 今日桶 partial/mutable（D-217-2），UI 不假设今日数值稳定。
+- **主链进度**：`01✅→02✅→03A✅→03B✅→04A✅→04B✅→05A✅→05B✅→06A✅→06B✅→07-ADR✅→07-A✅→07-B✅`。**🎉 SEQ-20260624-02 VIDEO-PLAY-STATS 主链全交付**（schema→visitor→写端点→前端上报→聚合 job→热度→ES 同步→搜索/公开热度读→admin ADR→API→UI 全栈闭环）。
+
+---
+
 ## [STATS-07-A] 后台视频播放分析只读端点 API 落地 `/admin/analytics/video-plays/{overview,trend,top-videos}`（ADR-217 / SEQ-20260624-02 主链第 7 卡 API 侧）
 
 - **完成时间**：2026-06-25
