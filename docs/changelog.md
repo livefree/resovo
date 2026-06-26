@@ -42,6 +42,22 @@
 
 ---
 
+## [STATS-04-INTEGRATION-FIX] 修复 `seedTestVideo` 陈旧 schema → STATS-04-A/B 写集成测可跑（合并 main 前 gate 发现）
+
+- **完成时间**：2026-06-26
+- **记录时间**：2026-06-26 00:55
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无
+- **背景**：合并 main 前跑 gate 时发现 STATS-04-A/B worker 写集成测（`play-stats-aggregate` / `play-stats-retention`）committed 即不可跑——依赖 main 既有共享 helper `tests/helpers/db.ts` 的 `seedTestVideo`，其 INSERT 面向 media_catalog 重构前的旧 `videos` schema（引用已退役列 title_en/status/rating/year/country/director/cast/writers + `cast` 未引号保留字 + 缺当前 NOT NULL FK `catalog_id`→`media_catalog`）。这俩测一直延后（破坏性 TRUNCATE 守卫要求库名含 "test" 的专用库，无则不跑），从未真跑、bug 未暴露。
+- **修复**：`seedTestVideo` 重写——先 seed `media_catalog`（NOT NULL：title/title_normalized/type，无级联 FK），再 seed `videos` 当前列（id/short_id/slug/title/type/episode_count/catalog_id/created_at），返回 video 行。仅影响其 2 个消费方（STATS-04-A/B 集成测），不动 makeVideo/seedTestSource/cleanTestData。
+- **门禁**：typecheck=0；专用 `resovo_test` 库（全量迁移 0→128）——STATS-04 写测 aggregate 8 + retention 5 = **13 测全过**；全量集成测 **14 文件 / 121 测全过**（含 STATS schema/analytics + card-size 等，干净库无数据漂移）。
+- **修改文件**：`tests/helpers/db.ts`（`seedTestVideo`）。
+- **新增依赖**：无
+- **数据库变更**：无（仅测试 seed 逻辑）
+- **注意事项**：① STATS-04-A/B 写集成测需库名含 "test" 的专用库（破坏性 TRUNCATE 守卫，Codex round2 HIGH）；② card-size 集成测对共享 `resovo_dev` 失败（global `card_width_px=200` vs seed 160）是该 dev DB 历史数据漂移、非代码问题，干净库通过。
+
+---
+
 ## [STATS-07-B] 后台视频播放分析 UI：dashboard「视频播放」Tab（overview 卡片 + trend SVG 图 + top-videos DataTable）+ ADMIN e2e（ADR-217 / SEQ-20260624-02 主链第 7 卡 UI 侧）
 
 - **完成时间**：2026-06-26

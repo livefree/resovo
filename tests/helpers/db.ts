@@ -45,14 +45,20 @@ export async function seedTestUser(db: Pool, overrides?: Parameters<typeof makeU
 
 export async function seedTestVideo(db: Pool, overrides?: Parameters<typeof makeVideo>[0]) {
   const video = makeVideo(overrides)
+  // videos.catalog_id 是 NOT NULL FK → media_catalog（VSR/VIR 重构后的规范父实体）。
+  // 先 seed media_catalog（仅 NOT NULL：title / title_normalized / type），再 seed videos。
+  // 旧实现引用的 title_en/status/rating/year/country/director/cast/writers 列已随重构退役，不再写入。
+  const catalog = await db.query<{ id: string }>(
+    `INSERT INTO media_catalog (title, title_normalized, type)
+     VALUES ($1, $2, $3) RETURNING id`,
+    [video.title, video.title.toLowerCase(), video.type]
+  )
+  const catalogId = catalog.rows[0].id
   const result = await db.query(
-    `INSERT INTO videos (id, short_id, slug, title, title_en, type, status, episode_count,
-                         rating, year, country, director, cast, writers, created_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
-    [video.id, video.shortId, video.slug, video.title, video.titleEn,
-     video.type, video.status, video.episodeCount, video.rating,
-     video.year, video.country, video.director, video.cast, video.writers,
-     video.createdAt]
+    `INSERT INTO videos (id, short_id, slug, title, type, episode_count, catalog_id, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [video.id, video.shortId, video.slug, video.title, video.type,
+     video.episodeCount, catalogId, video.createdAt]
   )
   return result.rows[0]
 }
