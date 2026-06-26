@@ -95,3 +95,54 @@ export interface VideoHotScore {
   playCount30d: number
   computedAt: string
 }
+
+// ── 后台播放分析只读读模型 DTO（ADR-217 / STATS-07-A）─────────────────────────────
+//
+// 三视图唯一数据源 = video_play_daily（零 raw-event 扫描、零 schema 变更，D-217-3）。
+// 端点：GET /admin/analytics/video-plays/{overview,trend,top-videos}（adminOnly，envelope { data }）。
+// 口径冻结见 ADR-217 D-217-4/5/6；BIGINT→number 裸 Number() 表示（D-217-7）。
+
+/** period 窗口枚举（近 N 自然日；无 today、最小 7d，D-217-2）。 */
+export type VideoPlaysPeriod = '7d' | '30d' | '90d'
+
+/**
+ * overview 概览读模型（period 窗口全站汇总，D-217-4）。
+ * 不变量：totalPlays === anonPlays + loggedInPlays（schema play_count = anon + logged 互补关系上提为读模型不变量）。
+ * avgWatchSeconds 除零保护：totalPlays>0 ? totalWatchSeconds/totalPlays : 0。
+ * v1 不暴露 period 级 unique visitor（daily-only 无法去重，D-217-4）。
+ */
+export interface VideoPlaysOverview {
+  /** 回显请求 period 供前端卡片标题展示「近 N 天」+ 校验响应窗口（D-217 DTO 段，刻意不对称） */
+  period: VideoPlaysPeriod
+  totalPlays: number
+  totalWatchSeconds: number
+  avgWatchSeconds: number
+  /** play-count based（含 ephemeral 匿名播放）；不查 users（D-217-4） */
+  anonPlays: number
+  loggedInPlays: number
+}
+
+/**
+ * trend 每日趋势点（恰好 N 个有序日点、缺日 zero-fill，全站跨视频汇总，D-217-5）。
+ * date 为严格 YYYY-MM-DD（SQL to_char/::text 显式产出，防 node-pg DATE off-by-one/TZ 漂移）。
+ */
+export interface VideoPlaysTrendPoint {
+  /** 严格 YYYY-MM-DD（不含时间分量） */
+  date: string
+  plays: number
+  watchSeconds: number
+  anonPlays: number
+  loggedInPlays: number
+}
+
+/**
+ * top-videos 热门榜项（period 内 SUM(play_count) 前 N，D-217-6）。
+ * 可见性：INNER JOIN videos deleted_at IS NULL（排已删，不过滤 is_published/visibility——后台看全部存活视频）。
+ * 仅 short_id/title + 计数，绝不含 visitor_hash。与 overview/trend 刻意不对账（live-video 子集）。
+ */
+export interface VideoPlaysTopVideo {
+  shortId: string
+  title: string
+  plays: number
+  watchSeconds: number
+}

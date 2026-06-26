@@ -282,3 +282,119 @@ export async function isActiveSourceOfVideo(
   )
   return (result.rowCount ?? 0) > 0
 }
+
+// ── 后台播放分析只读 query（ADR-217 / STATS-07-A）──────────────────────────────
+//
+// 唯一数据源 = video_play_daily（+ top-videos 的 videos join）；绝不扫 raw events / hourly / totals /
+//   hot_scores / daily_visitors / users（D-217-3）。
+// period 窗口 = 近 N 自然日：bucket_date ∈ [CURRENT_DATE−(N−1), CURRENT_DATE]（D-217-2）。
+// 时区同源：CURRENT_DATE 与聚合 worker 的 occurred_at::date 共享单一 PG session TimeZone，
+//   不在本层引入独立时区转换（D-217-2 不变量；守护见集成测 SHOW timezone 一致 + 静态 pool 无 SET TIME ZONE）。
+// BIGINT/NUMERIC SUM → ::text 显式取 string，DTO 映射（裸 Number()）归 VideoPlayAnalyticsService（D-217-7/9）。
+// 3 条 SQL 具名导出并汇成 VIDEO_PLAY_ANALYTICS_SQL，供数据源静态门**精确扫该常量集**
+//   （不扫整文件——本文件 insertVideoPlayEvent 合法含 video_play_events 写 SQL；Codex 卡审 MEDIUM-3）。
+
+/** overview 原始聚合行（service 映射 → VideoPlaysOverview）。 */
+export interface DbVideoPlaysOverviewRow {
+  total_plays: string
+  total_watch_seconds: string
+  anon_plays: string
+  logged_in_plays: string
+}
+
+/** trend 每日点原始行（service 映射 → VideoPlaysTrendPoint）。 */
+export interface DbVideoPlaysTrendRow {
+  date: string // to_char YYYY-MM-DD
+  plays: string
+  watch_seconds: string
+  anon_plays: string
+  logged_in_plays: string
+}
+
+/** top-videos 榜项原始行（service 映射 → VideoPlaysTopVideo）。 */
+export interface DbVideoPlaysTopVideoRow {
+  short_id: string
+  title: string
+  plays: string
+  watch_seconds: string
+}
+
+/** overview：period 窗口对 video_play_daily 全站 SUM（空窗口 COALESCE→0，聚合无 GROUP BY 恒返单行）。 */
+export const SQL_VIDEO_PLAYS_OVERVIEW = `
+  SELECT
+    COALESCE(SUM(play_count), 0)::text           AS total_plays,
+    COALESCE(SUM(total_watch_seconds), 0)::text  AS total_watch_seconds,
+    COALESCE(SUM(anon_play_count), 0)::text       AS anon_plays,
+    COALESCE(SUM(logged_in_play_count), 0)::text  AS logged_in_plays
+  FROM video_play_daily
+  WHERE bucket_date >= CURRENT_DATE - ($1::int - 1)
+    AND bucket_date <= CURRENT_DATE`
+
+/** trend：generate_series(...)::date 补齐 N 日序列 LEFT JOIN daily，缺日 zero-fill；date 严格 YYYY-MM-DD（防 TZ 漂移）。 */
+export const SQL_VIDEO_PLAYS_TREND = `
+  SELECT
+    to_char(s.day, 'YYYY-MM-DD')                   AS date,
+    COALESCE(SUM(d.play_count), 0)::text           AS plays,
+    COALESCE(SUM(d.total_watch_seconds), 0)::text  AS watch_seconds,
+    COALESCE(SUM(d.anon_play_count), 0)::text       AS anon_plays,
+    COALESCE(SUM(d.logged_in_play_count), 0)::text  AS logged_in_plays
+  FROM (
+    SELECT generate_series(CURRENT_DATE - ($1::int - 1), CURRENT_DATE, interval '1 day')::date AS day
+  ) s
+  LEFT JOIN video_play_daily d ON d.bucket_date = s.day
+  GROUP BY s.day
+  ORDER BY s.day ASC`
+
+/** top-videos：period 窗口 GROUP BY video，INNER JOIN 存活视频（deleted_at IS NULL），确定性 tie-break，LIMIT。 */
+export const SQL_TOP_VIDEOS_BY_PLAYS = `
+  SELECT
+    v.short_id                                     AS short_id,
+    v.title                                        AS title,
+    COALESCE(SUM(d.play_count), 0)::text           AS plays,
+    COALESCE(SUM(d.total_watch_seconds), 0)::text  AS watch_seconds
+  FROM video_play_daily d
+  JOIN videos v ON v.id = d.video_id AND v.deleted_at IS NULL
+  WHERE d.bucket_date >= CURRENT_DATE - ($1::int - 1)
+    AND d.bucket_date <= CURRENT_DATE
+  GROUP BY v.id, v.short_id, v.title
+  ORDER BY SUM(d.play_count) DESC, SUM(d.total_watch_seconds) DESC, v.id ASC
+  LIMIT $2::int`
+
+/**
+ * 数据源静态门集合（Codex 卡审 MEDIUM-3）：单测仅扫此 3 条 analytics SQL 字符串，
+ * 拒禁表（events/hourly/totals/hot_scores/daily_visitors/users）、仅许 video_play_daily + videos。
+ * **禁扫整 videoPlayStats.ts 源文本或函数名**——会误杀既有 STATS-03 写 SQL / 漏扫真 analytics SQL。
+ */
+export const VIDEO_PLAY_ANALYTICS_SQL = [
+  SQL_VIDEO_PLAYS_OVERVIEW,
+  SQL_VIDEO_PLAYS_TREND,
+  SQL_TOP_VIDEOS_BY_PLAYS,
+] as const
+
+/** overview 原始聚合（periodDays = 近 N 自然日；映射归 service）。 */
+export async function getVideoPlaysOverview(
+  db: Pool,
+  periodDays: number,
+): Promise<DbVideoPlaysOverviewRow> {
+  const result = await db.query<DbVideoPlaysOverviewRow>(SQL_VIDEO_PLAYS_OVERVIEW, [periodDays])
+  return result.rows[0]
+}
+
+/** trend 原始日序列（恒 N 行有序 zero-fill；映射归 service）。 */
+export async function getVideoPlaysTrend(
+  db: Pool,
+  periodDays: number,
+): Promise<DbVideoPlaysTrendRow[]> {
+  const result = await db.query<DbVideoPlaysTrendRow>(SQL_VIDEO_PLAYS_TREND, [periodDays])
+  return result.rows
+}
+
+/** top-videos 原始榜（前 limit；映射归 service）。 */
+export async function getTopVideosByPlays(
+  db: Pool,
+  periodDays: number,
+  limit: number,
+): Promise<DbVideoPlaysTopVideoRow[]> {
+  const result = await db.query<DbVideoPlaysTopVideoRow>(SQL_TOP_VIDEOS_BY_PLAYS, [periodDays, limit])
+  return result.rows
+}

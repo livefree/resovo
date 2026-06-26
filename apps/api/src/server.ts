@@ -17,6 +17,7 @@ import { adminVideoSourcesRoutes } from '@/api/routes/admin/videoSources'
 import { adminContentRoutes } from '@/api/routes/admin/content'
 import { adminUserRoutes } from '@/api/routes/admin/users'
 import { adminAnalyticsRoutes } from '@/api/routes/admin/analytics'
+import { adminVideoPlayAnalyticsRoutes } from '@/api/routes/admin/analytics.video-plays'
 import { adminCrawlerRoutes } from '@/api/routes/admin/crawler'
 import { adminCacheRoutes } from '@/api/routes/admin/cache'
 import { adminMigrationRoutes } from '@/api/routes/admin/migration'
@@ -182,6 +183,7 @@ async function start() {
   await fastify.register(adminContentRoutes, { prefix: '/v1' })
   await fastify.register(adminUserRoutes, { prefix: '/v1' })
   await fastify.register(adminAnalyticsRoutes, { prefix: '/v1' })
+  await fastify.register(adminVideoPlayAnalyticsRoutes, { prefix: '/v1' })  // ADR-217 / STATS-07-A
   await fastify.register(adminCrawlerRoutes, { prefix: '/v1' })
   await fastify.register(userRoutes, { prefix: '/v1' })
   await fastify.register(danmakuRoutes, { prefix: '/v1' })

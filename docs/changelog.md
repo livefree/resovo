@@ -42,6 +42,35 @@
 
 ---
 
+## [STATS-07-A] 后台视频播放分析只读端点 API 落地 `/admin/analytics/video-plays/{overview,trend,top-videos}`（ADR-217 / SEQ-20260624-02 主链第 7 卡 API 侧）
+
+- **完成时间**：2026-06-25
+- **记录时间**：2026-06-25 23:45
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：Codex adversarial-review（codex-cli 0.125.0 / gpt-5.5）2 轮——任务卡审（无 BLOCK，2H/3M/1L 全吸收）+ 代码审（无 BLOCK，3 条测试增强 HIGH-1/MEDIUM-2/LOW-3 全吸收）。**未另起 arch-reviewer**：DTO 契约已于 ADR-217 经 arch-reviewer（claude-opus-4-8）定稿冻结，本卡仅按冻结类型实现、零 admin-ui Props 改动、零 schema 变更。
+- **任务**：STATS-07-A（ADR-217 Accepted 的 API 侧实现）。API 单层纵切：3 admin 只读 GET 端点 + daily-only 三视图 + per-endpoint 严格 zod + 数据源/分层/时区/注册/SQL 子句五类静态门。schema 冻结（migration 128 零改）、UI 归 STATS-07-B。
+- **决策落地（D-217-1~12）**：唯一数据源 `video_play_daily`（显式禁扫 events/hourly/totals/hot_scores/daily_visitors/users）；period 7d/30d/90d 近 N 自然日窗口 `bucket_date ∈ [CURRENT_DATE-(N-1), CURRENT_DATE]`；overview SUM + avg 除零（`totalPlays>0 ? … : 0`）+ anon/logged play-count based（含 ephemeral anon、不查 users、`totalPlays===anon+logged` 恒等）；trend `generate_series(...)::date` LEFT JOIN zero-fill 恰 N 点 + `to_char YYYY-MM-DD`；top-videos INNER JOIN `videos deleted_at IS NULL` + 确定性 tie-break `SUM(play_count) DESC, SUM(total_watch_seconds) DESC, v.id ASC` + limit≤100；BIGINT `::text`→裸 `Number()`；分层 Route→VideoPlayAnalyticsService→queries 零 route 内联 SQL。
+- **Codex 代码审吸收（无 BLOCK；SQL/zod/分层/BIGINT 实现层确认零 bug，3 条均测试增强防假绿）**：
+  - **HIGH-1**：集成测时区门由「单池 truthy + 静态文本」升为「实开 api `lib/postgres` + worker `lib/db` 两侧**真实 pool 模块**各跑 `SHOW timezone` 断言相等」——挡静态文本看不见的 env/连接串 timezone 漂移（`PGTZ` / connectionString `options=-c timezone=`）；静态门保留为互补层、不互替。
+  - **MEDIUM-2**：guards 加 ⑤ SQL 子句静态门——`SQL_TOP_VIDEOS_BY_PLAYS` 钉死 `deleted_at IS NULL`/tie-break/`LIMIT $2`，trend 钉 `generate_series::date`+`to_char`，窗口钉 `CURRENT_DATE-($1::int-1)`，把延后集成测的 DB 形状覆盖前移到 CI 可拦静态层（补无删除/并列数据时删子句也假绿的盲区）。
+  - **LOW-3**：routes 补 zod 边界——`limit=`（空串→0→422）/ `limit=1.5`（.int 拒）/ top-videos 未知键（.strict 拒）/ 大写 `period=7D`（enum 大小写敏感→422）。
+- **门禁**：typecheck EXIT=0（全工作区）；3 单测文件 **34 passed**（25→34，+9 吸收）；test:changed EXIT=0 全量升格 **619 文件 / 8451 测全过**（8442→8451，零回归）；`verify:endpoint-adr` ✅ 253 admin 路由对齐（139 ADR 端点含新增 3 端点契约）；`verify:adr-contracts` EXIT=0（sql-schema-alignment 确认列引用对齐 migration 128 / style / types-mirror；error-message·D-N·enum-ssot 为既有 advisory 存量、非本卡引入、不阻塞）。apps/api lint=tsc 过；next-lint workspace 报错为 worktree 嵌套 `.eslintrc` plugin 冲突环境问题、与本卡零关系。集成测 DB 层无 DB → 落盘、实跑延后合并期。
+- **修改文件**：
+  - `packages/types/src/video-play-stats.types.ts` — 追加 `VideoPlaysPeriod` + 3 DTO（`VideoPlaysOverview`/`VideoPlaysTrendPoint`/`VideoPlaysTopVideo`），`@/types` 自动出口
+  - `apps/api/src/db/queries/videoPlayStats.ts` — 追加 3 具名 analytics SQL 常量 + `VIDEO_PLAY_ANALYTICS_SQL` 常量集 + 3 query 函数（唯一源 daily）
+  - `apps/api/src/services/VideoPlayAnalyticsService.ts`（新）— 编排 + DTO 映射 + period→天数 + avg 除零
+  - `apps/api/src/routes/admin/analytics.video-plays.ts`（新）— 3 GET + per-endpoint 严格 zod + adminOnly
+  - `apps/api/src/server.ts` — 注册 `adminVideoPlayAnalyticsRoutes`（prefix /v1）
+  - `tests/unit/api/video-play-analytics-{guards,service,routes}.test.ts`（新）— 静态门 ①~⑤ + service 映射 + route 行为/信封/zod 边界（34 测）
+  - `tests/integration/api/video-play-analytics.test.ts`（新）— 真 PG 可执行 + 不变量 + 时区真池相等门（延后实跑）
+  - `docs/task-queue.md`（STATS-07 母卡 A✅）/ `docs/tasks.md`（卡删除，净零）/ `docs/audit/adr-d-status.json`（verify 脚本自动）
+- **新增依赖**：无
+- **数据库变更**：无（migration 128 schema 冻结，零改）
+- **注意事项**：① 集成测（时区真池相等门 + top-videos deleted/tie-break）worktree 无 DB → 延后合并期实跑；② STATS-07-B（server-next analytics UI + ADMIN e2e）为下一卡，消费 `@/types` 3 DTO + 3 端点，A 先于 B；③ analytics 口径与 `watch_history` **刻意不对账**（D-217 三视图各自独立窗口/过滤）。
+- **主链进度**：`01✅→02✅→03A✅→03B✅→04A✅→04B✅→05A✅→05B✅→06A✅→06B✅→07-ADR✅→07-A✅→07-B⬜`。
+
+---
+
 ## [STATS-07-ADR] ADR-217 起草定稿：后台视频播放分析只读端点契约 `/admin/analytics/video-plays/{overview,trend,top-videos}`（SEQ-20260624-02 / STATS-07 前置门）
 
 - **任务**：STATS-07-ADR（SEQ-20260624-02 VIDEO-PLAY-STATS 主链第 7 卡的 admin 端点门禁前置）。纯 docs ADR 起草，**不落任何实现代码**。执行模型 `claude-opus-4-8`（主循环）；子代理 arch-reviewer（`claude-opus-4-8`，agentId a5f5f7bf958e94610）+ Codex 对抗审 2 轮（任务卡 / ADR 产物，codex-cli 0.125.0）。stats-01-adr 分支（未合并 dev/main）。
