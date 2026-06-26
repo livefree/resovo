@@ -197,7 +197,7 @@ export function DashboardClient() {
       {activeTab === 'overview' && (
         <>
           <PageHeader
-            title={`早上好，Yan — 今天有 ${dashboardStats.kpis[1].value} 待处理`}
+            title={`${(() => { const h = new Date().getHours(); return h < 5 ? '夜深了' : h < 9 ? '早上好' : h < 12 ? '上午好' : h < 14 ? '中午好' : h < 18 ? '下午好' : '晚上好' })()} — 今天有 ${dashboardStats.kpis[1].value} 待处理`}
             subtitle={dashboardStats.headSub}
             actions={
               <>
