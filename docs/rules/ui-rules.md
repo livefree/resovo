@@ -6,7 +6,7 @@
 > source_of_truth: no
 > supersedes: none
 > superseded_by: none
-> last_reviewed: 2026-03-28
+> last_reviewed: 2026-06-26
 >
 > 本文件由原"前端组件规范"升级而来，适用范围扩展至前台与后台。
 > 升级依据：`docs/archive/ui_governance_conflicts_20260327.md`（已归档）§4.2 及 §5
@@ -35,7 +35,7 @@
 
 前台与后台当前使用两套独立的 CSS 变量体系，分别来自 `apps/web-next/src/app/globals.css`（前台）和后台 `apps/server-next`（消费 `packages/design-tokens`）。两套体系并存属于已知历史分叉，将在 token 层统一后收敛。在此之前，各区域必须使用对应体系内的变量，**不得跨体系混用，不得引入新的硬编码颜色值**。（apps/web / apps/server v1 globals.css 已随退役删除）
 
-#### 前台 CSS 变量（用于 `apps/web/src/components/` 前台组件）
+#### 前台 CSS 变量（用于 `apps/web-next/src/components/` 前台组件）
 
 ```css
 /* 背景 */
@@ -195,7 +195,7 @@ import { cn } from '@/lib/utils'
 
 ## 播放器组件规范
 
-播放器相关组件在 `apps/web/src/components/player/` 目录，有特殊规范：
+播放器相关组件在 `apps/web-next/src/components/player/` 目录，有特殊规范：
 
 ### 状态管理
 ```tsx
@@ -388,28 +388,9 @@ packages/admin-ui/src/
 
 未抽出的业务复合组件（DualSignal / VisChip / Spark / KpiCard / thumb / pill / inline xs actions 等）由 CHG-DESIGN-12 沉淀（详见 `docs/designs/backend_design_v2.1/reference.md` §10）。
 
-#### ~~apps/server v1~~（已退役删除，CHG-CUTOVER-EXECUTE 2026-06-08 · 以下仅历史参考）
+#### ~~apps/server v1~~（已退役删除，CHG-CUTOVER-EXECUTE 2026-06-08）
 
-> apps/server v1 已物理删除，下列 `apps/server/src/components/admin/shared/` 目录清单仅作历史记录；新组件一律走 server-next（`packages/admin-ui` + `docs/designs/backend_design_v2.1/reference.md`）。
-
-历史 `apps/server/src/components/admin/shared/` 结构（已删除）：
-
-```
-apps/server/src/components/admin/shared/
-  batch/          ← 批量操作：SelectionActionBar
-  button/         ← 通用按钮：AdminButton
-  dialog/         ← 弹窗：AdminDialogShell
-  dropdown/       ← 下拉菜单/浮层：AdminDropdown
-  feedback/       ← 反馈状态：AdminHoverHint、AdminTableState
-  form/           ← 表单：AdminFormField、AdminInput、AdminSelect
-  layout/         ← 页面骨架：AdminPageShell
-  modal/          ← 模态框：AdminModal
-  modern-table/   ← 表格体系：ModernDataTable、TableColumn、cells/
-  table/          ← 旧表格辅助（逐步废弃中）：ColumnSettingsPanel*
-  toolbar/        ← 工具栏：AdminToolbar
-```
-
-> \* `ColumnSettingsPanel` 正在被 `TableSettingsTrigger + useTableSettings` 替代（SEQ-20260328-42）
+> v1 后台共享组件目录（`apps/server/src/components/admin/shared/`：batch / button / dialog / dropdown / feedback / form / layout / modal / modern-table / table / toolbar）已随 apps/server 物理删除，完整历史清单见 changelog `CHG-CUTOVER-EXECUTE` 条目。**新组件一律走 server-next**：先查 `packages/admin-ui/src/components/` + `shell/`，未抽出的业务复合组件见 `docs/designs/backend_design_v2.1/reference.md` 业务复合组件清单。
 
 ### 禁止行为
 

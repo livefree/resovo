@@ -168,7 +168,7 @@ npm run verify:adr-contracts # ADR 协议合规 3 类核验（端点/错误码/D
 
 调用模板：
 
-    Task(subagent_type: "arch-reviewer", model: "claude-opus-4-6",
+    Task(subagent_type: "arch-reviewer", model: "claude-opus-4-8",
          prompt: "<独立设计任务，自带完整上下文>")
 
 主循环拿到子代理输出后按其结论实施，子代理的模型 ID 必须记入 tasks.md 卡片的"子代理调用"字段。
