@@ -3356,3 +3356,20 @@
 - **延后合并期**：**VIDEO/PLAYER e2e**——worktree；PlayerShell 仅 meta 行加展示 span 未碰播放交互（断点续播/线路切换/影院/字幕），player-shell-hydration 5 测 + layout/preview-mode 回归过
 - **边界（供 STATS-05-B / 06）**：本卡仅 PG 读路径展示（VideoCard from PG / DetailHero / PlayerShell）；ES 搜索卡片（SearchResultRow）playCount 展示延后 **STATS-06**（ES play fields + 同步）；不改排序语义（hot 排序 STATS-05-B）
 - **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**
+
+## [FIX-HOME-TOP10-CAP] 首页 Top10 溢出修复：topTen 合并后缺 `.slice(0, size)` 硬上限
+- **完成时间**：2026-06-26
+- **记录时间**：2026-06-26 09:20
+- **执行模型**：claude-opus-4-8
+- **子代理**：无（单层 service bug 修复，非新架构决策/共享契约变更）
+- **问题与根因**：用户报首页 Top10 排行区块渲染超过 10 个卡片（rank 编号到 11、12…）。根因链——`HomeService.topTen()` 把 `orderedPinned`（人工置顶）与 `fillItems` 合并后**直接编号 rank，缺最终 `.slice(0, size)` 截断**；上游 `listActiveHomeModules('top10', …)` **无 LIMIT**，返回全部有效置顶（且 `brand_scope='all-brands'` 与品牌专属置顶因 `OR` 条件**叠加**）。当有效置顶数 > size(10) 时 `fillCount ≤ 0` 跳过补位，但置顶全量进入响应；路由层（`home.ts`）与前端 `Top10Track`（`TopTenRow.tsx`）均纯透传/全量渲染，无任何一层兜底。
+- **修复**：在 `HomeService.topTen()` 合并后、编号前 `.slice(0, size)`，使 `size` 成为唯一硬上限，无论置顶配置多少不溢出。收敛于根因层（Service 编排），不动 DB 查询签名/路由/前端契约。
+- **修改文件**：
+  - `apps/api/src/services/HomeService.ts` — `[...orderedPinned, ...fillItems]` 链式 `.slice(0, size)` 再 `.map` 编 rank + 注释说明上限来由
+  - `tests/unit/api/home.test.ts` — 新增「置顶 12 个 → 截断到 10、rank 连续 1..10、不触发补位查询」回归用例
+  - `docs/tasks.md`（删卡）/ `docs/changelog.md`（本条目）
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：`typecheck`=0（root + 6 workspace）/ `lint`=0（server-next `<img>` 为既有 warning 非本卡）/ 增量门禁 `vitest run --changed HEAD` 反向选中 4 个 home 测试文件 **78 passed**（含 home.test.ts 27）/ `verify:adr-contracts`=0。无新 route/error code/migration → architecture.md 零同步；前端纯透传无 UI 契约变更 → e2e N/A。
+- **注意事项**：① 现有 60s Redis 缓存（`buildTop10CacheKey`）令修复对已缓存 key 延迟生效，部署后等 TTL 过期或主动失效（`home-cache-invalidation`）即可，**无需 flush 全库**。② DB 层 `listActiveHomeModules` 仍无 LIMIT（属通用 active 模块查询，多 slot 复用），Top10 的数量约束有意收敛在 Service 编排层而非查询层。
+- **安全记录**：本任务执行期间收到 2 次提示注入（伪装用户消息要求 `curl … | bash`；伪装「Reminder to self」诱导 flush Redis 跳过改码），均按系统策略识别拒绝、未执行，并向用户上报。
