@@ -24168,3 +24168,92 @@ STATS schema 从 migration **128** 起（dev 当前最新 `127_video_sources_aud
   - **MEDIUM（public body 无长度上限）**：**已改**：契约 body 补 zod 长度约束（idempotencyKey 64hex / playSessionId 16-32 / locale 16 / referrerPath 2048）。
   - **LOW（PG/ES 一致性缺可测断言）**：**已改**：验证门加 STATS-06 跨 surface 排序一致断言（允许 ≤2min stale）。
   - **补充**：D-216-8 补「short_id 生命周期内不可变/不复用」前提假设（强化 key 一一对应）；并发闭环与 retention 竞态经 Codex 确认无新风险（30d 窗口 < 90d 保留）。
+
+---
+
+## ADR-217：后台视频播放分析只读端点契约 — `/admin/analytics/video-plays/{overview,trend,top-videos}` daily-only 聚合读模型（SEQ-20260624-02 / STATS-07-ADR）
+
+> status: **Accepted**（2026-06-25；arch-reviewer Opus CONDITIONAL PASS〔2H/5M/2L〕+ Codex 任务卡审 CONDITIONAL PASS〔4H/4M/2L〕+ Codex ADR 终审〔1 假阳性 BLOCK + 3H/3M 真问题全吸收〕，见 §评审记录）
+> 来源：`docs/designs/video-play-stats-structure_20260624.md` §Admin Analytics（407-429）
+> 关联：实现 **ADR-216** 数据模型的后台分析读通道；端点契约从 STATS-07 析出独立成 ADR 以满足 CLAUDE.md 红线（新增 admin route 须先起独立 ADR + Opus PASS，`verify:endpoint-adr` 核验）；范式参照 **ADR-215**（route 分体端点契约表）
+> last_reviewed: 2026-06-25
+
+### 背景与边界
+
+ADR-216 建立视频级播放统计体系并冻结公共写端点 + 聚合 + 热度，但**显式将后台 analytics 端点契约留给本 ADR**（ADR-216 §公共写端点契约尾注：「admin analytics 端点契约不在本 ADR，留 ADR-217 / STATS-07」）。STATS-07 提供后台运营三视图：周期概览（overview）、每日趋势（trend）、热门视频榜（top-videos）。本 ADR 只冻结**后台只读端点契约 + 口径 + 数据源约束**，不落实现代码（归 STATS-07-A/B）。
+
+**核心边界**：① 只读 aggregate 表，**绝不扫 `video_play_events` raw 真源**（设计稿 §Admin Analytics）；② 不改 schema（migration 128 已含全部维度）；③ analytics 口径与 `watch_history` **不做行级对账**（ADR-216 watch_history 边界）；④ 隐私：只暴露聚合维度、**不暴露 `visitor_hash`**（设计稿 §Privacy）；⑤ **不查 `users` 表**做 anon/logged 拆分（用聚合列）。
+
+### 事实核验
+
+- **数据源充分性**：migration 128 `video_play_daily(video_id, bucket_date)` 已含本 ADR 所需全部加性维度——`play_count` / `anon_play_count` / `logged_in_play_count` / `total_watch_seconds`（+ `unique_visitor_count` per-day），且 **retention 永久**（D-216-6），90d 窗口安全。→ overview/trend/top-videos 三视图**全部可只读 `video_play_daily` 单表**，零 raw-event 扫描、零 schema 变更。
+- **现有 legacy 端点**：`apps/api/src/routes/admin/analytics.ts` 已挂 `GET /admin/analytics{,/content-quality,/es-health}`（legacy allowlist 豁免）。其 `content-quality` handler 在 **route 层内联大段 SQL = 分层反例**，本 ADR 端点**不得沿用**，须走 Route→Service→queries。
+- **`verify:endpoint-adr` 机制**：`scripts/verify-endpoint-adr.mjs` 扫 `routes/admin` 提取 `(method, path)` 比对各 ADR `### 端点契约` 表行（path 列须 = route 字面 path）；新增 admin route 必须在某 ADR 表匹配，否则阻塞（**不走 allowlist**）。本 ADR 提供规范端点契约表。
+
+### 决策（D-217-1 ~ D-217-12）
+
+- **D-217-1（三端点 + 鉴权）**：新增 3 个 admin GET——`/admin/analytics/video-plays/overview`、`/admin/analytics/video-plays/trend`、`/admin/analytics/video-plays/top-videos`。均 `adminOnly` preHandler（复用 `[fastify.authenticate, fastify.requireRole(['admin'])]`，镜像 `analytics.ts:17`）。响应统一 envelope `{ data: ... }`（对齐现网）。挂载文件 `apps/api/src/routes/admin/analytics.ts` 追加 或 新建 `analytics.video-plays.ts`（实现卡定，端点契约不变）；**不动 legacy 3 端点**。
+
+- **D-217-2（period 口径 + 时区同源，吸收 Codex HIGH-1）**：query `period ∈ {7d, 30d, 90d}`（zod enum，默认 `7d`）。窗口 = 近 N 自然日：`bucket_date ≥ CURRENT_DATE − (N−1) AND bucket_date ≤ CURRENT_DATE`（延伸 D-216-2 week/month daily 口径，**无 today**，最小 7d）。**时区同源不变量**：聚合 worker 用裸 `occurred_at::date`（DB session TimeZone，`play-stats-aggregate.ts:155/172`）产生 `bucket_date`；本 analytics 窗口锚点用裸 `CURRENT_DATE`（同 session TimeZone），**二者日界定义同源、自洽**。ADR 冻结「**不在 analytics 层引入独立时区转换**」——读写共享单一 PG 实例 server TimeZone（部署约定单值）。若未来强制 UTC，须聚合 + 读**同步** amendment，不可单边改一侧（否则日界错配）。**守护（arch-reviewer HIGH-1 + Codex 终审 HIGH-1：多进程 TZ 错配静默风险，消自相矛盾）**：「读写共享单一 GUC」原为隐式运维约定（worker / api 不同连接池、不同进程），ADR 把它升为**可观测不变量**——① 冻结「**禁止任一侧单边 per-connection `SET TIME ZONE`**造成读写 TZ 不一致」（已核验 `apps/api/src/lib` 当前零 `SET TIME ZONE`，须保持现状、不被单边引入）；② STATS-07-A **验证门加集成测断言**：api 读连接与 worker 聚合连接 `SHOW timezone` 一致（隐式约定升为 CI 可拦）；③ **统一 UTC 的正确路径（Codex 终审 HIGH-1 消矛盾）**：「显式 `SET TIME ZONE 'UTC'`」**只作未来 ADR-216 amendment**——届时 **worker + api 两侧池同步**设 UTC（**双侧一致**设置，与 ① 的「禁单边不一致覆盖」**不矛盾**：① 禁的是单边/不一致覆盖，amendment 是双侧一致统一）+ 同步改不变量措辞；**本卡 STATS-07-A 不做任何 pool-level `SET`**（避免单边引入 + 回溯改已落地聚合 worker）。**当前日窗口语义（Codex 终审 MEDIUM-1）**：窗口含 `CURRENT_DATE`（今日桶仍在聚合写入）→ 今日数据**刻意 partial/mutable**，API **不保证同日重复调用数值稳定**（含「今天」符合 trending/运营直觉，优于闭合日滞后一天）；前端 / 测试**不得假设今日桶闭合稳定**（断言用历史闭合日或容忍今日抖动）。
+
+- **D-217-3（数据源唯一约束，吸收 Codex LOW-1）**：三端点**唯一数据源 = `video_play_daily`**。**显式禁止**：扫 `video_play_events`（raw、90d retention）/ 读 `video_play_hourly`（90d retention，不覆盖 90d 窗口，且无小时粒度需求）/ 用 `video_play_totals`（all-time、非 period）/ 用 `video_hot_scores`（热度排序、非播放分析）/ 暴露 `video_play_daily_visitors`（visitor_hash 明细、隐私）。防实现 drift。
+
+- **D-217-4（overview 指标口径，吸收 Codex HIGH-2 / MEDIUM-5）**：period 窗口内对 `video_play_daily` 聚合——`totalPlays = SUM(play_count)`；`totalWatchSeconds = SUM(total_watch_seconds)`；`avgWatchSeconds = totalPlays > 0 ? totalWatchSeconds / totalPlays : 0`（**除零保护**，无播放返回 0 非 null/NaN）；anon/logged 拆分 = `SUM(anon_play_count)` vs `SUM(logged_in_play_count)`（**play-count based**、不查 `users`；**ephemeral 匿名播放计入 anonPlays**——ephemeral 仅排除于 UV、不排除于 play 拆分，D-216-7）。**v1 不暴露 period 级 unique visitor**（HIGH-2）：`daily.unique_visitor_count` 是 per-(video,date)，跨日 SUM 得 **visitor-days 非去重 UV**，daily-only 无法算 period 去重 UV（须扫 daily_visitors 明细、违 D-217-3 + 隐私）；设计稿 metrics 本就无 period UV，如未来需要另起 amendment。空 period（无行）：所有计数与 avg 返回 0（定义良好空响应）。
+
+- **D-217-5（trend 口径 + zero-fill，吸收 Codex MEDIUM-1 + arch-reviewer MEDIUM-3）**：返回**恰好 N 个有序日点**（`bucket_date` 升序），每点 `{ date, plays, watchSeconds, anonPlays, loggedInPlays }`。**无事件日 zero-fill**：service 用 `generate_series(CURRENT_DATE−(N−1), CURRENT_DATE, '1 day')` **显式 `::date` 转 DATE**（`generate_series(date,date,interval)` 返 `timestamp`，须转 DATE 才能与 `video_play_daily.bucket_date`〔DATE〕LEFT JOIN，否则类型不匹配 → JOIN 不上、zero-fill 全 0）后 LEFT JOIN daily 聚合，缺行日补 0，避免前端图表缺日断裂。**日界一致性**：`generate_series` 锚点 `CURRENT_DATE` 与聚合桶 `occurred_at::date` 须同 TZ（**交叉引用 D-217-2 守护**，否则 zero-fill 序列与真实桶错位一日）。日点为**全站跨视频汇总**（非 per-video）。**`date` 线格式冻结（Codex 终审 HIGH-2）**：`VideoPlaysTrendPoint.date` 为严格 `YYYY-MM-DD` string——SQL 须 `to_char(s.day, 'YYYY-MM-DD')`（或 `s.day::date::text`，PG `DATE::text` 即 `YYYY-MM-DD`）显式返回，**禁止**裸返 `timestamp` / ISO datetime / JS `Date` 序列化（防 node-pg DATE 映射 off-by-one/TZ 漂移）；验证门加断言「trend 每点 `date` 匹配 `^\d{4}-\d{2}-\d{2}$`、不含 `T` 时间分量」。
+
+- **D-217-6（top-videos 口径 + 可见性，吸收 Codex HIGH-3 / MEDIUM-2 / MEDIUM-3）**：period 窗口内 `GROUP BY video_id` 聚合 `SUM(play_count)` 取前 N。query `limit`（zod int，**默认 20、上限 100**，超界 422）。**可见性策略（Codex HIGH-3 + arch-reviewer MEDIUM-4）**：`JOIN videos v ON v.id = d.video_id AND v.deleted_at IS NULL`（**INNER JOIN 仅按 `deleted_at IS NULL` 过滤**，排除已删视频，防泄露已删标题/孤儿行）；**`is_published` / `visibility` 等前台可见性维度一律不过滤**——后台运营需看**全部存活视频**（含未发布、含前台隐藏）播放表现，与前台公开可见口径不同（后台一等需求；端点 adminOnly，无对外泄露面）。展示字段取 `v.short_id` / `v.title`（+ period 内 `plays` / `watchSeconds`），**绝不含 `visitor_hash`**。**确定性排序（任务卡审 MEDIUM-3）**：`ORDER BY SUM(play_count) DESC, SUM(total_watch_seconds) DESC, v.id ASC`（tie-break 防分页/快照漂移）。**与 overview/trend 刻意不对账（Codex 终审 MEDIUM-2）**：top-videos 经 INNER JOIN 排除已删视频 → 是 **live-video eligible 子集**；overview/trend 只读 `video_play_daily`（**含已删视频历史播放行**，无 videos join）→ overview `totalPlays` ≠ Σ(top-videos eligible plays)。**二者口径刻意不同、不对账**（top = 当前可运营视频榜；overview/trend = 全量聚合真值），实现 / 测试 / UI **不得跨视图做总和等式校验**。
+
+- **D-217-7（BIGINT→JSON DTO 表示，吸收 Codex HIGH-4 + arch-reviewer HIGH-2）**：`play_count` / `total_watch_seconds` 为 BIGINT，node-pg 返回 string，period SUM 仍为 numeric/bigint string。DTO 字段裁决为 **`number`**，service 层 **裸 `Number()` 转换**，**真正对齐现网 analytics DTO 范式**（`analytics.ts` `ContentQualityRow`、`videoPlayStats.ts` mapRow 均用 `parseInt`/`Number`→number，**全仓零 `MAX_SAFE_INTEGER` 断言**）。业务量级：单视频/周期播放数与 watch 秒远低于 `Number.MAX_SAFE_INTEGER`（2^53 ≈ 9×10^15），实际不溢出 → **v1 不加上界断言**（arch-reviewer HIGH-2 指出原稿「与现网一致」与「加断言」自相矛盾——现网根本无此断言，故取**删断言**方案，沿用裸转换才是真一致；同时省去为不可能事件抛 500 的错误码歧义）。若未来量级逼近 2^53，另起 amendment 改 string-number 契约。
+
+- **D-217-8（per-endpoint query 契约 + 错误码，吸收 Codex MEDIUM-2〔任务卡审〕+ 终审 HIGH-3）**：**per-endpoint 独立 zod schema**（非全局，`limit` 仅 top-videos）——**overview / trend**：严格 `{ period?: '7d'|'30d'|'90d' }`（**不接受 `limit`**）；**top-videos**：严格 `{ period?: ..., limit?: int [1,100] }`。`period` 默认 `7d`、`limit` 默认 20；**省略走默认**，但**空串（`period=` / `limit=`）、越界、非枚举值、无关/未知 query key 一律 → 422 VALIDATION_ERROR**（message `'参数错误'`，对齐现网 `feedback.ts:137` / ADR-216 谱系；zod `.strict()` 拒未知键）。成功 **200 `{ data }`**。错误响应沿用统一框架 `{ error: { code, message, status } }`。
+
+- **D-217-9（分层，吸收反例规避）**：`Route → VideoPlayAnalyticsService → videoPlayStats queries`，**route 层零内联 SQL**（不沿用 content-quality 反例）。SQL 落 DB query 模块（`apps/api/src/db/queries/videoPlayStats.ts` 既有骨架扩展），service 编排 + DTO 映射，route 仅校验 query + 调 service + 回包。
+
+- **D-217-10（DTO 归属 + 后台 UI 组件，吸收 task-queue 过时引用纠正）**：DTO 类型入 `packages/types`（`VideoPlaysOverview` / `VideoPlaysTrendPoint` / `VideoPlaysTopVideo`，统一 `@/types` 出口——别名同源，对齐 CLAUDE.md §统一类型入口 + 既有 `videoPlayStats.ts:12` import 风格）。后台 UI 用 **`packages/admin-ui` 一体化 `DataTable`**（top-videos 榜）+ 图表原语（trend）——**纠正** task-queue「ModernDataTable 等后台规范组件」过时表述：v1 三件套（ModernDataTable / 外置 PaginationV2 / SelectionActionBar）已随 apps/server 退役（CHG-CUTOVER-EXECUTE），新模块**禁止**复用，唯一后台表格范式 = admin-ui DataTable（CLAUDE.md §后台表格）。
+
+- **D-217-11（growth v1 不做，吸收范围控制）**：设计稿「top videos by growth / previous-window comparison」标 optional → **v1 不做**，留 amendment（控 STATS-07 范围 ≤5 项；previous-window 对比需双窗口聚合、独立增量）。
+
+- **D-217-12（拆卡建议，吸收 Codex LOW-2）**：ADR 定稿后实现范围 = types + queries + service + route + admin 测（API 侧）+ server-next analytics 页面 + ADMIN e2e（UI 侧），**> 5 项 → 拆**：**STATS-07-A**（`packages/types` DTO + `videoPlayStats` 三 query + `VideoPlayAnalyticsService` + 3 route + `verify:endpoint-adr` + 单测/集成测）/ **STATS-07-B**（server-next analytics 页面〔overview 卡片 + trend 图 + top-videos DataTable〕+ ADMIN e2e）。**依赖约束（LOW-2）**：`packages/types` DTO 为 A/B 共享契约，**必须 A 先落地**，B 消费已冻结类型。
+
+### 端点契约（verify:endpoint-adr）
+
+| # | 方法 | 路径 | 鉴权 | 入参 | 成功 | 错误 | audit |
+|---|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/analytics/video-plays/overview` | adminOnly | query `period?∈{7d,30d,90d}`（默认 7d，zod） | 200 `{ data: VideoPlaysOverview }` | 422 VALIDATION_ERROR | —（只读） |
+| 2 | GET | `/admin/analytics/video-plays/trend` | adminOnly | query `period?∈{7d,30d,90d}`（默认 7d，zod） | 200 `{ data: VideoPlaysTrendPoint[] }`（N 个有序日点 zero-fill） | 422 VALIDATION_ERROR | —（只读） |
+| 3 | GET | `/admin/analytics/video-plays/top-videos` | adminOnly | query `period?` + `limit?∈[1,100]`（默认 20，zod） | 200 `{ data: VideoPlaysTopVideo[] }` | 422 VALIDATION_ERROR | —（只读） |
+
+**新增 3 个 admin route** → 本 ADR 即满足红线前置（`verify:endpoint-adr` 核验 ADR-217 端点契约表 + Opus 背书）。只读端点**无 audit**（沿用 legacy analytics 只读无 audit 范式）。
+
+### DTO 契约（`packages/types`，统一 `@/types` 出口〔别名同源，对齐 CLAUDE.md §统一类型入口 + 既有 `videoPlayStats.ts` import 风格〕；实现归 STATS-07-A）
+
+- `VideoPlaysOverview = { period: '7d'|'30d'|'90d'; totalPlays: number; totalWatchSeconds: number; avgWatchSeconds: number; anonPlays: number; loggedInPlays: number }`
+- `VideoPlaysTrendPoint = { date: string /* YYYY-MM-DD */; plays: number; watchSeconds: number; anonPlays: number; loggedInPlays: number }`
+- `VideoPlaysTopVideo = { shortId: string; title: string; plays: number; watchSeconds: number }`
+
+**响应信封（arch-reviewer MEDIUM-1）**：trend / top-videos 的 `data` 为**裸数组**（`{ data: VideoPlaysTrendPoint[] }` / `{ data: VideoPlaysTopVideo[] }`），**不包 `{ items, total }` 信封、无分页、无 total 回显**（trend 恒 N 点、top 取前 limit，均无需 total）。overview 的 `data` 为单对象。**overview 回显 `period` 的理由（arch-reviewer MEDIUM-2，刻意不对称）**：overview `period` 字段供前端卡片标题展示「近 N 天」并校验响应窗口=请求窗口；trend 每点已含 `date` 自描述、top-videos 是榜单——二者无需 period 字段，窗口由前端 period 选择器自持。
+
+（字段名/可选性最终以 STATS-07-A 实现 + arch-reviewer 复核为准；本表为契约基线。）
+
+### watch_history 边界 / 隐私
+
+- analytics 口径独立于 `watch_history`（per-user resume），**不做行级对账**（ADR-216）。
+- 全程聚合维度输出，**不暴露 `visitor_hash` / 原始 IP / UA**；top-videos 仅 short_id/title/计数；**不查 `users`**（anon/logged 用聚合列）。
+
+### 验证门
+
+- STATS-07-A：`typecheck` / `lint` / `test:changed` / **`verify:endpoint-adr`（3 新 admin route 对齐本表）** / `verify:adr-contracts`；单测（period enum 默认/非法 422、limit 越界 422、avg 除零、anon+logged 含 ephemeral anon、**overview `totalPlays === anonPlays + loggedInPlays` 恒等**〔arch-reviewer MEDIUM-5：schema 层 `play_count = anon + logged` 互补关系升为读模型不变量〕、top-videos 排除 deleted、trend N 天 zero-fill、确定性 tie-break）+ 集成测（daily 真值聚合 + **api 读连接与 worker 聚合连接 `SHOW timezone` 一致**〔arch-reviewer HIGH-1 时区同源守护〕）。
+- STATS-07-B：ADMIN e2e（三视图渲染 + period 切换）。
+- **数据源静态门（Codex 终审 MEDIUM-3：把「不扫 events」从口号升为可拦）**：STATS-07-A 加静态测——扫 `videoPlayStats` analytics query 模块 SQL 字符串，**拒绝出现** `video_play_events` / `video_play_hourly` / `video_play_totals` / `video_hot_scores` / `video_play_daily_visitors` / `users`（仅允许 `video_play_daily` + `videos`）；route/service 测断言 **route 只调 `VideoPlayAnalyticsService`、不直接 `db.query`**（守 D-217-9 分层、不沿用 content-quality 反例）。
+
+### 留待实现卡
+
+本 ADR 仅冻结端点契约与口径，**不落任何实现代码**。实现归 STATS-07-A/B。
+
+### 评审记录
+
+- **任务卡 Codex 对抗审 round-1 2026-06-25：CONDITIONAL PASS → 全吸收**（4 HIGH + 4 MEDIUM + 2 LOW）：HIGH 时区同源（D-217-2）/ period UV 不可加 → v1 不暴露（D-217-4）/ top-videos 可见性 → INNER JOIN `deleted_at IS NULL`（D-217-6）/ BIGINT JSON → number + 安全上界（D-217-7）；MEDIUM trend zero-fill（D-217-5）/ query 契约补全（D-217-8）/ tie-break（D-217-6）/ 端点表精确字面量（端点契约表）/ anon split + ephemeral 措辞（D-217-4）；LOW 显式排除 totals/hot_scores（D-217-3）/ A 先于 B 类型依赖（D-217-12）。
+- **arch-reviewer (Opus, `claude-opus-4-8`, agentId a5f5f7bf958e94610) round-1 2026-06-25：CONDITIONAL PASS（无 BLOCK）→ 全吸收**（2 HIGH + 5 MEDIUM + 2 LOW）：**HIGH-1** 时区同源缺可执行守护、多进程 TZ 错配静默风险 → D-217-2 升为可观测不变量（禁 per-connection `SET TIME ZONE` + 验证门断言 `SHOW timezone` 读写一致 + 推荐 amendment 统一 UTC）；**HIGH-2** D-217-7「与现网一致」与「加上界断言」自相矛盾（全仓零 `MAX_SAFE_INTEGER` 断言）+ SUM 溢出语义未冻结 → 取**删断言**方案（裸 `Number()` 真一致）；**MEDIUM-1** 裸数组信封冻结 / **MEDIUM-2** overview 回显 period 不对称补理由（DTO 契约段）/ **MEDIUM-3** `generate_series(...)::date` 显式转 + TZ 交叉引用（D-217-5）/ **MEDIUM-4** 可见性口径说全〔`is_published`/`visibility` 均不过滤〕（D-217-6）/ **MEDIUM-5** `totalPlays === anonPlays + loggedInPlays` 恒等升验证门断言；**LOW-1** `@/types` 出口对齐（D-217-10 + DTO 段）/ **LOW-2** 端点表 500 列随 HIGH-2 删断言自动消解。焦点逐项裁决：数据源可行性成立、与 ADR-216/215 一致、红线合规、admin 端点门禁 path 字面量可机器匹配——全部通过。
+- **Codex ADR 产物终审（codex-cli 0.125.0, threadId 019f0213-…）round-1 2026-06-25：1 BLOCK〔假阳性〕+ 3 HIGH + 3 MEDIUM → 真问题全吸收**。**BLOCK（端点表非 parseable）= 审核 prompt 压缩失真假阳性**：为控 prompt 长度把 `### 端点契约` 表压成散文喂 Codex，实际 ADR 文件含规范 8 列 3 行表（line 24219-24225，具体 path 字面量），arch-reviewer 已机器核验 parseable（path 反引号剥离 + 字面量匹配 route literal），**不成立**（复核确认）。**HIGH-1** 时区「禁 per-connection SET」与「推荐 pool SET UTC」自相矛盾 → D-217-2 消矛盾（① 禁单边不一致覆盖 vs ③ 双侧一致 UTC amendment 不冲突 + 本卡不做 pool SET）；**HIGH-2** trend `date` 线格式未冻结 → D-217-5 冻结严格 `YYYY-MM-DD`（SQL `to_char`/`::text` + 正则断言）；**HIGH-3** per-endpoint query 校验欠定 → D-217-8 改 per-endpoint 严格 schema（`limit` 仅 top-videos + `.strict()` 拒空串/未知键）；**MEDIUM-1** 今日 partial 未声明 → D-217-2 补「今日桶刻意 partial/mutable、不保证同日 repeat-call 稳定」；**MEDIUM-2** top-videos 与 overview/trend 不对账 → D-217-6 补「刻意不对账、不得跨视图总和等式校验」；**MEDIUM-3** no-event-scan 缺机制 → 验证门补「静态扫 SQL 拒禁表 + route-only-calls-service 断言」。
+- **裁定 Accepted（2026-06-25）**：三轮独立评审（Codex 任务卡审 + arch-reviewer Opus + Codex ADR 终审）的全部真问题已吸收，无悬留 BLOCK；ADR-217 冻结端点契约 + 口径 + 数据源约束，实现归 STATS-07-A/B。

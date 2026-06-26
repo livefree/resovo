@@ -42,6 +42,22 @@
 
 ---
 
+## [STATS-07-ADR] ADR-217 起草定稿：后台视频播放分析只读端点契约 `/admin/analytics/video-plays/{overview,trend,top-videos}`（SEQ-20260624-02 / STATS-07 前置门）
+
+- **任务**：STATS-07-ADR（SEQ-20260624-02 VIDEO-PLAY-STATS 主链第 7 卡的 admin 端点门禁前置）。纯 docs ADR 起草，**不落任何实现代码**。执行模型 `claude-opus-4-8`（主循环）；子代理 arch-reviewer（`claude-opus-4-8`，agentId a5f5f7bf958e94610）+ Codex 对抗审 2 轮（任务卡 / ADR 产物，codex-cli 0.125.0）。stats-01-adr 分支（未合并 dev/main）。
+- **背景/门禁**：STATS-07 task-queue 红线「admin 端点门禁：不能只依赖 STATS-01 总 ADR，必须另起 admin endpoint ADR 并取得 Opus PASS」+ ADR-216 显式「admin analytics 端点契约留 ADR-217，须过 verify:endpoint-adr + arch-reviewer (Opus) PASS」+ CLAUDE.md「新增 admin route 未先起独立 ADR + Opus PASS → 阻塞」。本卡起 ADR-217 满足该前置。
+- **关键事实核验**：① migration 128 `video_play_daily` 已含全部口径维度（play_count / anon_play_count / logged_in_play_count / total_watch_seconds / unique_visitor_count / bucket_date）且 **retention 永久** → ADR-217 **无需 schema 变更**，三视图全可只读 daily 单表零 raw-event 扫描；② 现有 `analytics.ts` content-quality 端点 route 层内联 SQL = 分层反例，ADR 不沿用；③ verify:endpoint-adr 扫 routes/admin 比对 ADR §端点契约表 path 字面量。
+- **ADR-217 决策（D-217-1~12，Accepted）**：3 admin GET 端点契约（overview/trend/top-videos，adminOnly，端点契约表 verifier-parseable）/ period 7d/30d/90d 近自然日读 daily + **时区同源不变量**（聚合 `occurred_at::date` 与 analytics `CURRENT_DATE` 同 session TZ、禁单边 SET TIME ZONE、验证门断言 SHOW timezone 一致）/ **唯一数据源 video_play_daily**（显式禁扫 events/hourly/totals/hot_scores/daily_visitors/users）/ overview 指标（total plays·watch seconds·avg 除零·anon-vs-logged play-count based 含 ephemeral anon、v1 不暴露 period 级去重 UV）/ trend N 天 zero-fill（`generate_series(...)::date` + `date` 严格 YYYY-MM-DD）/ top-videos（INNER JOIN videos `deleted_at IS NULL`、不过滤 is_published/visibility、limit≤100、确定性 tie-break、与 overview/trend 刻意不对账）/ BIGINT→number 裸 Number()（不加上界断言，真对齐现网）/ per-endpoint 严格 zod（limit 仅 top-videos、`.strict()` 拒空串/未知键、非法 422）/ 分层 Route→VideoPlayAnalyticsService→queries 零 route 内联 SQL / DTO 入 packages/types（`@/types`）+ 后台 UI admin-ui DataTable（纠正 task-queue 过时 ModernDataTable 引用）/ growth v1 不做 / 拆 STATS-07-A（API 侧）→ STATS-07-B（UI 侧）A 先于 B。
+- **三轮独立评审全吸收**：
+  - **Codex 任务卡审 CONDITIONAL PASS**（4 HIGH+4 MEDIUM+2 LOW）：时区同源 / period UV 不可加→v1 排除 / top-videos 可见性 / BIGINT JSON / trend zero-fill / query 契约 / tie-break / 端点表精确字面量 / anon+ephemeral / 显式排除 totals·hot_scores / A 先于 B。
+  - **arch-reviewer Opus CONDITIONAL PASS（无 BLOCK，2 HIGH+5 MEDIUM+2 LOW）**：HIGH-1 时区守护升可观测不变量（验证门 SHOW timezone 断言）/ HIGH-2 删自相矛盾的 MAX_SAFE_INTEGER 断言（裸 Number 真一致）；MEDIUM 裸数组信封 / overview period 回显理由 / generate_series::date / 可见性说全 visibility / totalPlays===anon+logged 恒等门；LOW @/types 出口对齐。焦点逐项裁决：数据源可行性成立、与 ADR-216/215 一致、红线合规、admin 端点门禁 path 可机器匹配全通过。
+  - **Codex ADR 终审（1 假阳性 BLOCK + 3 HIGH+3 MEDIUM）**：BLOCK（端点表非 parseable）= 审核 prompt 压缩失真，实际文件含规范 8 列 3 行表、arch-reviewer 已机器核验、verify-endpoint-adr 实测计入 139 ADR 端点 → 不成立；HIGH-1 时区规则「禁 per-connection SET」vs「推荐 pool SET UTC」自相矛盾→消矛盾（单边不一致 vs 双侧一致 amendment）；HIGH-2 trend date 线格式冻结 YYYY-MM-DD；HIGH-3 per-endpoint 严格 schema；MEDIUM 今日 partial 声明 / top-videos 不对账声明 / no-event-scan 静态门。
+- **门禁**：`verify:adr-contracts` **EXIT=0**（✅ verify-endpoint-adr 250 admin 路由对齐〔ADR 端点池 139 含 ADR-217 新增 3 端点契约，证表格 parseable〕；✅ sql-schema-alignment / style / types-mirror；error-message·D-N 两 ⚠️ 为仓库既有 advisory 存量、非本卡引入、不阻塞）。纯 docs 卡，typecheck/lint docs-only 不适用、test:changed docs-only 自动跳过（ADR-180）。
+- **改动文件**：`docs/decisions.md`（新增 ADR-217，89 行）/ `docs/task-queue.md`（STATS-07 母卡状态）/ `docs/tasks.md`（卡删除，净零）/ `docs/audit/adr-d-status.json`（verify 脚本自动）。零代码改动。
+- **主链进度**：`01✅→02✅→03A✅→03B✅→04A✅→04B✅→05A✅→05B✅→06A✅→06B✅→07-ADR✅→07-A⬜→07-B⬜`。下一步 STATS-07-A（types+queries+VideoPlayAnalyticsService+3 route+verify:endpoint-adr+测，opus），A 先于 B（packages/types 共享契约）。
+
+---
+
 ## [STATS-06-B-REALTIME-SYNC] ES play fields ≤2min 实时同步——worker 聚合 commit 后两阶段 best-effort partial-update（ADR-216 D-216-4 / SEQ-20260624-02）
 
 - **任务**：STATS-06-B-REALTIME-SYNC（SEQ-20260624-02 VIDEO-PLAY-STATS 主链第 6 卡·B）。执行模型 `claude-opus-4-8`；子代理 Codex 对抗审 3 轮（任务卡 / 实现 / 确认）。stats-01-adr 分支（未合并 dev/main）。
