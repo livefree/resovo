@@ -42,6 +42,27 @@
 
 ---
 
+## [STATS-06-B-REALTIME-SYNC] ES play fields ≤2min 实时同步——worker 聚合 commit 后两阶段 best-effort partial-update（ADR-216 D-216-4 / SEQ-20260624-02）
+
+- **任务**：STATS-06-B-REALTIME-SYNC（SEQ-20260624-02 VIDEO-PLAY-STATS 主链第 6 卡·B）。执行模型 `claude-opus-4-8`；子代理 Codex 对抗审 3 轮（任务卡 / 实现 / 确认）。stats-01-adr 分支（未合并 dev/main）。
+- **背景**：STATS-06-A 落 ES 读对齐层（mapping additive + SearchService hot 4-key 链 + buildDocument 携带 play 字段 + reindex 回填）后，补 D-216-4 冻结主机制「**聚合 commit 后增量更新变更视频文档**」实时层；陈旧度 ≤ 聚合周期(1min)+ES refresh ≈ ≤2min。
+- **设计裁定（方案①）**：卡片二选一选 **worker play-stats-aggregate commit 后自包含 ES client partial-update**。理由：① D-216-4 字面主机制即「聚合即更新」，≤2min 预算按此设计；方案②（apps/api ~1min poll）实为把既有 24h 兜底调快当主机制、叠加轮询周期突破预算且偏离冻结二分。② 验收明确「不破坏 worker→apps/api 零耦合边界」→ 须 worker 内实现、零 import apps/api（ADR-107 §4，同 `lib/db.ts` 自包含 pg Pool 范式）。
+- **改动（5 手写项 + 自动 lockfile）**：
+  - **worker ES client**（`apps/worker/src/lib/elasticsearch.ts` 新建）：自包含 `@elastic/elasticsearch` Client + 内联 `ES_INDEX='resovo_videos'`；**可选**——`ELASTICSEARCH_URL` 缺失→`esClient=null`→同步降级 no-op，绝不阻断聚合关键路径（与 apps/api 模块加载期 throw 刻意不同）。
+  - **两阶段聚合**（`play-stats-aggregate.ts`）：`SQL_AFFECTED_LOCK_KEYS` 复用同次 query 额外返 `video_id`（不新增 txn query → 既有 verb 序列零破坏），`aggregateOneBatch` 返 `{ processed, videoIds }`。**阶段一** drain 跨批累积 `affectedVideoIds:Set`→释放 PG client（poison/release 语义不变）；**阶段二**（client 已释放）best-effort `es.bulk` partial-update 仅 3 字段（`toNullableNumber` 保 null ≡ missing:_last）+ 分块 `ES_BULK_CHUNK=1000` + `requestTimeout=10s`；逐 item 判 `document_missing`→missing 跳过（reconcile 兜底）、其余→failed warn；整段 try/catch 包裹 ES 失败不挂 job、不占 DB 连接。
+  - **DI + 可观测**（`index.ts`）：`runPlayStatsAggregate(db, log, esClient)` + 启动日志 `play_stats_es_sync_enabled`；shutdown 关 esClient。
+  - **依赖**（`package.json`）：加 `@elastic/elasticsearch ^8.16.0`（已在技术栈，apps/api 同版本，非新依赖）。
+- **Codex 对抗审 3 轮**：
+  - **任务卡审 FAIL → 1 BLOCK+4 HIGH+3 MEDIUM 全吸收**：BLOCK 1 ES 同步不得在 drain 循环内逐 video 占 PG client（5000 次 update 卡死反拖聚合）→ 改两阶段 + bulk；HIGH 返 videoIds 非 eventIds / ES 禁用须可观测 / 404 跳过+收紧措辞 / 「互不 clobber」过强改记 stale-overwrite 残余竞态；MEDIUM 默认 null 改既有单测 / isDocumentMissing 查 type / 文件范围含 lockfile。**PASS 确认**：方案①成立、`hot_score:null` ≡ missing:_last（Elastic 官方：显式 null 不索引）、缺 doc 不 upsert 正确。
+  - **实现审 0 BLOCK → 3 HIGH+1 MEDIUM+1 LOW 全吸收**：HIGH 1 `isDocumentMissing` 仅认 `document_missing_exception`（裸 404 含 index_not_found 误判静默）；HIGH 2 drain 中途失败仍同步已 commit 批后再 rethrow（保 T11/T12）；HIGH 3 `maxRetries:0` + 30s 总 deadline 防慢 ES 钉死 isRunning 拖累聚合吞吐；MEDIUM 1 shutdown 关 esClient；LOW 1 禁用可观测由启动日志承担（避免 per-tick 刷屏）。**6 不变量 verified**（两阶段用 pool 非已释放 client / unnest uuid 兼容 / bulk update 形态 / errors:false 即全成功 / advisory lock 序无损 / 无 ADR-107 违规）。
+  - **确认轮 5 项全 RESOLVED**（HIGH 3 with caveat：deadline 兜 ES 耦合段非全 job <60s 严格保证，符合预期）+ 3 文案修正（drain 失败仍同步 / deferred 措辞 / 禁用 metric 说明）。
+- **门禁**：typecheck=0（8 workspace）/ 改动文件 eslint=0 / verify:adr-contracts=0（endpoint-adr 250 路由对齐〔零新 admin 路由〕 + **sql-schema-alignment ✅**〔worker SQL 引用 video_play_totals/video_hot_scores 列对齐 migration 128〕）/ **test:changed 升全量 8417 passed 零回归**（package.json/lockfile 改动触发 ADR-180 升级；worker 聚合套件 24 tests：T1-T15 + S1-S8 + S4b〔含两阶段隔离/null 保留/404 vs index_not_found 区分/drain 失败仍同步/去重透传〕；首轮 4 jsdom 环境 flaky errors 复跑清零、与 worker 零关系）。
+- **已知残余（Codex HIGH 4，记录非消除）**：admin edit 全量 `es.index` 若读旧 stats 却在 worker partial-update 后写入 → stale-overwrite race。频率极低、下次聚合 tick 或 24h reconcile 自愈，符合 D-216-4「主机制 + reconcile 兜底」分工，v1 接受。
+- **延后合并期 gate**：SEARCH e2e + reindex 实跑 + 真实 PG↔ES ≤2min 实时窗口收敛对拍（需 ES+Postgres+.env.local，worktree 阻塞，同 STATS-02/04/06-A 先例）。
+- **主链进度**：`01✅→02✅→03A✅→03B✅→04A✅→04B✅→05A✅→05B✅→06A✅→06B✅→07⬜`。下一卡 STATS-07-ADMIN-ANALYTICS（须先起独立 admin endpoint ADR-217 + Opus PASS）。
+
+---
+
 ## [STATS-06-A-SEARCH-HOT-READ-BACKFILL] `/search?sort=hot` 改用 ES play fields + reindex 回填，跨 surface 热度口径对齐（ADR-216 D-216-3/D-216-4 / SEQ-20260624-02）
 - **完成时间**：2026-06-25
 - **执行模型**：claude-opus-4-8（主循环，卡建议 opus·对齐）；**子代理**：Codex 对抗审（任务卡 1 轮 + 实现 1 轮 + 确认轮超时）

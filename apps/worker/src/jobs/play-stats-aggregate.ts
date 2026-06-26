@@ -31,6 +31,8 @@
 
 import type { Pool, PoolClient } from 'pg'
 import type pino from 'pino'
+import type { Client } from '@elastic/elasticsearch'
+import { ES_INDEX } from '../lib/elasticsearch'
 
 /** D-216-3 hot_score 加权窗口常量（单一真源；近 24h 等效总权重 1.4 为刻意近期偏置）。 */
 export const HOT_SCORE_W24 = 1.0
@@ -44,6 +46,17 @@ export const MAX_BATCHES_PER_TICK = 10
 
 /** per-video advisory lock key 前缀（防与其他 job 的 advisory 命名空间碰撞）。 */
 const ADVISORY_LOCK_PREFIX = 'play_stats_agg:'
+
+/** STATS-06-B：单次 `es.bulk` partial-update 的最大 video 数（限请求体大小，Codex BLOCK 1）。 */
+const ES_BULK_CHUNK = 1000
+/** STATS-06-B：ES bulk 单次请求超时（best-effort，超时 → warn 不挂 job）。 */
+const ES_BULK_TIMEOUT_MS = 10_000
+/**
+ * STATS-06-B（Codex 实现审 HIGH 3）：阶段二 ES 同步**总时限**（半个 1min tick）。
+ * 慢/不可达 ES 下 isRunning 被钉死会使后续聚合 tick 被跳过 → DB 吞吐反受 ES 拖累；
+ * 超此时限即停（剩余 video 顺延下 tick / 24h reconcile），保最坏 isRunning < tick 周期、聚合不停。
+ */
+const ES_SYNC_DEADLINE_MS = 30_000
 
 /** ROLLBACK 自身失败 → 事务状态未知，连接必须销毁而非归还池（Codex HIGH-1）。 */
 class BatchRollbackError extends Error {
@@ -74,12 +87,32 @@ FOR UPDATE SKIP LOCKED
  * 直接计算**实际锁资源** `hashtext(prefix || video_id)` 并 DISTINCT + `ORDER BY lock_key` —— 死锁规避要求
  * 所有并发事务按真实锁资源（而非映射前 video_id）一致排序；哈希碰撞时不同 video 落同 key 仅致偶尔多串行化，
  * 正确性不受损（同 key 互斥本就该串行）。prefix 参数化（$2）不拼接 SQL。
+ *
+ * STATS-06-B（Codex 任务卡审 HIGH 1）：同次 query 额外返回 `video_id` 供 commit 后 ES 增量同步——
+ * 复用本 SQL（**不新增 txn 内 query**，verb 序列 'AFFECTED' 零破坏）；`video_id → lock_key` 确定性，
+ * `DISTINCT (video_id, lock_key)` ≡ `DISTINCT video_id`（每 video 一行）；哈希碰撞 → 同 lock_key 多 video
+ * 行 → advisory lock 同 key 取多次（事务内可重入，无害，与原 per-video 串行意图一致）。
  */
 const SQL_AFFECTED_LOCK_KEYS = `
-SELECT DISTINCT hashtext($2 || video_id::text) AS lock_key
+SELECT DISTINCT video_id::text AS video_id, hashtext($2 || video_id::text) AS lock_key
 FROM video_play_events
 WHERE id = ANY($1::bigint[])
 ORDER BY lock_key
+` as const
+
+/**
+ * STATS-06-B 阶段二：取本 tick affected video 的物化 play 字段（commit 后、txn 外、用 pool 短连接）。
+ * `unnest` 驱动左连——无聚合行的 video（理论上 affected video 必有 totals/hot_scores 行）值为 null，
+ * `toNullableNumber` 保 null（对齐 STATS-06-A NULLS LAST / ES missing:_last，非 `?? 0`）。
+ */
+const SQL_FETCH_PLAY_FIELDS = `
+SELECT v.id::text AS id,
+       vpt.total_play_count,
+       vhs.play_count_7d,
+       vhs.hot_score
+FROM unnest($1::uuid[]) AS v(id)
+LEFT JOIN video_play_totals vpt ON vpt.video_id = v.id
+LEFT JOIN video_hot_scores vhs ON vhs.video_id = v.id
 ` as const
 
 /** Step 2.5b：对单个 lock key 取事务级 advisory lock（COMMIT/ROLLBACK 自动释放）。 */
@@ -231,32 +264,64 @@ interface BatchIdRow {
 }
 
 interface AffectedLockRow {
+  video_id: string
   lock_key: number
+}
+
+/** 单批聚合结果：处理事件数 + 本批 affected video_id（供阶段二 ES 同步；HIGH 1）。 */
+interface BatchResult {
+  processed: number
+  videoIds: string[]
+}
+
+/** 阶段二 ES 同步读取的物化 play 字段行（node-pg：BIGINT/NUMERIC → string）。 */
+interface PlayFieldsRow {
+  id: string
+  total_play_count: string | null
+  play_count_7d: string | null
+  hot_score: string | null
+}
+
+/** node-pg BIGINT/NUMERIC 为 string；ES 需 number。保留 null（不 `?? 0`，对齐 missing:_last）。 */
+function toNullableNumber(value: string | null): number | null {
+  return value == null ? null : Number(value)
+}
+
+/**
+ * @elastic v8 bulk item 错误判别：**文档缺失**（partial `doc` 更新落到不存在文档）。
+ * 仅认 `error.type === 'document_missing_exception'`——不靠裸 `status === 404`（Codex 实现审 HIGH 1：
+ * 404 也可能是 `index_not_found_exception` 等索引/配置故障，误判 missing 会静默隐藏坏索引，
+ * 且 reconcile 未必能修）。其余错误（含其它 404）一律计 failed + warn。
+ */
+function isDocumentMissing(errorType: string | undefined): boolean {
+  return errorType === 'document_missing_exception'
 }
 
 /** node-cron 不等上一轮 Promise → 本进程重入 guard（Codex HIGH-2）。 */
 let isRunning = false
 
 /**
- * 聚合单批：一个独立事务（BEGIN→8 步→COMMIT）。返回处理事件数（0 = 无 pending）。
- * 任一步抛错 → ROLLBACK + 上抛（本批 pending 保留；已 commit 批不受影响）。
+ * 聚合单批：一个独立事务（BEGIN→8 步→COMMIT）。返回处理事件数 + 本批 affected video_id（HIGH 1）。
+ * processed=0 → 无 pending。任一步抛错 → ROLLBACK + 上抛（本批 pending 保留；已 commit 批不受影响）。
  * ROLLBACK 自身失败 → 抛 BatchRollbackError（连接污染信号，调用方销毁连接）。
  */
-async function aggregateOneBatch(client: PoolClient): Promise<number> {
+async function aggregateOneBatch(client: PoolClient): Promise<BatchResult> {
   await client.query('BEGIN')
   try {
     const batch = await client.query<BatchIdRow>(SQL_SELECT_BATCH, [BATCH_LIMIT])
     const ids = batch.rows.map((r) => r.id)
     if (ids.length === 0) {
       await client.query('ROLLBACK')
-      return 0
+      return { processed: 0, videoIds: [] }
     }
 
-    // Step 2.5：per-video advisory xact lock（按实际 lock key 排序逐个取，防碰撞下交错死锁 + 串行化同 video 重算）
+    // Step 2.5：per-video advisory xact lock（按实际 lock key 排序逐个取，防碰撞下交错死锁 + 串行化同 video 重算）；
+    // 同次取 affected video_id 供阶段二 ES 同步（HIGH 1，事务内捕获、不 commit 后反查 events）。
     const affected = await client.query<AffectedLockRow>(SQL_AFFECTED_LOCK_KEYS, [ids, ADVISORY_LOCK_PREFIX])
     for (const row of affected.rows) {
       await client.query(SQL_ADVISORY_LOCK, [row.lock_key])
     }
+    const videoIds = affected.rows.map((r) => r.video_id)
 
     await client.query(SQL_UPSERT_HOURLY, [ids])
     await client.query(SQL_UPSERT_DAILY, [ids])
@@ -265,7 +330,7 @@ async function aggregateOneBatch(client: PoolClient): Promise<number> {
     await client.query(SQL_MARK_AGGREGATED, [ids])
 
     await client.query('COMMIT')
-    return ids.length
+    return { processed: ids.length, videoIds }
   } catch (err) {
     try {
       await client.query('ROLLBACK')
@@ -277,12 +342,103 @@ async function aggregateOneBatch(client: PoolClient): Promise<number> {
 }
 
 /**
- * runPlayStatsAggregate — cron job 入口（每 1min）。
- * 同进程重入 guard（isRunning）→ 单 client drain 循环：顺序处理 ≤ MAX_BATCHES_PER_TICK 个独立事务，空批即停。
- * 批内抛错向上传播（由调用方 runWithLogger try/catch 包，不挂 worker）；
- * 正常归还 client；ROLLBACK 失败（BatchRollbackError）→ release(err) 销毁污染连接。
+ * 阶段二（STATS-06-B / Codex BLOCK 1）：drain 完成、**PG client 已释放后**，对本 tick affected video
+ * 批量 partial-update ES play 字段（best-effort）。两阶段隔离保证：ES 慢/失败不占 DB 连接、不拖垮聚合吞吐。
+ *
+ * - `es == null`（未配置）或无 affected → no-op（不查 DB 不调 ES）。
+ * - 用 `pool` 短连接读物化 play 字段 → `es.bulk` partial doc（仅 3 字段，幂等不清其余 doc 字段）；分块限请求体。
+ * - 逐 item：`document_missing`(404) → 跳过（doc 未入索引，由 24h reconcile 兜底，HIGH 3）；其余 item error → warn。
+ * - 整段 try/catch 包裹：ES/读取任何失败 → warn 不抛（聚合已 commit，reconcile 周期兜底覆盖漂移）。
  */
-export async function runPlayStatsAggregate(pool: Pool, log: pino.Logger): Promise<void> {
+async function syncPlayFieldsToEs(
+  pool: Pool,
+  es: Client | null,
+  videoIds: string[],
+  log: pino.Logger,
+): Promise<void> {
+  if (!es || videoIds.length === 0) return
+  try {
+    const { rows } = await pool.query<PlayFieldsRow>(SQL_FETCH_PLAY_FIELDS, [videoIds])
+    let synced = 0
+    let missing = 0
+    let failed = 0
+    const startedAt = Date.now()
+
+    for (let i = 0; i < rows.length; i += ES_BULK_CHUNK) {
+      // 总时限护栏（HIGH 3）：超时即停，剩余 video 顺延下 tick / reconcile，避免钉死 isRunning。
+      if (Date.now() - startedAt > ES_SYNC_DEADLINE_MS) {
+        log.warn(
+          { metric: 'play_stats_es_sync.deadline', remaining: rows.length - i, synced, missing, failed },
+          'play-stats ES partial-update deadline exceeded; remaining videos rely on 24h reconcile (next tick only re-covers on new events)',
+        )
+        break
+      }
+      const chunk = rows.slice(i, i + ES_BULK_CHUNK)
+      const operations = chunk.flatMap((r) => [
+        { update: { _index: ES_INDEX, _id: r.id } },
+        {
+          doc: {
+            play_count_total: toNullableNumber(r.total_play_count),
+            play_count_7d: toNullableNumber(r.play_count_7d),
+            hot_score: toNullableNumber(r.hot_score),
+          },
+        },
+      ])
+      // maxRetries:0（HIGH 3）：best-effort 路径快失败，不让 ES 重试风暴拖长聚合 tick。
+      const res = await es.bulk({ operations }, { requestTimeout: ES_BULK_TIMEOUT_MS, maxRetries: 0 })
+      if (!res.errors) {
+        synced += chunk.length
+        continue
+      }
+      for (const item of res.items) {
+        const u = item.update
+        if (!u) continue
+        if (u.error) {
+          if (isDocumentMissing(u.error.type)) missing += 1
+          else failed += 1
+        } else {
+          synced += 1
+        }
+      }
+    }
+
+    if (failed > 0) {
+      log.warn(
+        { metric: 'play_stats_es_sync.result', synced, missing, failed },
+        'play-stats ES partial-update completed with item errors; reconcile will backfill',
+      )
+    } else {
+      log.info(
+        { metric: 'play_stats_es_sync.result', synced, missing, failed },
+        'play-stats ES partial-update completed',
+      )
+    }
+  } catch (err) {
+    // ES bulk / play 字段读取整体失败：best-effort，聚合已 commit、reconcile 周期兜底 → warn 不抛。
+    log.warn(
+      { err, metric: 'play_stats_es_sync.error', affected: videoIds.length },
+      'play-stats ES partial-update failed; reconcile will backfill',
+    )
+  }
+}
+
+/**
+ * runPlayStatsAggregate — cron job 入口（每 1min）。
+ * 同进程重入 guard（isRunning）→ **阶段一** 单 client drain 循环：顺序处理 ≤ MAX_BATCHES_PER_TICK 个
+ * 独立事务，空批即停，跨批累积 affected video_id；批内抛错向上传播（由 runWithLogger 包，不挂 worker），
+ * 正常归还 client，ROLLBACK 失败（BatchRollbackError）→ release(err) 销毁污染连接。
+ * **阶段二**（client 已释放后）：best-effort `es.bulk` partial-update ES play 字段（STATS-06-B）——
+ * **无论 drain 成功或中途失败都对已累积的 affected video 执行**（HIGH 2：已 commit 批不漏同步），
+ * 之后若有 drainError 再 rethrow 保既有错误语义。
+ *
+ * @param es worker 自包含 ES client（`null` = 未配置 → 阶段二 no-op；显式注入、默认 null 不依赖环境，
+ *           保既有单测确定性，Codex 任务卡审 MEDIUM 1）。
+ */
+export async function runPlayStatsAggregate(
+  pool: Pool,
+  log: pino.Logger,
+  es: Client | null = null,
+): Promise<void> {
   if (isRunning) {
     log.info(
       { metric: 'play_stats_aggregate.skipped_overlap', value: 1 },
@@ -296,18 +452,23 @@ export async function runPlayStatsAggregate(pool: Pool, log: pino.Logger): Promi
     let totalProcessed = 0
     let batches = 0
     let poisoned = false
+    let drainError: unknown = null
+    const affectedVideoIds = new Set<string>()
     try {
       for (let i = 0; i < MAX_BATCHES_PER_TICK; i++) {
-        let n: number
+        let result: BatchResult
         try {
-          n = await aggregateOneBatch(client)
+          result = await aggregateOneBatch(client)
         } catch (err) {
+          // 捕获不立抛（HIGH 2）：先在阶段二同步**已 commit 批**的 affected video，再 rethrow。
           if (err instanceof BatchRollbackError) poisoned = true
-          throw err
+          drainError = err
+          break
         }
-        if (n === 0) break
-        totalProcessed += n
+        if (result.processed === 0) break
+        totalProcessed += result.processed
         batches += 1
+        for (const id of result.videoIds) affectedVideoIds.add(id)
       }
     } finally {
       if (poisoned) {
@@ -319,10 +480,18 @@ export async function runPlayStatsAggregate(pool: Pool, log: pino.Logger): Promi
       }
     }
 
-    log.info(
-      { metric: 'play_stats_aggregate.processed', value: totalProcessed, batches },
-      'play-stats-aggregate: batch aggregation completed',
-    )
+    if (!drainError) {
+      log.info(
+        { metric: 'play_stats_aggregate.processed', value: totalProcessed, batches },
+        'play-stats-aggregate: batch aggregation completed',
+      )
+    }
+
+    // 阶段二：PG client 已释放 → best-effort ES 增量同步（不占 DB 连接，ES 失败不挂 job）。
+    // drain 中途失败时仍同步已 commit 批的 video（HIGH 2），随后 rethrow 保 T11/T12 错误语义。
+    await syncPlayFieldsToEs(pool, es, [...affectedVideoIds], log)
+
+    if (drainError) throw drainError
   } finally {
     isRunning = false
   }

@@ -1,5 +1,6 @@
 import cron from 'node-cron'
 import { db } from './lib/db'
+import { esClient } from './lib/elasticsearch'
 import { config } from './config'
 import { jobLogger, baseLogger } from './observability/logger'
 import { runSourceHealthLevel1, runSourceHealthLevel2 } from './jobs/source-health'
@@ -59,7 +60,7 @@ const bangumiDumpTask = cron.schedule(
 // ADR-216 D-216-10：视频播放事件批量聚合（每 1min；独立 job，不并入 source-health feedback recheck）
 const playStatsAggregateTask = cron.schedule(
   config.cron.playStatsAggregate,
-  () => runWithLogger('play-stats-aggregate', () => runPlayStatsAggregate(db, jobLogger('play-stats-aggregate'))),
+  () => runWithLogger('play-stats-aggregate', () => runPlayStatsAggregate(db, jobLogger('play-stats-aggregate'), esClient)),
   { scheduled: false },
 )
 
@@ -92,6 +93,8 @@ async function startup(): Promise<void> {
       bangumi_dump_cron: config.cron.bangumiDumpRefresh,
       play_stats_aggregate_cron: config.cron.playStatsAggregate,
       play_stats_retention_cron: config.cron.playStatsRetention,
+      // STATS-06-B（HIGH 2）：ES 实时同步启用与否可观测——禁用 → play 字段仅靠 24h reconcile 兜底。
+      play_stats_es_sync_enabled: esClient != null,
     },
     'cron tasks started',
   )
@@ -111,6 +114,10 @@ async function shutdown(signal: string): Promise<void> {
   playStatsAggregateTask.stop()
   playStatsRetentionTask.stop()
   await db.end()
+  // STATS-06-B（Codex 实现审 MEDIUM 1）：优雅关闭 worker 自包含 ES client（不掩盖 db.end()）。
+  if (esClient) {
+    await esClient.close().catch((err) => log.error({ err }, 'es client close failed'))
+  }
   log.info('worker stopped')
   process.exit(0)
 }

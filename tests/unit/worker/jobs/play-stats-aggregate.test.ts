@@ -12,6 +12,11 @@
  * 滑窗下降 / 并发不丢计数 / rollback 留 pending）需真 PG → tests/integration/worker/play-stats-aggregate.test.ts
  * （延后合并期跑，worktree 无 .env.local DB，同 STATS-02 schema 测试先例）。Codex LOW：mock 断 SQL 子串
  * 不能替代并发锁/RETURNING 真实行为证据，故并发与数值断言由 integration 层承担。
+ *
+ * STATS-06-B（ADR-216 D-216-4 / Codex 任务卡审 BLOCK 1+HIGH 1-3）追加「阶段二 ES 增量同步」套件：
+ * drain（DB）完成、PG client 释放后 best-effort `es.bulk` partial-update ES play 字段。验证两阶段隔离
+ * （client 在 bulk 前释放）/ es=null no-op / partial doc 字段值保 null / 404 item 跳过不抛 / bulk 抛错
+ * warn 且聚合照常 / videoIds 去重透传。真实 PG↔ES ≤2min 收敛对拍延后合并期（需 live ES）。
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
@@ -61,7 +66,8 @@ function makePoolAndClient(plan: {
     }
     if (sql.includes('lock_key') && sql.includes('ORDER BY lock_key')) {
       const keys = plan.lockKeys ?? [111]
-      return { rows: keys.map((lock_key) => ({ lock_key })), rowCount: keys.length }
+      // STATS-06-B：affected query 现同返 video_id（drain 累积供阶段二 ES 同步）；既有断言只看 lock。
+      return { rows: keys.map((lock_key) => ({ video_id: `v${lock_key}`, lock_key })), rowCount: keys.length }
     }
     return { rows: [], rowCount: 0 }
   })
@@ -313,7 +319,7 @@ describe('runPlayStatsAggregate — 视频播放事件批量聚合编排（STATS
         return { rows: [], rowCount: 0 }
       }
       if (sql.includes('lock_key') && sql.includes('ORDER BY lock_key')) {
-        return { rows: [{ lock_key: 1 }], rowCount: 1 }
+        return { rows: [{ video_id: 'v1', lock_key: 1 }], rowCount: 1 }
       }
       return { rows: [], rowCount: 0 }
     })
@@ -346,5 +352,262 @@ describe('runPlayStatsAggregate — 视频播放事件批量聚合编排（STATS
       expect.objectContaining({ metric: 'play_stats_aggregate.processed', value: 3, batches: 1 }),
       expect.any(String),
     )
+  })
+
+  it('T15 既有 2-arg 调用（es 默认 null）→ 阶段二完全跳过：不查 pool、不依赖 ELASTICSEARCH_URL', async () => {
+    const h = makePoolAndClient({ batches: [['1'], []] })
+    await runPlayStatsAggregate(h.pool, makeLog()) // 不传 es → 默认 null
+    // 阶段二仅在 es!=null 时 pool.query 取 play 字段；es=null → 不触碰 pool.query（guard 不被触发）
+    expect(h.poolQuery).not.toHaveBeenCalled()
+  })
+})
+
+// ── STATS-06-B：阶段二 ES 增量同步（ADR-216 D-216-4 / Codex BLOCK 1 + HIGH 1-3）─────────
+
+interface PlayFieldsRow {
+  id: string
+  total_play_count: string | null
+  play_count_7d: string | null
+  hot_score: string | null
+}
+
+interface BulkItem {
+  update?: { status?: number; error?: { type?: string } }
+}
+
+/**
+ * ES-sync 专用 harness：
+ *   - client.query 驱动 drain（SELECT_BATCH / affected 返回 video_id+lock_key / 其余 no-op）。
+ *   - pool.query **允许**（既有聚合 harness 用 reject guard，本套件阶段二要真用 pool 取 play 字段）：
+ *     命中 SQL_FETCH_PLAY_FIELDS（unnest + LEFT JOIN totals/hot_scores）→ 返回 playFields。
+ *   - es.bulk 返回 bulkResult 或抛错（best-effort 路径）。
+ */
+function makeEsSyncHarness(opts: {
+  batches: string[][]
+  videoIdsByBatch: string[][]
+  playFields?: PlayFieldsRow[]
+  bulkResult?: { errors: boolean; items: BulkItem[] }
+  bulkThrows?: boolean
+  throwOn?: string
+}) {
+  let selectIdx = 0
+  let affectedIdx = 0
+  const clientQuery = vi.fn(async (sql: string): Promise<QueryResponse> => {
+    if (sql.trim().startsWith('ROLLBACK')) return { rows: [], rowCount: 0 }
+    // throwOn 仅在第 2 批起触发（selectIdx≥2 表示已过批1 SELECT）→ 批1 commit、后续批失败（S8 用）。
+    if (opts.throwOn && selectIdx >= 2 && sql.includes(opts.throwOn)) {
+      throw new Error(`Test-injected drain failure on: ${opts.throwOn}`)
+    }
+    if (sql.includes('FOR UPDATE SKIP LOCKED')) {
+      const ids = opts.batches[selectIdx] ?? []
+      selectIdx += 1
+      return { rows: ids.map((id) => ({ id })), rowCount: ids.length }
+    }
+    if (sql.includes('lock_key') && sql.includes('ORDER BY lock_key')) {
+      const vids = opts.videoIdsByBatch[affectedIdx] ?? []
+      affectedIdx += 1
+      return { rows: vids.map((video_id, i) => ({ video_id, lock_key: 100 + i })), rowCount: vids.length }
+    }
+    return { rows: [], rowCount: 0 } // BEGIN / COMMIT / advisory lock / upserts / mark
+  })
+  const release = vi.fn()
+  const client = { query: clientQuery, release } as unknown as import('pg').PoolClient
+
+  const poolConnect = vi.fn().mockResolvedValue(client)
+  const poolQuery = vi.fn(async (sql: string, _values?: unknown[]): Promise<QueryResponse> => {
+    if (sql.includes('FROM unnest') && sql.includes('LEFT JOIN video_play_totals')) {
+      const rows = opts.playFields ?? []
+      return { rows, rowCount: rows.length }
+    }
+    throw new Error(`Unexpected pool.query in ES-sync harness: ${sql}`)
+  })
+  const pool = { connect: poolConnect, query: poolQuery } as unknown as import('pg').Pool
+
+  const bulk = vi.fn(async (_req: unknown) => {
+    if (opts.bulkThrows) throw new Error('Test-injected ES bulk failure')
+    return opts.bulkResult ?? { errors: false, items: [] }
+  })
+  const es = { bulk } as unknown as import('@elastic/elasticsearch').Client
+
+  return { pool, es, bulk, release, poolQuery, clientQuery }
+}
+
+describe('runPlayStatsAggregate 阶段二 — ES play 字段增量同步（STATS-06-B / ADR-216 D-216-4）', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('S1 drain 后 es.bulk partial-update：operations 为 affected video 的 {update}/{doc}，字段值经 toNullableNumber 保 null', async () => {
+    const h = makeEsSyncHarness({
+      batches: [['1', '2'], []],
+      videoIdsByBatch: [['va', 'vb']],
+      playFields: [
+        { id: 'va', total_play_count: '100', play_count_7d: '50', hot_score: '78.5' },
+        { id: 'vb', total_play_count: '0', play_count_7d: null, hot_score: null },
+      ],
+    })
+    await runPlayStatsAggregate(h.pool, makeLog(), h.es)
+
+    // 阶段二用 pool.query 取 play 字段（去重 video_id 数组）
+    expect(h.poolQuery).toHaveBeenCalledTimes(1)
+    expect(h.poolQuery.mock.calls[0][1]).toEqual([['va', 'vb']])
+
+    // es.bulk 一次，operations = 交替 {update}/{doc}
+    expect(h.bulk).toHaveBeenCalledTimes(1)
+    const req = h.bulk.mock.calls[0][0] as { operations: Array<Record<string, unknown>> }
+    const ops = req.operations
+    expect(ops[0]).toEqual({ update: { _index: 'resovo_videos', _id: 'va' } })
+    // 真实值 → number
+    expect(ops[1]).toEqual({ doc: { play_count_total: 100, play_count_7d: 50, hot_score: 78.5 } })
+    expect(ops[2]).toEqual({ update: { _index: 'resovo_videos', _id: 'vb' } })
+    // 真实 0 → 0；缺聚合 → null（非 ?? 0，对齐 NULLS LAST / missing:_last）
+    expect(ops[3]).toEqual({ doc: { play_count_total: 0, play_count_7d: null, hot_score: null } })
+  })
+
+  it('S2 es=null → 阶段二完全 no-op：不查 pool、不调 bulk', async () => {
+    const h = makeEsSyncHarness({ batches: [['1'], []], videoIdsByBatch: [['va']] })
+    await runPlayStatsAggregate(h.pool, makeLog(), null)
+
+    expect(h.poolQuery).not.toHaveBeenCalled()
+    expect(h.bulk).not.toHaveBeenCalled()
+  })
+
+  it('S3 两阶段隔离：client 在 es.bulk 之前已 release（ES 不占 DB 连接）', async () => {
+    const h = makeEsSyncHarness({
+      batches: [['1'], []],
+      videoIdsByBatch: [['va']],
+      playFields: [{ id: 'va', total_play_count: '1', play_count_7d: '1', hot_score: '1' }],
+    })
+    await runPlayStatsAggregate(h.pool, makeLog(), h.es)
+
+    expect(h.release).toHaveBeenCalledTimes(1)
+    expect(h.bulk).toHaveBeenCalledTimes(1)
+    // release 调用次序早于 bulk（阶段一释放 → 阶段二同步）
+    expect(h.release.mock.invocationCallOrder[0]).toBeLessThan(h.bulk.mock.invocationCallOrder[0])
+  })
+
+  it('S4 bulk item 404（document_missing）→ 计 missing 跳过、不抛、聚合照常完成', async () => {
+    const h = makeEsSyncHarness({
+      batches: [['1', '2'], []],
+      videoIdsByBatch: [['va', 'vb']],
+      playFields: [
+        { id: 'va', total_play_count: '1', play_count_7d: '1', hot_score: '1' },
+        { id: 'vb', total_play_count: '2', play_count_7d: '2', hot_score: '2' },
+      ],
+      bulkResult: {
+        errors: true,
+        items: [
+          { update: { status: 404, error: { type: 'document_missing_exception' } } },
+          { update: { status: 200 } },
+        ],
+      },
+    })
+    const log = makeLog()
+    await expect(runPlayStatsAggregate(h.pool, log, h.es)).resolves.toBeUndefined()
+
+    // missing=1（404 跳过）/ synced=1（200 无 error）/ failed=0 → info 级 result metric
+    expect(log.info).toHaveBeenCalledWith(
+      expect.objectContaining({ metric: 'play_stats_es_sync.result', synced: 1, missing: 1, failed: 0 }),
+      expect.any(String),
+    )
+    // 聚合完成日志仍写（阶段一不受阶段二影响）
+    expect(log.info).toHaveBeenCalledWith(
+      expect.objectContaining({ metric: 'play_stats_aggregate.processed', value: 2 }),
+      expect.any(String),
+    )
+  })
+
+  it('S4b（HIGH 1）非 document_missing 的 404（如 index_not_found）→ 计 failed 非 missing，warn 不静默', async () => {
+    const h = makeEsSyncHarness({
+      batches: [['1'], []],
+      videoIdsByBatch: [['va']],
+      playFields: [{ id: 'va', total_play_count: '1', play_count_7d: '1', hot_score: '1' }],
+      bulkResult: {
+        errors: true,
+        items: [{ update: { status: 404, error: { type: 'index_not_found_exception' } } }],
+      },
+    })
+    const log = makeLog()
+    await expect(runPlayStatsAggregate(h.pool, log, h.es)).resolves.toBeUndefined()
+
+    // 404 但非 document_missing → failed=1 / missing=0（不被误当缺文档静默）
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ metric: 'play_stats_es_sync.result', synced: 0, missing: 0, failed: 1 }),
+      expect.any(String),
+    )
+  })
+
+  it('S5 bulk item 非 404 错误 → 计 failed、warn 级 result metric、仍不抛', async () => {
+    const h = makeEsSyncHarness({
+      batches: [['1'], []],
+      videoIdsByBatch: [['va']],
+      playFields: [{ id: 'va', total_play_count: '1', play_count_7d: '1', hot_score: '1' }],
+      bulkResult: {
+        errors: true,
+        items: [{ update: { status: 500, error: { type: 'es_rejected_execution_exception' } } }],
+      },
+    })
+    const log = makeLog()
+    await expect(runPlayStatsAggregate(h.pool, log, h.es)).resolves.toBeUndefined()
+
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ metric: 'play_stats_es_sync.result', synced: 0, missing: 0, failed: 1 }),
+      expect.any(String),
+    )
+  })
+
+  it('S6 es.bulk 抛错 → warn(error metric)、不挂 job、聚合（已 commit）照常完成', async () => {
+    const h = makeEsSyncHarness({
+      batches: [['1'], []],
+      videoIdsByBatch: [['va']],
+      playFields: [{ id: 'va', total_play_count: '1', play_count_7d: '1', hot_score: '1' }],
+      bulkThrows: true,
+    })
+    const log = makeLog()
+    await expect(runPlayStatsAggregate(h.pool, log, h.es)).resolves.toBeUndefined()
+
+    expect(log.warn).toHaveBeenCalledWith(
+      expect.objectContaining({ metric: 'play_stats_es_sync.error' }),
+      expect.any(String),
+    )
+    expect(log.info).toHaveBeenCalledWith(
+      expect.objectContaining({ metric: 'play_stats_aggregate.processed', value: 1 }),
+      expect.any(String),
+    )
+  })
+
+  it('S7 videoIds 跨批去重透传：fetch 用去重后的并集（va,vb,vc）', async () => {
+    const h = makeEsSyncHarness({
+      batches: [['1'], ['2'], []],
+      videoIdsByBatch: [
+        ['va', 'vb'],
+        ['vb', 'vc'],
+      ],
+      playFields: [],
+    })
+    await runPlayStatsAggregate(h.pool, makeLog(), h.es)
+
+    expect(h.poolQuery).toHaveBeenCalledTimes(1)
+    expect(h.poolQuery.mock.calls[0][1]).toEqual([['va', 'vb', 'vc']])
+  })
+
+  it('S8（HIGH 2）drain 中途失败：已 commit 批的 video 仍在阶段二同步，随后 rethrow drain 错误', async () => {
+    // 批1 ['1']→commit（video va）；批2 ['2'] 在 TOTALS upsert 抛错 → ROLLBACK → drain 错误。
+    const h = makeEsSyncHarness({
+      batches: [['1'], ['2'], []],
+      videoIdsByBatch: [['va'], ['vb']],
+      playFields: [{ id: 'va', total_play_count: '5', play_count_7d: '3', hot_score: '8' }],
+      throwOn: 'INTO video_play_totals',
+    })
+    const log = makeLog()
+
+    // drain 错误最终 rethrow（保 T11/T12 错误语义）
+    await expect(runPlayStatsAggregate(h.pool, log, h.es)).rejects.toThrow('Test-injected drain failure')
+
+    // 但已 commit 批1 的 va 仍被同步（批2 的 vb 因 ROLLBACK 未提交、未加入 affected）
+    expect(h.poolQuery).toHaveBeenCalledTimes(1)
+    expect(h.poolQuery.mock.calls[0][1]).toEqual([['va']])
+    expect(h.bulk).toHaveBeenCalledTimes(1)
+    const req = h.bulk.mock.calls[0][0] as { operations: Array<Record<string, unknown>> }
+    expect(req.operations[0]).toEqual({ update: { _index: 'resovo_videos', _id: 'va' } })
+    expect(req.operations[1]).toEqual({ doc: { play_count_total: 5, play_count_7d: 3, hot_score: 8 } })
   })
 })
