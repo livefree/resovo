@@ -67,6 +67,41 @@ describe('GridSortBar（网格排序条，HANDOFF-39）', () => {
     expect(screen.getByTestId('sort-rating').getAttribute('aria-checked')).toBe('true')
   })
 
+  it('search 模式：渲染 4 按钮含「相关度」(relevance)', () => {
+    render(<GridSortBar mode="search" />)
+    expect(screen.getByTestId('sort-relevance')).toBeTruthy()
+    expect(screen.getByTestId('sort-latest')).toBeTruthy()
+    expect(screen.getByTestId('sort-hot')).toBeTruthy()
+    expect(screen.getByTestId('sort-rating')).toBeTruthy()
+  })
+
+  it('search 模式：无 ?sort= 默认高亮 relevance（= 后端搜索默认，前后端一致）', () => {
+    render(<GridSortBar mode="search" />)
+    expect(screen.getByTestId('sort-relevance').getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByTestId('sort-latest').getAttribute('aria-checked')).toBe('false')
+  })
+
+  it('search 模式：点 latest 显式写 ?sort=latest', () => {
+    render(<GridSortBar mode="search" />)
+    fireEvent.click(screen.getByTestId('sort-latest'))
+    const url = mockPush.mock.calls[0][0] as string
+    expect(url).toContain('sort=latest')
+  })
+
+  it('search 模式：选 latest 后点回「相关度」删 param 回后端默认（死角消除）', () => {
+    mockSearchParams.set('sort', 'latest')
+    render(<GridSortBar mode="search" />)
+    fireEvent.click(screen.getByTestId('sort-relevance'))
+    const url = mockPush.mock.calls[0][0] as string
+    expect(url).not.toContain('sort=')
+  })
+
+  it('search 模式：有 ?sort= 时正常高亮', () => {
+    mockSearchParams.set('sort', 'hot')
+    render(<GridSortBar mode="search" />)
+    expect(screen.getByTestId('sort-hot').getAttribute('aria-checked')).toBe('true')
+  })
+
   it('total + totalLabelKey 提供时渲染计数', () => {
     render(<GridSortBar total={42} totalLabelKey="filter.countSearch" />)
     const count = screen.getByTestId('grid-sort-count')

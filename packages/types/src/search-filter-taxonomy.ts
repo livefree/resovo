@@ -107,3 +107,13 @@ export type CuratedFilterCountry = (typeof CURATED_FILTER_COUNTRIES)[number]
 export const SORT_OPTIONS = ['latest', 'hot', 'rating'] as const
 export type SortOption = (typeof SORT_OPTIONS)[number]
 export const DEFAULT_SORT: SortOption = 'latest'
+
+/**
+ * 搜索页排序选项：在网格 3 项前置「相关度」(relevance = 搜索默认，按搜索相关性)。
+ * 分类页用 SORT_OPTIONS（后端 /videos 无 relevance 语义）；搜索页用本集合（后端 /search 支持 relevance）。
+ * SearchSortOption ⊇ SortOption；relevance 默认高亮且可点回，消除搜索排序回不到默认的死角。
+ * label: filter.sort.<value>。
+ */
+export const SEARCH_SORT_OPTIONS = ['relevance', 'latest', 'hot', 'rating'] as const
+export type SearchSortOption = (typeof SEARCH_SORT_OPTIONS)[number]
+export const DEFAULT_SEARCH_SORT: SearchSortOption = 'relevance'

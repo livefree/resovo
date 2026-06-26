@@ -6,7 +6,7 @@
 > source_of_truth: yes
 > supersedes: none
 > superseded_by: none
-> last_reviewed: 2026-06-18
+> last_reviewed: 2026-06-24
 
 > 本文件仅记录 SEQ-20260613-01（META-24）及以后的活跃变更。
 > 历史 changelog 已分段归档（四段）：
@@ -39,6 +39,153 @@
 - "执行模型" 必填，必须是完整模型 ID
 - "子代理" 必填；本任务未 spawn 任何 Task 工具调用时写 "无"；有则列出每个 subagent 的名称和其对应 model ID
 - 历史条目（本补丁应用前的条目）不强制回填，保持原样
+
+---
+
+## [STATS-04-INTEGRATION-FIX] 修复 `seedTestVideo` 陈旧 schema → STATS-04-A/B 写集成测可跑（合并 main 前 gate 发现）
+
+- **完成时间**：2026-06-26
+- **记录时间**：2026-06-26 00:55
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无
+- **背景**：合并 main 前跑 gate 时发现 STATS-04-A/B worker 写集成测（`play-stats-aggregate` / `play-stats-retention`）committed 即不可跑——依赖 main 既有共享 helper `tests/helpers/db.ts` 的 `seedTestVideo`，其 INSERT 面向 media_catalog 重构前的旧 `videos` schema（引用已退役列 title_en/status/rating/year/country/director/cast/writers + `cast` 未引号保留字 + 缺当前 NOT NULL FK `catalog_id`→`media_catalog`）。这俩测一直延后（破坏性 TRUNCATE 守卫要求库名含 "test" 的专用库，无则不跑），从未真跑、bug 未暴露。
+- **修复**：`seedTestVideo` 重写——先 seed `media_catalog`（NOT NULL：title/title_normalized/type，无级联 FK），再 seed `videos` 当前列（id/short_id/slug/title/type/episode_count/catalog_id/created_at），返回 video 行。仅影响其 2 个消费方（STATS-04-A/B 集成测），不动 makeVideo/seedTestSource/cleanTestData。
+- **门禁**：typecheck=0；专用 `resovo_test` 库（全量迁移 0→128）——STATS-04 写测 aggregate 8 + retention 5 = **13 测全过**；全量集成测 **14 文件 / 121 测全过**（含 STATS schema/analytics + card-size 等，干净库无数据漂移）。
+- **修改文件**：`tests/helpers/db.ts`（`seedTestVideo`）。
+- **新增依赖**：无
+- **数据库变更**：无（仅测试 seed 逻辑）
+- **注意事项**：① STATS-04-A/B 写集成测需库名含 "test" 的专用库（破坏性 TRUNCATE 守卫，Codex round2 HIGH）；② card-size 集成测对共享 `resovo_dev` 失败（global `card_width_px=200` vs seed 160）是该 dev DB 历史数据漂移、非代码问题，干净库通过。
+
+---
+
+## [STATS-07-B] 后台视频播放分析 UI：dashboard「视频播放」Tab（overview 卡片 + trend SVG 图 + top-videos DataTable）+ ADMIN e2e（ADR-217 / SEQ-20260624-02 主链第 7 卡 UI 侧）
+
+- **完成时间**：2026-06-26
+- **记录时间**：2026-06-26 00:30
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：Codex adversarial-review（codex-cli 0.125.0 / gpt-5.5）2 轮——任务卡审（方向成立、不拆 B1/B2、放置正确；1 BLOCK + 2 HIGH + 3 MEDIUM + LOW 全吸收）+ 代码审（无 BLOCK；HIGH-1 列 ⋯ 死交互 + 4 条测试增强全吸收）。**未另起 arch-reviewer**：纯消费既有 admin-ui 组件（DataTable/KpiCard/PageHeader/LoadingState/ErrorState）+ STATS-07-A 已冻结 DTO，零 admin-ui Props 契约改动、零 schema/API 改动。
+- **任务**：STATS-07-B（ADR-217 D-217-10/12 的 UI 侧实现，主链 `…07-A✅→07-B✅`，**STATS-07 全交付**）。UI 单层：新 dashboard Tab「视频播放」（放置「under existing analytics area」设计真源，镜像既有 `AnalyticsView` 范式），消费 STATS-07-A 三只读端点 + 3 DTO。
+- **实现（5 项）**：① `lib/video-plays/api.ts` 3 fetch（`apiClient` + **`@resovo/types`**〔server-next 共享类型入口，非 `@/types`〕 + `{ data }` 解包）；② `VideoPlaysAnalyticsView.tsx`——period 选择器（7d/30d/90d）+ overview 5 `KpiCard`（总播放/总观看秒/均观看秒/匿名/登录，标题消费 `overview.period` 回显）+ trend inline SVG 折线（镜像 `AreaChart`，**零图表库依赖**，恒 N 点 zero-fill、全 0 画可见 flat baseline、`<title>`/aria 含 period+点数+首尾 date、`data-video-plays-trend-line`）+ top-videos `admin-ui DataTable`（**server mode 直渲全行** + `pagination/toolbar` 隐藏 + `columnTriggerVisibility="never"` 抑制列 ⋯ 死交互，禁 v1 三件套）+ **stale guard**（`requestSeqRef` + `Promise.all` 原子 + 仅 latest seq setState）；③ `DashboardClient.tsx` 加 `'video-plays'` tab（`TabId` + `activeTab` 派生 + 按钮 + render 分支，additive）；④ 单测 7 测；⑤ ADMIN e2e 3 测（实跑延后）。
+- **Codex 两轮吸收**：
+  - **卡审（实现前）**：BLOCK-1 `@/types`→`@resovo/types`（server-next tsconfig `@/*`→`./src/*`）/ HIGH-2 e2e 路径 `tests/e2e-next/`→`tests/e2e/admin/`（admin-next-chromium 仅匹配 `**/e2e/admin/**`）+ `installAdminShellMocks` / HIGH-3 DataTable server mode 直渲不被 client 默认 pageSize=20 切片 / MEDIUM-4 stale guard / MEDIUM-5 trend 退化态 / MEDIUM-6 测精确钩子 / LOW-9 ADR 语义守卫（不对账/今日桶不稳定/avg=0 非 NaN/anon 含 ephemeral）。
+  - **代码审（实现后，无 BLOCK）**：HIGH-1 top-videos 列级 ⋯ 死交互（noop 打不开）→ 加 `toolbar={{hidden:true}}` + `columnTriggerVisibility="never"` / MEDIUM-1 period 切换测加 deferred stale 覆盖测（30d 先 resolve、7d 晚到丢弃）/ MEDIUM-2 行数测 2→25 行拦 pageSize 切片回归 + 断言无 `th-menu-trigger` / LOW-1 avg=0 精确断言卡 value='0' / LOW-2 标题改用 `overview.period` 回显。stale guard / trend SVG / api client / DashboardClient additive 经代码审确认正确。
+- **门禁**：typecheck EXIT=0（全工作区）；单测 **7 测全过**（VideoPlaysAnalyticsView）；test:changed EXIT=0（2 文件 23 测，含 DashboardClient 依赖，零回归）；`playwright --project=admin-next-chromium --list` **收集 3 e2e**（HIGH-2 spec 进对 project）；verify:adr-contracts EXIT=0（无新 route，endpoint-adr 不变）；自查零硬编码色 / 零 any / 无空 catch。next-lint workspace 报错为 worktree 嵌套 `.eslintrc` plugin 冲突环境问题、与本卡零关系（apps/api/server-next tsc typecheck 已覆盖）。ADMIN e2e 实跑延后合并期（worktree 无 `.env.local`/dev server，同 CARD-SIZE-E2E 先例）。
+- **修改文件**：
+  - `apps/server-next/src/lib/video-plays/api.ts`（新）— 3 fetch api client
+  - `apps/server-next/src/app/admin/_client/VideoPlaysAnalyticsView.tsx`（新）— 三视图 view（overview/trend/top-videos + period + stale guard）
+  - `apps/server-next/src/app/admin/_client/DashboardClient.tsx` — 加 video-plays tab（additive）
+  - `tests/unit/components/server-next/admin/VideoPlaysAnalyticsView.test.tsx`（新，7 测）
+  - `tests/e2e/admin/video-plays-analytics.spec.ts`（新，3 测，实跑延后）
+  - `docs/task-queue.md`（STATS-07 母卡全交付 ✅）/ `docs/tasks.md`（卡删除，净零）/ `docs/audit/adr-d-status.json`（verify 脚本自动）
+- **新增依赖**：无（trend 用 inline SVG，零图表库；全仓零第三方图表库依赖，引入即 BLOCKER）
+- **数据库变更**：无
+- **偏离登记**：① 单测路径放 `tests/unit/components/server-next/admin/`（仓库既有 server-next 组件单测约定）而非卡登记的 `tests/unit/server-next/`（实现手段对齐既有约定，契约未变）；② 代码审吸收时移除 `ErrorState` 上不被转发的 dead `data-video-plays-error` prop，错误态 e2e/测试钩子改用 ErrorState 真实渲染的 `[data-retry-btn]` / `[data-error-title]`。
+- **注意事项**：① ADMIN e2e（3 测）worktree 无 dev server → 延后合并期 `npm run test:e2e` 实跑；② 新 tab URL = `/admin?tab=video-plays`（沿用 IA-2 dashboard tab 容器、不新增 sidebar 入口）；③ top-videos 与 overview/trend **刻意不对账**（D-217-6），UI 无跨视图总和校验；④ 今日桶 partial/mutable（D-217-2），UI 不假设今日数值稳定。
+- **主链进度**：`01✅→02✅→03A✅→03B✅→04A✅→04B✅→05A✅→05B✅→06A✅→06B✅→07-ADR✅→07-A✅→07-B✅`。**🎉 SEQ-20260624-02 VIDEO-PLAY-STATS 主链全交付**（schema→visitor→写端点→前端上报→聚合 job→热度→ES 同步→搜索/公开热度读→admin ADR→API→UI 全栈闭环）。
+
+---
+
+## [STATS-07-A] 后台视频播放分析只读端点 API 落地 `/admin/analytics/video-plays/{overview,trend,top-videos}`（ADR-217 / SEQ-20260624-02 主链第 7 卡 API 侧）
+
+- **完成时间**：2026-06-25
+- **记录时间**：2026-06-25 23:45
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：Codex adversarial-review（codex-cli 0.125.0 / gpt-5.5）2 轮——任务卡审（无 BLOCK，2H/3M/1L 全吸收）+ 代码审（无 BLOCK，3 条测试增强 HIGH-1/MEDIUM-2/LOW-3 全吸收）。**未另起 arch-reviewer**：DTO 契约已于 ADR-217 经 arch-reviewer（claude-opus-4-8）定稿冻结，本卡仅按冻结类型实现、零 admin-ui Props 改动、零 schema 变更。
+- **任务**：STATS-07-A（ADR-217 Accepted 的 API 侧实现）。API 单层纵切：3 admin 只读 GET 端点 + daily-only 三视图 + per-endpoint 严格 zod + 数据源/分层/时区/注册/SQL 子句五类静态门。schema 冻结（migration 128 零改）、UI 归 STATS-07-B。
+- **决策落地（D-217-1~12）**：唯一数据源 `video_play_daily`（显式禁扫 events/hourly/totals/hot_scores/daily_visitors/users）；period 7d/30d/90d 近 N 自然日窗口 `bucket_date ∈ [CURRENT_DATE-(N-1), CURRENT_DATE]`；overview SUM + avg 除零（`totalPlays>0 ? … : 0`）+ anon/logged play-count based（含 ephemeral anon、不查 users、`totalPlays===anon+logged` 恒等）；trend `generate_series(...)::date` LEFT JOIN zero-fill 恰 N 点 + `to_char YYYY-MM-DD`；top-videos INNER JOIN `videos deleted_at IS NULL` + 确定性 tie-break `SUM(play_count) DESC, SUM(total_watch_seconds) DESC, v.id ASC` + limit≤100；BIGINT `::text`→裸 `Number()`；分层 Route→VideoPlayAnalyticsService→queries 零 route 内联 SQL。
+- **Codex 代码审吸收（无 BLOCK；SQL/zod/分层/BIGINT 实现层确认零 bug，3 条均测试增强防假绿）**：
+  - **HIGH-1**：集成测时区门由「单池 truthy + 静态文本」升为「实开 api `lib/postgres` + worker `lib/db` 两侧**真实 pool 模块**各跑 `SHOW timezone` 断言相等」——挡静态文本看不见的 env/连接串 timezone 漂移（`PGTZ` / connectionString `options=-c timezone=`）；静态门保留为互补层、不互替。
+  - **MEDIUM-2**：guards 加 ⑤ SQL 子句静态门——`SQL_TOP_VIDEOS_BY_PLAYS` 钉死 `deleted_at IS NULL`/tie-break/`LIMIT $2`，trend 钉 `generate_series::date`+`to_char`，窗口钉 `CURRENT_DATE-($1::int-1)`，把延后集成测的 DB 形状覆盖前移到 CI 可拦静态层（补无删除/并列数据时删子句也假绿的盲区）。
+  - **LOW-3**：routes 补 zod 边界——`limit=`（空串→0→422）/ `limit=1.5`（.int 拒）/ top-videos 未知键（.strict 拒）/ 大写 `period=7D`（enum 大小写敏感→422）。
+- **门禁**：typecheck EXIT=0（全工作区）；3 单测文件 **34 passed**（25→34，+9 吸收）；test:changed EXIT=0 全量升格 **619 文件 / 8451 测全过**（8442→8451，零回归）；`verify:endpoint-adr` ✅ 253 admin 路由对齐（139 ADR 端点含新增 3 端点契约）；`verify:adr-contracts` EXIT=0（sql-schema-alignment 确认列引用对齐 migration 128 / style / types-mirror；error-message·D-N·enum-ssot 为既有 advisory 存量、非本卡引入、不阻塞）。apps/api lint=tsc 过；next-lint workspace 报错为 worktree 嵌套 `.eslintrc` plugin 冲突环境问题、与本卡零关系。集成测 DB 层无 DB → 落盘、实跑延后合并期。
+- **修改文件**：
+  - `packages/types/src/video-play-stats.types.ts` — 追加 `VideoPlaysPeriod` + 3 DTO（`VideoPlaysOverview`/`VideoPlaysTrendPoint`/`VideoPlaysTopVideo`），`@/types` 自动出口
+  - `apps/api/src/db/queries/videoPlayStats.ts` — 追加 3 具名 analytics SQL 常量 + `VIDEO_PLAY_ANALYTICS_SQL` 常量集 + 3 query 函数（唯一源 daily）
+  - `apps/api/src/services/VideoPlayAnalyticsService.ts`（新）— 编排 + DTO 映射 + period→天数 + avg 除零
+  - `apps/api/src/routes/admin/analytics.video-plays.ts`（新）— 3 GET + per-endpoint 严格 zod + adminOnly
+  - `apps/api/src/server.ts` — 注册 `adminVideoPlayAnalyticsRoutes`（prefix /v1）
+  - `tests/unit/api/video-play-analytics-{guards,service,routes}.test.ts`（新）— 静态门 ①~⑤ + service 映射 + route 行为/信封/zod 边界（34 测）
+  - `tests/integration/api/video-play-analytics.test.ts`（新）— 真 PG 可执行 + 不变量 + 时区真池相等门（延后实跑）
+  - `docs/task-queue.md`（STATS-07 母卡 A✅）/ `docs/tasks.md`（卡删除，净零）/ `docs/audit/adr-d-status.json`（verify 脚本自动）
+- **新增依赖**：无
+- **数据库变更**：无（migration 128 schema 冻结，零改）
+- **注意事项**：① 集成测（时区真池相等门 + top-videos deleted/tie-break）worktree 无 DB → 延后合并期实跑；② STATS-07-B（server-next analytics UI + ADMIN e2e）为下一卡，消费 `@/types` 3 DTO + 3 端点，A 先于 B；③ analytics 口径与 `watch_history` **刻意不对账**（D-217 三视图各自独立窗口/过滤）。
+- **主链进度**：`01✅→02✅→03A✅→03B✅→04A✅→04B✅→05A✅→05B✅→06A✅→06B✅→07-ADR✅→07-A✅→07-B⬜`。
+
+---
+
+## [STATS-07-ADR] ADR-217 起草定稿：后台视频播放分析只读端点契约 `/admin/analytics/video-plays/{overview,trend,top-videos}`（SEQ-20260624-02 / STATS-07 前置门）
+
+- **任务**：STATS-07-ADR（SEQ-20260624-02 VIDEO-PLAY-STATS 主链第 7 卡的 admin 端点门禁前置）。纯 docs ADR 起草，**不落任何实现代码**。执行模型 `claude-opus-4-8`（主循环）；子代理 arch-reviewer（`claude-opus-4-8`，agentId a5f5f7bf958e94610）+ Codex 对抗审 2 轮（任务卡 / ADR 产物，codex-cli 0.125.0）。stats-01-adr 分支（未合并 dev/main）。
+- **背景/门禁**：STATS-07 task-queue 红线「admin 端点门禁：不能只依赖 STATS-01 总 ADR，必须另起 admin endpoint ADR 并取得 Opus PASS」+ ADR-216 显式「admin analytics 端点契约留 ADR-217，须过 verify:endpoint-adr + arch-reviewer (Opus) PASS」+ CLAUDE.md「新增 admin route 未先起独立 ADR + Opus PASS → 阻塞」。本卡起 ADR-217 满足该前置。
+- **关键事实核验**：① migration 128 `video_play_daily` 已含全部口径维度（play_count / anon_play_count / logged_in_play_count / total_watch_seconds / unique_visitor_count / bucket_date）且 **retention 永久** → ADR-217 **无需 schema 变更**，三视图全可只读 daily 单表零 raw-event 扫描；② 现有 `analytics.ts` content-quality 端点 route 层内联 SQL = 分层反例，ADR 不沿用；③ verify:endpoint-adr 扫 routes/admin 比对 ADR §端点契约表 path 字面量。
+- **ADR-217 决策（D-217-1~12，Accepted）**：3 admin GET 端点契约（overview/trend/top-videos，adminOnly，端点契约表 verifier-parseable）/ period 7d/30d/90d 近自然日读 daily + **时区同源不变量**（聚合 `occurred_at::date` 与 analytics `CURRENT_DATE` 同 session TZ、禁单边 SET TIME ZONE、验证门断言 SHOW timezone 一致）/ **唯一数据源 video_play_daily**（显式禁扫 events/hourly/totals/hot_scores/daily_visitors/users）/ overview 指标（total plays·watch seconds·avg 除零·anon-vs-logged play-count based 含 ephemeral anon、v1 不暴露 period 级去重 UV）/ trend N 天 zero-fill（`generate_series(...)::date` + `date` 严格 YYYY-MM-DD）/ top-videos（INNER JOIN videos `deleted_at IS NULL`、不过滤 is_published/visibility、limit≤100、确定性 tie-break、与 overview/trend 刻意不对账）/ BIGINT→number 裸 Number()（不加上界断言，真对齐现网）/ per-endpoint 严格 zod（limit 仅 top-videos、`.strict()` 拒空串/未知键、非法 422）/ 分层 Route→VideoPlayAnalyticsService→queries 零 route 内联 SQL / DTO 入 packages/types（`@/types`）+ 后台 UI admin-ui DataTable（纠正 task-queue 过时 ModernDataTable 引用）/ growth v1 不做 / 拆 STATS-07-A（API 侧）→ STATS-07-B（UI 侧）A 先于 B。
+- **三轮独立评审全吸收**：
+  - **Codex 任务卡审 CONDITIONAL PASS**（4 HIGH+4 MEDIUM+2 LOW）：时区同源 / period UV 不可加→v1 排除 / top-videos 可见性 / BIGINT JSON / trend zero-fill / query 契约 / tie-break / 端点表精确字面量 / anon+ephemeral / 显式排除 totals·hot_scores / A 先于 B。
+  - **arch-reviewer Opus CONDITIONAL PASS（无 BLOCK，2 HIGH+5 MEDIUM+2 LOW）**：HIGH-1 时区守护升可观测不变量（验证门 SHOW timezone 断言）/ HIGH-2 删自相矛盾的 MAX_SAFE_INTEGER 断言（裸 Number 真一致）；MEDIUM 裸数组信封 / overview period 回显理由 / generate_series::date / 可见性说全 visibility / totalPlays===anon+logged 恒等门；LOW @/types 出口对齐。焦点逐项裁决：数据源可行性成立、与 ADR-216/215 一致、红线合规、admin 端点门禁 path 可机器匹配全通过。
+  - **Codex ADR 终审（1 假阳性 BLOCK + 3 HIGH+3 MEDIUM）**：BLOCK（端点表非 parseable）= 审核 prompt 压缩失真，实际文件含规范 8 列 3 行表、arch-reviewer 已机器核验、verify-endpoint-adr 实测计入 139 ADR 端点 → 不成立；HIGH-1 时区规则「禁 per-connection SET」vs「推荐 pool SET UTC」自相矛盾→消矛盾（单边不一致 vs 双侧一致 amendment）；HIGH-2 trend date 线格式冻结 YYYY-MM-DD；HIGH-3 per-endpoint 严格 schema；MEDIUM 今日 partial 声明 / top-videos 不对账声明 / no-event-scan 静态门。
+- **门禁**：`verify:adr-contracts` **EXIT=0**（✅ verify-endpoint-adr 250 admin 路由对齐〔ADR 端点池 139 含 ADR-217 新增 3 端点契约，证表格 parseable〕；✅ sql-schema-alignment / style / types-mirror；error-message·D-N 两 ⚠️ 为仓库既有 advisory 存量、非本卡引入、不阻塞）。纯 docs 卡，typecheck/lint docs-only 不适用、test:changed docs-only 自动跳过（ADR-180）。
+- **改动文件**：`docs/decisions.md`（新增 ADR-217，89 行）/ `docs/task-queue.md`（STATS-07 母卡状态）/ `docs/tasks.md`（卡删除，净零）/ `docs/audit/adr-d-status.json`（verify 脚本自动）。零代码改动。
+- **主链进度**：`01✅→02✅→03A✅→03B✅→04A✅→04B✅→05A✅→05B✅→06A✅→06B✅→07-ADR✅→07-A⬜→07-B⬜`。下一步 STATS-07-A（types+queries+VideoPlayAnalyticsService+3 route+verify:endpoint-adr+测，opus），A 先于 B（packages/types 共享契约）。
+
+---
+
+## [STATS-06-B-REALTIME-SYNC] ES play fields ≤2min 实时同步——worker 聚合 commit 后两阶段 best-effort partial-update（ADR-216 D-216-4 / SEQ-20260624-02）
+
+- **任务**：STATS-06-B-REALTIME-SYNC（SEQ-20260624-02 VIDEO-PLAY-STATS 主链第 6 卡·B）。执行模型 `claude-opus-4-8`；子代理 Codex 对抗审 3 轮（任务卡 / 实现 / 确认）。stats-01-adr 分支（未合并 dev/main）。
+- **背景**：STATS-06-A 落 ES 读对齐层（mapping additive + SearchService hot 4-key 链 + buildDocument 携带 play 字段 + reindex 回填）后，补 D-216-4 冻结主机制「**聚合 commit 后增量更新变更视频文档**」实时层；陈旧度 ≤ 聚合周期(1min)+ES refresh ≈ ≤2min。
+- **设计裁定（方案①）**：卡片二选一选 **worker play-stats-aggregate commit 后自包含 ES client partial-update**。理由：① D-216-4 字面主机制即「聚合即更新」，≤2min 预算按此设计；方案②（apps/api ~1min poll）实为把既有 24h 兜底调快当主机制、叠加轮询周期突破预算且偏离冻结二分。② 验收明确「不破坏 worker→apps/api 零耦合边界」→ 须 worker 内实现、零 import apps/api（ADR-107 §4，同 `lib/db.ts` 自包含 pg Pool 范式）。
+- **改动（5 手写项 + 自动 lockfile）**：
+  - **worker ES client**（`apps/worker/src/lib/elasticsearch.ts` 新建）：自包含 `@elastic/elasticsearch` Client + 内联 `ES_INDEX='resovo_videos'`；**可选**——`ELASTICSEARCH_URL` 缺失→`esClient=null`→同步降级 no-op，绝不阻断聚合关键路径（与 apps/api 模块加载期 throw 刻意不同）。
+  - **两阶段聚合**（`play-stats-aggregate.ts`）：`SQL_AFFECTED_LOCK_KEYS` 复用同次 query 额外返 `video_id`（不新增 txn query → 既有 verb 序列零破坏），`aggregateOneBatch` 返 `{ processed, videoIds }`。**阶段一** drain 跨批累积 `affectedVideoIds:Set`→释放 PG client（poison/release 语义不变）；**阶段二**（client 已释放）best-effort `es.bulk` partial-update 仅 3 字段（`toNullableNumber` 保 null ≡ missing:_last）+ 分块 `ES_BULK_CHUNK=1000` + `requestTimeout=10s`；逐 item 判 `document_missing`→missing 跳过（reconcile 兜底）、其余→failed warn；整段 try/catch 包裹 ES 失败不挂 job、不占 DB 连接。
+  - **DI + 可观测**（`index.ts`）：`runPlayStatsAggregate(db, log, esClient)` + 启动日志 `play_stats_es_sync_enabled`；shutdown 关 esClient。
+  - **依赖**（`package.json`）：加 `@elastic/elasticsearch ^8.16.0`（已在技术栈，apps/api 同版本，非新依赖）。
+- **Codex 对抗审 3 轮**：
+  - **任务卡审 FAIL → 1 BLOCK+4 HIGH+3 MEDIUM 全吸收**：BLOCK 1 ES 同步不得在 drain 循环内逐 video 占 PG client（5000 次 update 卡死反拖聚合）→ 改两阶段 + bulk；HIGH 返 videoIds 非 eventIds / ES 禁用须可观测 / 404 跳过+收紧措辞 / 「互不 clobber」过强改记 stale-overwrite 残余竞态；MEDIUM 默认 null 改既有单测 / isDocumentMissing 查 type / 文件范围含 lockfile。**PASS 确认**：方案①成立、`hot_score:null` ≡ missing:_last（Elastic 官方：显式 null 不索引）、缺 doc 不 upsert 正确。
+  - **实现审 0 BLOCK → 3 HIGH+1 MEDIUM+1 LOW 全吸收**：HIGH 1 `isDocumentMissing` 仅认 `document_missing_exception`（裸 404 含 index_not_found 误判静默）；HIGH 2 drain 中途失败仍同步已 commit 批后再 rethrow（保 T11/T12）；HIGH 3 `maxRetries:0` + 30s 总 deadline 防慢 ES 钉死 isRunning 拖累聚合吞吐；MEDIUM 1 shutdown 关 esClient；LOW 1 禁用可观测由启动日志承担（避免 per-tick 刷屏）。**6 不变量 verified**（两阶段用 pool 非已释放 client / unnest uuid 兼容 / bulk update 形态 / errors:false 即全成功 / advisory lock 序无损 / 无 ADR-107 违规）。
+  - **确认轮 5 项全 RESOLVED**（HIGH 3 with caveat：deadline 兜 ES 耦合段非全 job <60s 严格保证，符合预期）+ 3 文案修正（drain 失败仍同步 / deferred 措辞 / 禁用 metric 说明）。
+- **门禁**：typecheck=0（8 workspace）/ 改动文件 eslint=0 / verify:adr-contracts=0（endpoint-adr 250 路由对齐〔零新 admin 路由〕 + **sql-schema-alignment ✅**〔worker SQL 引用 video_play_totals/video_hot_scores 列对齐 migration 128〕）/ **test:changed 升全量 8417 passed 零回归**（package.json/lockfile 改动触发 ADR-180 升级；worker 聚合套件 24 tests：T1-T15 + S1-S8 + S4b〔含两阶段隔离/null 保留/404 vs index_not_found 区分/drain 失败仍同步/去重透传〕；首轮 4 jsdom 环境 flaky errors 复跑清零、与 worker 零关系）。
+- **已知残余（Codex HIGH 4，记录非消除）**：admin edit 全量 `es.index` 若读旧 stats 却在 worker partial-update 后写入 → stale-overwrite race。频率极低、下次聚合 tick 或 24h reconcile 自愈，符合 D-216-4「主机制 + reconcile 兜底」分工，v1 接受。
+- **延后合并期 gate**：SEARCH e2e + reindex 实跑 + 真实 PG↔ES ≤2min 实时窗口收敛对拍（需 ES+Postgres+.env.local，worktree 阻塞，同 STATS-02/04/06-A 先例）。
+- **主链进度**：`01✅→02✅→03A✅→03B✅→04A✅→04B✅→05A✅→05B✅→06A✅→06B✅→07⬜`。下一卡 STATS-07-ADMIN-ANALYTICS（须先起独立 admin endpoint ADR-217 + Opus PASS）。
+
+---
+
+## [STATS-06-A-SEARCH-HOT-READ-BACKFILL] `/search?sort=hot` 改用 ES play fields + reindex 回填，跨 surface 热度口径对齐（ADR-216 D-216-3/D-216-4 / SEQ-20260624-02）
+- **完成时间**：2026-06-25
+- **执行模型**：claude-opus-4-8（主循环，卡建议 opus·对齐）；**子代理**：Codex 对抗审（任务卡 1 轮 + 实现 1 轮 + 确认轮超时）
+- **背景**：原 STATS-06-SEARCH-HOT。Codex 任务卡审 FAIL→**降格 STATS-06-A（读对齐层）**：批量 updater 路径（reindex + doc 投影携带 play fields），实时 ≤2min freshness 拆 **STATS-06-B**（D-216-4「聚合 commit 后增量更新」需 worker 自包含 ES 或 scheduler ~1min tick，>5 文件违 ≤5）。
+- **产出（5 项，正好 ≤5）**：
+  - **ES mapping**（`es_mapping.json`）：additive 加 `play_count_total`(long) / `play_count_7d`(long) / `hot_score`(double)。
+  - **index sync**（`VideoIndexSyncService.ts`）：doc 投影 SQL LEFT JOIN `video_play_totals`+`video_hot_scores`（PK video_id additive 不 fan-out）+ `ES_FIELDS` 加 `v.updated_at`；`buildDocument` 加 3 play 字段（**保留 null** `row.x==null?null:Number(x)`）+ `updated_at = row.updated_at`（**videos.updated_at 同源**，非索引时间）；新增 `syncVideoStrict`（ES 失败抛出，供 reindex 真实计数）。使 syncVideo/reconcile/reindex 全路径携带 play fields、全量 es.index 不再清空。
+  - **search service**（`SearchService.ts`）：`sortMap.hot` 从 `rating_votes` 改 4-key 链 `hot_score → play_count_7d → play_count_total → updated_at`（前 3 `missing:'_last'` ≡ PG NULLS LAST），与 `/videos?sort=hot`（STATS-05-B）逐字段对齐。
+  - **script**（`scripts/reindex-es-play-stats.ts`，新建）：putMapping 3 字段 + keyset 分页 `syncVideoStrict` 真实成功计数（失败 exit≠0）+ **覆盖断言**（synced==published，`--allow-drift` 容忍并发漂移）+ **3 形态数据收敛抽样**（有 hot / 无聚合→3 字段全 null / 仅 totals→total 匹配其余 null，重读 ES vs DB 非仅遍历计数）。`--dry-run` 支持。
+  - **tests**：`search.test.ts`（hot sort 4-key 链精确断言 + 无 rating_votes）+ `videoIndexSync.test.ts`（VIDEO_ROW 加 play 字段 + buildDocument 有值/无行 null/真实 0 区分/updated_at 同源 + syncVideoStrict 成功/skip/抛错）+ `play-stats-cross-surface-sort.test.ts`（新：双侧 emit 4-key 链 + 共享 spec 行为 + **两独立 comparator PG NULLS LAST ≡ ES missing:_last 同序** + null/0 区分 + isCommonVisible）。
+- **Codex 对抗审吸收**：
+  - 任务卡审 1 轮 **FAIL → 3 BLOCK + 4 HIGH 全吸收**：① 降格 -A 不声称 ≤2min；② `?? 0` → 保留 null（破 NULLS LAST 等价的混淆）；③ updated_at 改 videos.updated_at 同源 tiebreak（原 `new Date()` 索引时间分裂）；④ reindex syncVideo 假收敛 → syncVideoStrict + 数据收敛断言；⑤ cross-surface 行为断言非字符串 tautology；⑥ fixture 限共同可见集。
+  - 实现审 1 轮 **CONDITIONAL PASS（0 BLOCK）→ 2 HIGH + 2 MEDIUM 补强**：HIGH 1 reindex 补无聚合/仅 totals 两 null 收敛抽样；HIGH 2 补覆盖计数断言 + `--allow-drift`；MEDIUM 2 fixture 加可见性字段 + `every(isCommonVisible)` 断言；MEDIUM 1 加独立 ES 语义 comparator（-Infinity 映射）与 PG comparator 同序比对破 tautology。MEDIUM 3（加 id 第 5 tiebreak）**拒绝**——/videos 无、会偏离冻结 D-216-3 破坏 parity。确认轮 Codex infra 超时（非 finding），补强经单测 + 自审验证。
+- **门禁**：typecheck=0（8 workspace）/ 改动文件 eslint=0 / verify:adr-contracts EXIT=0（endpoint-adr 250 admin 路由对齐〔本卡零新 admin 路由〕+ **sql-schema-alignment ✅ 新 JOIN 引用 video_play_totals/video_hot_scores 列全对齐 migration 128**）/ **test:changed=692 passed**（含本卡 videoIndexSync 21 + cross-surface 10 + search 19）。
+- **延后合并期**：SEARCH e2e + `scripts/reindex-es-play-stats.ts` 实跑 + PG↔ES 同夹具 seed 排序对拍（worktree 无 ES + .env.local，同 STATS-02/03B/05 先例）。
+- **边界**：实时 ≤2min freshness = STATS-06-B（已登记 task-queue）；SearchResultRow playCount 展示（STATS-05-A 延后项）+ 两 surface 可见全集对账 非本卡。
+- **AI-CHECK**：✅ 正确性（null/0 语义 + tiebreak 同源 + 双侧口径对齐，单测覆盖）｜ ✅ 边界复用（复用 VideoIndexSyncService doc 投影单点 + reindex-es-audio-langs 范式）｜ ✅ 无越层（SearchService 读 ES、index sync 读聚合表，无 UI 直查 DB）｜ ✅ 收敛（5 文件，-B 拆分守 ≤5）。
+
+## [STATS-05-B-PUBLIC-HOT] `/videos?sort=hot` 与 `/videos/trending` 改用播放聚合真源（ADR-216 / SEQ-20260624-02）
+- **完成时间**：2026-06-25
+- **记录时间**：2026-06-25
+- **执行模型**：claude-opus-4-8（主循环；卡建议 opus·模型对齐，排序语义变更）
+- **子代理**：Codex 对抗性独立审核（codex-cli 0.125.0，1 轮 PASS）——非 Task 工具 spawn，落盘后对实现做对抗审。
+- **来源**：SEQ-20260624-02 主链第 5 卡·B（`01→…→05A✅→05B`）；ADR-216 §后续工作行 77-78（替换 `/videos?sort=hot` 的 active source count 占位 + 替换 `/videos/trending` 的 updated_at recency）。依赖 STATS-04（聚合产出）+ STATS-05-A（vpt 已 JOIN）。
+- **产出**：
+  - **`/videos?sort=hot`**（`listVideos`，`apps/api/src/db/queries/videos.ts`）：sort=hot 时条件 `LEFT JOIN video_hot_scores vhs ON vhs.video_id = v.id`（additive，PK video_id，不改行数/COUNT；非 hot 排序 `hotJoin=''` 零改动）；orderBy.hot 改用 D-216-3 统一口径 `vhs.hot_score DESC NULLS LAST, vhs.play_count_7d DESC NULLS LAST, vpt.total_play_count DESC NULLS LAST, v.updated_at DESC`（vpt 复用 STATS-05-A 在 VIDEO_JOIN 的 LEFT JOIN）。**删活跃源计数占位**（原 `SOURCE_COUNT_SUBQUERY DESC`）。COUNT 查询不附加 vhs join（LEFT 不影响计数）。
+  - **`/videos/trending`**（`listTrendingVideos`）：新增 `TRENDING_WINDOW` 常量 map（period→窗口源+谓词）——`today`→`video_play_hourly`（`bucket_hour >= NOW()-INTERVAL '24 hours' AND bucket_hour <= NOW()`，D-216-9 防未来桶）；`week`/`month`→`video_play_daily`（`bucket_date >= CURRENT_DATE - 6/29 AND bucket_date <= CURRENT_DATE`，D-216-2 近 7/30 自然日）。改 `LEFT JOIN (SELECT video_id, SUM(play_count) AS window_plays FROM <源> WHERE <谓词> GROUP BY video_id) w ON w.video_id = v.id` + `ORDER BY w.window_plays DESC NULLS LAST, v.updated_at DESC`。**删 updated_at recency 占位过滤**（原 `v.updated_at >= NOW()-INTERVAL`）。
+  - **稳定 fallback**：聚合空窗（系统冷启动 / 窗口内零播放）→ window_plays 全 NULL → NULLS LAST 后退化为原 `updated_at DESC` 行为，不产出空列表。
+- **新增依赖**：无。
+- **数据库变更**：无（仅读端 SQL 改造；消费 STATS-02 已建表 video_hot_scores/hourly/daily + STATS-04 聚合产出）。
+- **边界与复用**：复用 `VIDEO_JOIN`（vpt）/`SOURCE_COUNT_SUBQUERY`/`mapVideoCard`；period→窗口源映射常量化（无重复实现）。**消费方零回归**：`listTrendingVideos` 还被 `home-curation.preview.ts` + `home-autofill/trending.ts`（period:'week'）当候选池消费——签名/返回 `VideoCard[]` 不变；无数据时退化为原 updated_at DESC 行为，home-autofill-core(33)+home-queries(15) 回归测试全过。VideoService.list/trending、routes/videos.ts 签名不变零改动。
+- **质量门禁**：typecheck=0（8 workspace）/ 改动文件 eslint=0（worktree cascade 经临时 `root:true` 隔离跑后还原）/ `verify:adr-contracts` EXIT=0（verify-endpoint-adr 250 admin 路由对齐〔本卡公共端点零新增 admin 路由〕+ verify-sql-schema-alignment ✅ 新 SQL 引用 hot_scores/hourly/daily 列全对齐 migration；error-message/d-numbers/enum-ssot ⚠️ 均 advisory 预存非本卡）/ test:changed=1126 passed（82 文件）。**VIDEO e2e 延后合并期**（worktree 无 .env.local，同 STATS-02/05-A 先例）。
+- **测试**：`tests/unit/api/videos-list-query.test.ts` +4 用例（hot LEFT JOIN + 统一排序口径 + 非 hot 不引入无谓 join + COUNT 不附加 hot join）；新增 `tests/unit/api/videos-trending-query.test.ts` 6 用例（today/week/month 三窗口源 + 防未来桶 + 排序 fallback + 删 recency 占位 + 公开过滤/type 参数化）。
+- **Codex 对抗审**：1 轮 PASS——0 BLOCK/HIGH/MEDIUM。喂入 ADR-216 D-216-2/3/9 冻结决策 + schema 事实 + 消费方约束 + diff，Codex 确认 SQL 语义、NULL 排序、防未来桶、注入面、消费方回归均无缺陷（设计直落冻结决策，缺陷面小）。
+- **[AI-CHECK]**：六问过——①正确性：trending 无数据退化原行为、非 hot 排序零改动，消费方测试全过，无回归；②边界复用：复用 VIDEO_JOIN/vpt/SOURCE_COUNT_SUBQUERY/mapVideoCard，窗口映射常量化不重复实现；③可扩展：orderBy + TRENDING_WINDOW map 可增量扩展，后续半衰期调整在 worker 侧、读端不变；④一致性：与既有 SQL 构造范式（参数化 idx、INTERVAL 字面量）一致；⑤改动收敛：仅 1 源 + 2 测试文件，service/route 签名零改动；⑥沉淀评估：窗口源映射为 trending 专属、不构成跨模块共享需求，不沉淀（理由记录）。
 
 ---
 
@@ -2999,3 +3146,213 @@
   - **audio_language 列无 CHECK 约束**（migration 112 TEXT NULL，封闭性靠应用层 SourceLanguageResolver/ADR-199 D-199-2）：理论脏值（非枚举音频语言）会进 audio_langs 数组，但因 route z.enum 收窄不可达 → 无召回风险（死数据）。Opus 建议 reindex 时可附 `SELECT DISTINCT audio_language ... NOT IN (枚举)` 健康检查日志（非阻塞，未实装）。
   - subtitle_langs 与 audio_langs 数据血缘不同（前者 ES 取自 `subtitles` 表，后者取自 `video_sources.audio_language`），二者正交，本卡不触碰 subtitle 逻辑。
   - **SEQ-20260624-01 全交付**（37/38/39/40A/40B/41 ✅）：分类/搜索两页统一筛选区主体 + ES lang 音频对齐收口完成。
+
+---
+
+## [CHORE-DOCS-CLEANUP-20260624] 文档治理 T1：README 索引全面更新 + 退役口吻对齐（SEQ-20260624-03）
+- **完成时间**：2026-06-24
+- **记录时间**：2026-06-24 23:56
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无
+- **触发**：用户指令「整理项目文档，清理过期信息，更新关键信息」插队（doc-governance T1·阶段收尾，先例 SEQ-20260610-01）
+- **盘点结论（Step 1 / 4 / 5）**：
+  - **引用健康（Step 5）**：活区 R1/R2 断链扫描 **零真实断链**——R1 报的 `docs/manual/` 内 `./P-*.md` / `./W*.md` / Picker 文件全部实际存在，系治理脚本对相对路径（`./`、`../`）解析的局限（仅查 `$p` 与 `docs/$p`，不含源文件目录），非文档错误。
+  - **活文档行数（T5）**：task-queue 3181 行 / changelog 活跃段约 2900 行，均 < 4000 行阈值 → 不触发分段归档。
+  - **归档判定（Step 1 + §4）**：`docs/designs/` 14 份方案文档**无符合归档窗口候选**——`videos-sources-responsibility-redesign_20260601` 虽 ≥14 天但被 decisions.md 引用作 ADR 定档输入（保留）；`moderation-console-ux-plan_20260610`（SEQ-20260610-03 ✅ 2026-06-11）距今 13 天差 1 天未满窗口（保留）；其余均 <14 天或有活跃 SEQ/follow-up（保留）。**本轮零 git mv**。
+  - **冲突检测（Step 4·K3）**：README §4 第 6 条 `admin-module-template.md` 仍以「含 v1 冻结章 + v2 真源章」现行口吻描述，与 CLAUDE.md「v1 已退役」声明不一致 → 已修正为退役标注。
+- **修改文件**：
+  - `docs/README.md` — §1 第 3 条 decisions ADR 范围 `100..180`→`100..215`；§1 第 6 条 task-queue 活跃序列范围补至最新 `SEQ-20260624-02`；§2 第 4 条活跃设计文档列表补全 6 份缺失（notification-task-log / moderation-console / source-health-feedback-loop / metadata-source-ux / image-health ×2）+ 更新 client-video-card-sizing-audit 状态（卡片尺寸体系已落地合并 `01b32abf`）+ videos-sources 标注 decisions 引用保留 + 补 design_reference_v2.1 stub 说明；§2 第 5 条 audit 台账补 4 份（admin-cutover-parity / cross-season-merge / identity-recall-grayzone / metadata-enrichment）+ 新增 §2 第 6 条 research 调研纪要 2 份；§4 第 6 条 admin-module-template 补退役标注（K3 修复）；last_reviewed 6-18→6-24
+  - `docs/tasks.md` — last_reviewed 6-06→6-24
+  - `docs/task-queue.md` — last_reviewed 5-23→6-24；尾部追加 SEQ-20260624-03 序列卡
+  - `docs/changelog.md` — last_reviewed 6-18→6-24；本条目
+- **新增依赖**：无
+- **数据库变更**：无
+- **注意事项**：
+  - 本轮纯索引更新，零归档 / 零 git mv；下轮治理（≥2026-06-25）`moderation-console-ux-plan_20260610` 满 14 天可进归档判定。
+  - `verify:docs-format` 残留（非本轮引入，存量债务）：[4] 23 项 frontmatter 缺失全在 `docs/archive/**`（历史快照，doc-governance §6 禁改 archive 内容）；[5] README 主题判重（`manual/README.md` 与 `docs/README.md` 同名不同 scope）为按文件名判重的误报，二者 scope 正交（manual navigation vs docs navigation），不修。
+  - dev working tree 有未提交的 `video-play-stats-structure_20260624.md`（位于 `docs/designs/`，SEQ-20260624-02 进行中产物，未合并 main）→ 本轮 worktree 基于 main 不含该文件，README 活跃设计列表暂未纳入，待该序列合并后由其登记。
+
+---
+
+## [STATS-01-ADR] ADR-216 起草定稿：视频级播放量统计体系（SEQ-20260624-02 第 1 卡）
+- **完成时间**：2026-06-25
+- **记录时间**：2026-06-25 02:57
+- **执行模型**：claude-opus-4-8（主循环；撰写即将成为 ADR 的决策文档，CLAUDE.md 强制 Opus 路由）
+- **子代理**：
+  - `arch-reviewer` (claude-opus-4-8, agentId a17bf370fb4489a22) — ADR-216 独立架构评审：CONDITIONAL PASS，2 BLOCKER + 3 HIGH + 3 MEDIUM + 2 LOW（L2 确认通过）全吸收
+  - `codex:codex-rescue` (codex-cli 0.125.0 runtime 等效对抗审, agentId a84f77e18db6811cc) — Codex 对抗独立审核：1 BLOCK + 2 HIGH + 2 MEDIUM + 1 LOW 全处理（`/codex:adversarial-review` 配 disable-model-invocation 不可自动触发，自动模式走 codex-rescue 等效，同 ADR-214 先例）
+- **修改文件**：
+  - `docs/decisions.md` — 新增 ADR-216（**Accepted**）：逐条决议 Open Decision 1–10（Qualified Play 阈值 / today·week·month 语义 / hot_score 公式 + 滑窗全量重算 / ES 同步 / user_id 边界 / retention / 匿名 visitor cookie / idempotency 双防线 / occurred_at 非对称容差 / batch 调度）+ 公共写端点 `POST /videos/:id/play-events` 契约 + 契约门禁说明 + schema 起号 128 + watch_history 边界 + 双评审记录
+  - `docs/task-queue.md` — SEQ-20260624-02 状态 🟡→🔄；STATS-01-ADR ⬜→✅
+  - `docs/tasks.md` — 删除 STATS-01-ADR 进行中卡（完成即删）
+  - `docs/changelog.md` — 本条目
+- **新增依赖**：无
+- **数据库变更**：无（纯决策文档；schema 实现归 STATS-02，从 migration 128 起）
+- **注意事项**：
+  - **ADR 序号核验**：decisions.md 现最大 ADR-215（210→215 连续无空洞），全仓 216/217/218 零占用；本卡占 **ADR-216**；STATS-07 admin analytics 端点另起 **ADR-217**（已预留）。
+  - **关键决策冻结**（实现卡必守）：① hot_score 按窗口**全量重算**（数据源 hourly 表、非增量累加，Codex BLOCK）② occurred_at **非对称容差**（过去 −30min / 未来 +2min）+ 窗口查询 `bucket_hour ≤ now()`（Codex HIGH）③ 统计写端点限流 **fail-closed**（Codex HIGH）④ ephemeral visitor 用 `visitor_is_ephemeral` 列区分、不计 UV（arch H1）⑤ 错误码对齐现网（`422 VALIDATION_ERROR` / `404 NOT_FOUND`，arch B2）⑥ 公共端点**不被** `verify:endpoint-adr` 覆盖、靠 STATS-03-A 端点测试守护（arch B1）。
+  - STATS schema 从 migration **128** 起（127 已被 `127_video_sources_audio_language_index` 占用）。
+  - 分支 `stats-01-adr`（从 dev `d2c0cc71` 拉），完成后合回 dev。
+
+## [STATS-02-SCHEMA] migration 128 视频级播放统计 schema 底座（SEQ-20260624-02 第 2 卡）
+- **完成时间**：2026-06-25
+- **记录时间**：2026-06-25 03:51
+- **执行模型**：claude-opus-4-8（主循环；卡建议 opus·schema + hot-score 真源。ADR-216 schema 已 Opus arch-reviewer + Codex 双审冻结，本卡为忠实实现非新架构决策，未另起 Opus 设计代理）
+- **子代理**：
+  - `codex:codex-rescue` (codex-cli runtime 等效对抗审, agentId a71caf78a41b916e0) — 任务卡 + 具体 DDL/类型/集成测对抗审：**CONDITIONAL PASS，无 BLOCK**；A/B/D/E 维度（DDL 忠实度 / mapRow 类型转换 / schema 设计 / 范围边界）确认通过；吸收 1 MEDIUM（`idempotency_key` 唯一约束**显式命名** `uq_video_play_events_idempotency_key` 供 STATS-03 精确捕获 `err.constraint`）+ 2 HIGH/1 MEDIUM/1 LOW（集成测断言精确化：`pg_get_indexdef`/`pg_get_expr(indpred)`/`pg_get_constraintdef`/FK `confdeltype`，防 schema 漂移假阳性）
+- **修改文件**：
+  - `apps/api/src/db/migrations/128_video_play_stats.sql`（新建）— 6 表：`video_play_events`（append-only 真源，双唯一防线〔`uq_video_play_events_idempotency_key` 显式命名 + `uq_video_play_events_session_video_episode` null-safe `COALESCE(episode_number,0)`〕 + `visitor_is_ephemeral BOOLEAN NOT NULL DEFAULT false` + `event_type CHECK IN ('qualified_play')` + pending partial/video_time/occurred_at 索引 + FK video_id CASCADE·source_id/user_id SET NULL）/ `video_play_hourly`/`video_play_daily`/`video_play_daily_visitors`〔bucket_date 清理索引〕/`video_play_totals`/`video_hot_scores`〔NUMERIC hot_score + 嵌套窗口计数〕
+  - `packages/types/src/video-play-stats.types.ts`（新建）+ `packages/types/src/index.ts`（导出）— 6 域类型 camelCase
+  - `apps/api/src/db/queries/videoPlayStats.ts`（新建，**骨架**）— Db 行类型 + COLUMNS（timestamptz/date `::TEXT`）+ mapRow（BIGINT/NUMERIC `parseInt`/`Number`）；写入/聚合/读取查询函数留 STATS-03/04/05
+  - `tests/integration/api/video-play-stats-schema.test.ts`（新建）— schema 集成测，只读 catalog 精确断言（独立 integration config，不入 test:changed）
+  - `docs/architecture.md` — §5.20 视频级播放量统计体系 schema 同步
+  - `docs/task-queue.md`（STATS-02 ⬜→✅）/ `docs/tasks.md`（删卡）/ `docs/changelog.md`（本条目）
+- **新增依赖**：无
+- **数据库变更**：migration **128**（6 表 + 索引 + 约束）；**冷启动延后合并期**（worktree 无 `.env.local`，按「不合 dev」隔离意图不动 live dev 库，同 CARD-SIZE-A1A2-GATE / IMGH-P4-A worktree 阻塞先例）
+- **门禁**：`typecheck`=0（root + 6 workspace）/ 改动文件 `eslint`=0（`npm run lint` 聚合受 worktree 嵌套父仓库 `.eslintrc` `resovo` 插件冲突阻塞——环境artifact、命中未触碰的 web-next/server-next，顶层检出区不触发）/ `verify:adr-contracts`=0（`verify-endpoint-adr` ✅ 未加 admin 端点、`verify-sql-schema-alignment` ✅）/ `test:changed` **零回归**（升全量 8262 测；121 失败全为既有 worktree 环境失败〔Fastify app 夹具 undefined + `douban-adapter` 工作区包解析〕，`moderationBatch` 已 stash 验证 pristine HEAD 同失败、与本卡无关）
+- **延后合并期**：① migration 128 冷启动 ② schema 集成测执行（需 DB migrate ≥128 + DATABASE_URL；测试文件本卡已写并强化、就绪）③ `npm run lint` 聚合（非嵌套检出区运行）
+- **时序说明**：Codex 卡审在实现后、commit 前执行（覆盖卡 + 具体 DDL/类型/集成测，信号高于抽象计划），满足 workflow-rules「非代码产物落盘后、定稿 commit 前」原则。
+- **注意事项**：
+  - **范围边界守恒**：本卡仅落 schema 底座，零业务逻辑（写入/聚合/读取归 STATS-03/04/05）；query 模块为骨架（导出 COLUMNS + mapRow 供后卡复用）。
+  - **关键约束冻结供 STATS-03**：`idempotency_key` 唯一约束名 = `uq_video_play_events_idempotency_key`；第二防线 = `uq_video_play_events_session_video_episode`；二者 23505 均当幂等 202（D-216-8）。
+  - **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**（dev 仅保留规划落盘 `b53135f7`）。
+
+## [STATS-03-A1] 匿名 visitor 身份单一边界（全局 onRequest 中间件，SEQ-20260624-02 第 3 卡·A 拆分 A1）
+- **完成时间**：2026-06-25
+- **记录时间**：2026-06-25 04:40
+- **执行模型**：claude-opus-4-8（主循环；卡建议 opus·PLAYER 关键路径前置基建）
+- **子代理**：
+  - `codex:codex-rescue` (codex-cli runtime 等效对抗审, agentId a860859302b1c3004) — 全局中间件对抗审：**CONDITIONAL PASS，无 BLOCK**；fail-safe 代码边界 / 注册顺序（CORS preflight 先短路）/ hash 命名空间 / Max-Age·H2 确认通过；**3 HIGH 全闭合**（H-1 生产密钥 boot fail-fast / H-2 HEAD·OPTIONS·/v1/health 探针豁免 / H-3 rv_vid signed 校验防伪造轮换）+ M-1（Secure dev-http 例外登记）/ M-2（ephemeral NAT 碰撞接受偏差）/ M-3（Fastify inject blast-radius 测）/ L-1（unsignCookie fail-safe 测）全吸收
+- **原子化拆分**：原 STATS-03-A（route+service+query+visitor-cookie 中间件+限流+幂等 >5 项 / 跨多层）按 CLAUDE.md 原子化红线拆 **A1（visitor-cookie 全局边界）+ A2（写端点）**；本条 = A1。**流程偏离登记**：A1 直接进入实现、未先写 tasks.md 任务卡（红线「未写任务卡片就开始执行代码」），已门禁全绿事后补记于 task-queue + 本条目；A2 起恢复"先写卡"流程。
+- **修改文件**：
+  - `apps/api/src/plugins/visitorCookie.ts`（新建）— D-216-7 单一边界：全局 onRequest 钩子，签发/刷新 **signed** rv_vid cookie（HttpOnly + SameSite=Lax + Path=/ + Max-Age 400d + 生产 Secure）+ 解析 `visitor_hash = HMAC-SHA256(rv_vid, SERVER_VISITOR_SECRET)` 截断 32hex 不可逆 + 装饰 `request.visitorHash`/`request.visitorIsEphemeral`；cookie 缺失/签名失效/首屏竞态 → ephemeral hash(ip+ua+10min 窗) 标 `visitorIsEphemeral=true` 不计 UV；**fail-safe**（命中每请求、任何异常不破坏请求）；HEAD/OPTIONS/`/v1/health` 探针豁免
+  - `apps/api/src/server.ts`（修改）— `setupVisitorCookie(fastify)` 在 @fastify/cookie 注册后、各 routes 之前接入
+  - `tests/unit/api/visitor-cookie-plugin.test.ts`（新建）— 16 测：handler（cookie-backed/伪造→ephemeral/首访签发/探针豁免/fail-safe×2/确定性/ephemeral 稳定）+ boot fail-fast×3 + **Fastify inject blast-radius×4**（首访签发 / 有效 cookie 复访不重签 / `/v1/health` 与 HEAD 无 Set-Cookie）
+  - `.env.example`（修改）— 新增 `SERVER_VISITOR_SECRET`（生产必设强随机值；缺省走 dev fallback 仅本地）
+  - `docs/task-queue.md`（STATS-03-A 拆分 + A1 ✅）/ `docs/changelog.md`（本条目）
+- **新增依赖**：无（node:crypto + 既有 nanoid / @fastify/cookie）
+- **数据库变更**：无
+- **新增环境变量**：`SERVER_VISITOR_SECRET`（**生产必设**；`setupVisitorCookie` boot 期对生产缺失/dev 默认/<32 字符 fail-fast 拒绝启动，Codex H-1）
+- **门禁**：`typecheck`=0 / 改动文件 `eslint`=0 / `verify:adr-contracts`=0（未加端点，verify-endpoint-adr ✅）/ `test:changed`=0（`vitest --changed HEAD` 仅命中本测 16/16，工具自证零 blast radius——server.ts 改动无既有测试依赖）
+- **blast-radius 核查**：全局 onRequest 钩子——既有路由测试各自 `Fastify()` 直建、**不经全局 buildServer**（server.ts 无 export）→ 对既有测试零影响；本卡 Fastify inject 测在 mini-server 验真实钩子行为（health/HEAD 无 cookie、有效 cookie 复访不重签）。**全量 e2e（验全请求管线不回归）延后合并期**（worktree 无 DB/Redis/.env + 嵌套 eslint 冲突；同 worktree 阻塞先例）。
+- **环境修复（非提交物）**：worktree `external-adapter/douban-adapter` 未 build（无 dist，npm ci 未触发）致 `test:changed` 模块解析中止——`npm run build` 该包恢复（dist gitignored，不入提交）；属既有 worktree 构建缺口、非本卡引入。
+- **D-216-7 偏离登记**：① Secure 仅生产置位（dev-http 通融，M-1）② ephemeral NAT 出口 IP+UA 合并 + 窗边界双发为接受偏差，防刷真源是 A2 双维限流 + per-visitor 硬上限（M-2）。
+- **注意事项**：
+  - rv_vid **signed**（@fastify/cookie 签名，COOKIE_SECRET）→ 仅本边界签发的 cookie 计 cookie-backed；伪造/篡改落 ephemeral（不虚增 UV）。visitor_hash 另用 SERVER_VISITOR_SECRET 做 HMAC（签名/哈希双密钥分离）。
+  - **供 STATS-03-A2**：写端点消费 `request.visitorHash`（null=无身份）+ `request.visitorIsEphemeral`（true 不计 UV）；不自行 Set-Cookie。
+  - **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**。
+
+## [STATS-03-A2] 视频播放上报写端点 POST /videos/:id/play-events（SEQ-20260624-02 第 3 卡·A 拆分 A2）
+- **完成时间**：2026-06-25
+- **记录时间**：2026-06-25 05:30
+- **执行模型**：claude-opus-4-8（卡建议 opus）
+- **子代理**：
+  - `codex:codex-rescue` (codex-cli runtime 等效对抗审, agentId ade0729253171a6f1) — 公共写端点对抗审 **3 轮 BLOCK→PASS**：① round-1 BLOCK（限流在幂等之前→重试烧 INCR 计数违反 D-216-8）+ HIGH（数值无上限）+ MEDIUM（裸 sha256 / clamp 时钟偏差）② round-2 BLOCK（DB EXISTS 非原子→并发 TOCTOU）+ MEDIUM（密钥空串静默回退）+ HIGH（缺精确边界测）③ round-3 **PASS**（全闭合）
+- **原子化拆分**：原 STATS-03-A（route+service+query+中间件+限流+幂等 >5 项）拆 A1（visitor-cookie 中间件，commit `547e27ea`）+ **A2（写端点，本条）**——拆分**全部完成**。
+- **修改文件**：
+  - `apps/api/src/routes/videos.ts`（修改）— `POST /videos/:id/play-events`：`preHandler: optionalAuthenticate`（填 user_id 不查 users，D-216-5）；shortId 非法→404 / zod（含 episodeNumber≤9999·watchSeconds≤86400·durationSeconds≤86400 上限）失败→422 VALIDATION_ERROR；service 结果映射 ok→`202 {data:{received:true}}` / not_found→404 / invalid_source→422 INVALID_SOURCE / rate_limited→429 RATE_LIMITED。route 仅校验+映射、无业务逻辑。
+  - `apps/api/src/services/VideoPlayEventService.ts`（新建）— 编排：findVideoByShortId（复用 canonical 公开过滤）→not_found；isActiveSourceOfVideo→invalid_source；**原子 Redis SET NX 幂等 marker**（`pe:idem:{key}` EX 300 NX）置于限流前——并发/近期同 key 仅一个获取、其余幂等 202 **不烧 INCR**（关闭并发 TOCTOU），失败路径（限流拦截/插入瞬态错误）释放 marker 防丢事件；**双维 INCR 固定窗限流 fail-closed**（redis 错→429）；ip/ua/fallback visitor **HMAC**（含密钥防枚举）；occurredAt **非对称 clamp**（−30min/+2min，单一 `ingestedAt` 基准 + 显式写 ingested_at）；**双防线幂等插入**（ON CONFLICT idempotency_key + 捕获两约束名 23505→202，其余 23505 上抛）。**不查 users**。
+  - `apps/api/src/db/queries/videoPlayStats.ts`（修改）— `insertVideoPlayEvent`（含显式 ingested_at）+ `isActiveSourceOfVideo`。
+  - `tests/unit/api/video-play-events-service.test.ts`（新建，28 测）+ `tests/unit/api/video-play-events-route.test.ts`（新建，11 测）— 幂等双防线 / 原子 marker（SET NX 参数·duplicate 不烧限流·释放语义·成功不释放）/ 限流命中 + fail-closed / occurredAt clamp 精确边界（fake timers ±1ms）/ 匿名 userId 透传 / ip·ua 仅 hash / 数值边界 422 / 错误码映射 / optionalAuthenticate 实跑。
+  - `docs/task-queue.md`（A2 ✅，A 拆分全完成）/ `docs/tasks.md`（删卡）/ `docs/changelog.md`（本条目）
+- **新增依赖**：无（node:crypto + 既有 pg/ioredis）
+- **数据库变更**：无（复用 STATS-02 migration 128；insert 增显式 ingested_at 列写入）
+- **门禁**：`typecheck`=0 / 改动文件 `eslint`=0 / `verify:adr-contracts`=0（**verify-endpoint-adr ✅ 公共端点不误判为未注册 admin** / verify-sql-schema ✅ 新查询列对齐）/ `test:changed`=0（5 文件 **93 测**全过，零回归；vitest --changed 仅命中相关测试）
+- **环境修复（非提交物）**：worktree `external-adapter/douban-adapter` 未 build 致 `vitest --changed` 模块解析中止——`npm run build` 该包恢复（dist gitignored）；既有 worktree 构建缺口、非本卡引入。
+- **延后合并期**：公共端点不被 `verify:endpoint-adr` 覆盖（ADR-216 §契约门禁，靠端点测 + 文字契约守护）；全链路 e2e（真实 DB/Redis 限流·cookie·幂等）延后（worktree 无 DB/Redis/.env）。
+- **关键约束（供 STATS-04 聚合）**：events 表 ingested_at 显式写入；rate-limit/marker 仅 Redis、不入计数真源；聚合仍只读 `aggregated_at IS NULL` raw events。
+- **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**（dev 仅保留规划落盘 `b53135f7`）。
+
+## [STATS-03-B] 前端 Qualified Play 上报 helper + PlayerShell/MiniPlayer 双接入（SEQ-20260624-02 第 3 卡·B）
+- **完成时间**：2026-06-25
+- **记录时间**：2026-06-25
+- **执行模型**：claude-opus-4-8（卡建议 opus·PLAYER 关键路径）
+- **子代理**：
+  - Codex 对抗审（`codex exec` codex-cli 0.125.0，任务卡落盘后实现前，task-queue 行 3193 要求）— **2 BLOCK + 3 HIGH + 3 MEDIUM + 1 LOW 全吸收**：① BLOCK preview 守卫（现网 preview 未接线、无 `previewMode={true}` 消费方）→ 沿用现有 feedback 上报同范式保持一致、接线缺口登记 follow-up（下沉 host state 超本卡范围）② BLOCK `watchSeconds=floor(currentTime)` 误判（断点续播/seek 即 qualified）→ `createQualifiedPlayDetector` 累计**真实观看时长**（正向小增量、排除 seek/续播跳跃）③ HIGH session 生命周期未闭环 → `ensurePlaySessionId` 集中收敛（prev.shortId 原子比较，覆盖 initPlayer/enter/hydrate 全路径）④ HIGH async sha256 去重竞态 → 跨阈值**同步**写 reportedRef 再 await ⑤ HIGH mini 接入点写错（真实 timeupdate 在 `useMiniPlayerVideo` 非 `MiniPlayer.tsx`，且丢 matched source id）→ 改接 hook + 补存 source id ⑥ MEDIUM crypto 能力检测 ⑦ MEDIUM episode 口径统一用 currentEpisode ⑧ MEDIUM 注释式 fire-and-forget catch ⑨ LOW 字段边界明确
+- **修改文件**：
+  - `apps/web-next/src/lib/play-stats.ts`（新建）— 共享 helper 单一真源：阈值常量（`QUALIFIED_PLAY_MIN_SECONDS=20`/`SHORT_MEDIA_MAX_SECONDS=25`/`SHORT_MEDIA_QUALIFY_RATIO=0.8`/`QUALIFIED_PLAY_EVENT_TYPE`，与 API service 同名，D-216-1）+ `buildPlaySessionId`（crypto.getRandomValues 24-hex，命中 zod min16/max32）+ `isQualifiedPlay({watchSeconds,duration})` + `createQualifiedPlayDetector`（真实观看时长累加器、排除 seek）+ `buildPlayEventIdempotencyKey`（async Web Crypto sha256，D-216-8 公式 + 能力检测）+ `reportVideoPlayEvent`（依赖注入 apiClient、fire-and-forget catch、不绕过 apiClient）
+  - `apps/web-next/src/stores/playerStore.ts`（修改）— 加 `playSessionId`/内部 `playSessionShortId` + `ensurePlaySessionId(shortId)` action（同 shortId 复用·变化换新·hydrate 恢复 mini = 新会话语义）；`releaseMiniPlayer` 清空 session
+  - `apps/web-next/src/components/player/PlayerShell.tsx`（修改）— full 接入：`handleTimeUpdate` 内 detector.track → qualified 同步去重 + fire-and-forget 上报；复用 `isPlaybackFeedbackEnabled(previewMode)` 守卫；切集/切视频 detector.reset
+  - `apps/web-next/src/app/[locale]/_lib/player/useMiniPlayerVideo.ts`（修改）— mini 接入（HIGH-3 正确点）：补存 matched `VideoSource.id`；`handleVideoTimeUpdate` 节流块内 detector + 同步去重 + 上报；mini 天然非 preview（preview 不 enter host）
+  - `tests/unit/web-next/play-stats.test.ts`（新建，17 测）— isQualifiedPlay 阈值/短媒体比例/duration null + detector（逐 tick 累加·**排除 seek 大跳跃**·断点续播不计起点·跨阈值 qualified·reset）+ playSessionId 长度命中 16–32 + idempotencyKey 确定性同输入同值/64hex/null↔0 归一/不同输入不同值 + reportVideoPlayEvent（端点路径·字段·watchSeconds 取整·可选字段省略·**post 抛错被吞不影响播放**）
+  - `docs/task-queue.md`（STATS-03-B 🔄→✅）/ `docs/tasks.md`（删卡）/ `docs/changelog.md`（本条目）
+- **新增依赖**：无（浏览器原生 `crypto.subtle`/`getRandomValues`，零新 npm 包；web-next 无 nanoid 故用原生）
+- **数据库变更**：无
+- **门禁**：`typecheck`=0（root + 6 workspace）/ 改动 4 文件 `eslint` clean（worktree 全量 `npm run lint` 失败为 worktree 嵌套父仓库 `.eslintrc` `resovo` 插件 cascade 冲突——环境 artifact，server-next 同失败为证；临时 root:true 隔离验证我的文件 EXIT=0 后还原）/ `test:changed`=0（16 文件 **150 测**全过，含 MiniPlayer 41 + player-shell 全套〔on-error/success-report/hydration/preview-mode/episode-url-sync〕回归 + play-stats 17）/ `verify:adr-contracts`=0
+- **延后合并期**：**PLAYER e2e 回归**（断点续播/线路切换/影院/字幕）——worktree 无 `.env.local` + eslint cascade，:3000 在跑为原仓库代码（复用无意义）；改动为 onTimeUpdate 末尾 fire-and-forget 上报、未触碰播放交互逻辑、单测已强覆盖回归（同 STATS-02 worktree 阻塞先例）
+- **遗留 follow-up（登记）**：① preview 禁写统计接线缺口（ADR-160 D-160-5 既有 tech debt，非本卡引入）② referrerPath v1 暂未采集 ③ full/mini detector 独立累计（已知接受偏差：playSessionId 共享 → 不双计〔后端幂等〕、不漏计〔任一实例达阈值即报〕；`full<20s 即切 mini` 场景 watchSeconds 仅单实例累计、略低估真实总时长，跨实例精确累加留 amendment）
+- **关键约束（供 STATS-04/05）**：watch_seconds 为单事件观看信号（非精确总时长）；前端口径 episodeNumber=currentEpisode（line-matrix 归一、电影=1）；idempotency_key 前端确定性构造、后端原样存
+- **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**
+
+## [STATS-04-A-AGGREGATE] apps/worker 视频播放事件批量聚合 job（drain 循环 + 单批单事务 + hot_score 全量重算，SEQ-20260624-02 第 4 卡·A）
+- **完成时间**：2026-06-25
+- **记录时间**：2026-06-25
+- **执行模型**：claude-opus-4-8（卡建议 opus·worker 聚合真源）
+- **拆卡**：母卡 STATS-04-AGGREGATE 含聚合 + retention 两独立 job（worker job×2 + queries + config/index + tests >5 项）→ 原子化判据拆 `-A`（聚合）/`-B`（retention）。本条 -A；retention 落 STATS-04-B。
+- **子代理**：
+  - Codex 对抗审（`codex exec` codex-cli，任务卡 + 聚合 SQL 落盘后 commit 前，task-queue 行 3193 要求）— **3 轮 BLOCK→PASS**：
+    - 轮 1（1 BLOCK + 2 HIGH + 2 MEDIUM + 1 LOW 全吸收）：① **BLOCK** hot_score 全量覆盖并发 lost update（两 worker/tick 处理同 video 不同桶，各自快照看不到对方未提交 hourly → 后提交者 `=EXCLUDED` 覆盖丢计数）→ 新增 step 2.5 per-video advisory xact lock 串行化重算；② HIGH `ROLLBACK` 自身失败吞原始错误 + 污染连接归还池 → `BatchRollbackError` + `client.release(err)` 销毁连接；③ HIGH node-cron 不等上轮 Promise（drain>60s 同进程并发突破 ≤10 事务节流 + 放大 lost update）→ `isRunning` guard；④ MEDIUM hot 下降测试只验初次计算 → 人为抬高 pc24 再重算断言覆盖下降；⑤ MEDIUM integration 全局 pending 干扰 → beforeEach TRUNCATE 隔离
+    - 轮 2（1 HIGH + 1 MEDIUM + 1 LOW 全吸收）：① HIGH 无保护 `TRUNCATE` 可能清空非 test 库 → beforeAll `current_database()` token 守卫 fail-fast；② MEDIUM advisory lock 按 video_id 排序而非实际锁资源 hashtext（碰撞时死锁不消除）→ SQL 直接算 `hashtext(prefix||video_id) AS lock_key` 并 `ORDER BY lock_key`、按真实锁资源排序加锁；③ LOW 端到端多进程并发测试需子进程（超单进程范围，注释承认 + 保留双 client advisory 阻塞机制测试）
+    - 轮 3：**PASS**（三项闭环、无新 BLOCK/HIGH；残留 LOW token 守卫子串边界顺手改 token 正则 `(^|[_-])test([_-]|$)` 防 `fastest_prod` 误放行）
+- **修改文件**：
+  - `apps/worker/src/jobs/play-stats-aggregate.ts`（新建）— `runPlayStatsAggregate(pool,log)`：`isRunning` 重入 guard → 单 client drain ≤`MAX_BATCHES_PER_TICK`(10) 个独立事务；`aggregateOneBatch` 单批 8 步内联 SQL（ADR-107 §4 worker 自包含）：`SELECT ... FOR UPDATE SKIP LOCKED LIMIT 500 ORDER BY ingested_at ASC` 取批 → per-video advisory xact lock（`hashtext(prefix||video_id)` 按 lock_key 升序）→ hourly/daily+UV/totals 增量 upsert（`+= EXCLUDED`，UV 仅 `NOT visitor_is_ephemeral`、`ON CONFLICT DO NOTHING RETURNING` 实插数）→ hot_scores 全量重算（hourly `SUM FILTER` 嵌套窗口 + `bucket_hour<=NOW()`、`=EXCLUDED` 覆盖）→ mark `aggregated_at`；常量 `HOT_SCORE_W24/W7/W30`+`BATCH_LIMIT`+`MAX_BATCHES_PER_TICK` 单一真源 export；`BatchRollbackError` 连接污染信号类
+  - `apps/worker/src/config.ts`（修改）— `cron.playStatsAggregate='* * * * *'`（env `WORKER_CRON_PLAY_STATS` 覆盖）
+  - `apps/worker/src/index.ts`（修改）— `playStatsAggregateTask` 注册（`{scheduled:false}` → startup `.start()` / shutdown `.stop()` + 启动日志加 cron 字段）
+  - `tests/unit/worker/jobs/play-stats-aggregate.test.ts`（新建，14 测）— mock client 编排：单 client / 事务序列 BEGIN→AFFECTED→LOCK→…→COMMIT / 空批 ROLLBACK 退出 / drain 上限 / advisory lock 按 lock_key 排序 + 每 key 一锁 / UV NOT ephemeral / hot EXCLUDED 覆盖+bucket_hour<=NOW() / 增量 += / mark / ROLLBACK 正常 release vs ROLLBACK 失败销毁 / isRunning 重入跳过 / processed metric
+  - `tests/integration/worker/play-stats-aggregate.test.ts`（新建，8 测，延后合并期）— 真 PG 数值：commit 标 aggregated+数值 / 重跑不 double-count / UV 跨批去重 / ephemeral 不计 UV / anon-logged_in 拆分 / hot 窗口 pc24<pc7 / hot 陈旧高值覆盖下降 / per-video advisory lock 串行阻塞机制；beforeAll test-DB token 守卫 + beforeEach TRUNCATE 隔离
+  - `docs/task-queue.md`（STATS-04 拆 -A/-B，-A 🔄→✅）/ `docs/tasks.md`（删卡）/ `docs/changelog.md`（本条目）/ `docs/audit/adr-d-status.json`（verify 自动更新）
+- **新增依赖**：无（node-pg + node-cron 既有；advisory lock 用 PG 内置 `pg_advisory_xact_lock`）
+- **数据库变更**：无（消费 STATS-02 migration 128 六表，零 schema 改动）
+- **门禁**：`typecheck`=0（root + 7 workspace 含 worker）/ 改动文件 `eslint` clean（worktree 全量 lint 为 `.eslintrc` resovo 插件 cascade 环境冲突，临时 root:true 隔离验证 EXIT=0 后还原）/ `test:changed`=43（含 14 编排单测 + 既有 worker 测试零回归）/ `verify:adr-contracts`=0（含 sql-schema-alignment 对齐）
+- **延后合并期**：**integration 数值测（8 例）**——需专用 test DB（库名含 test token）+ migrate ≥128，worktree 无 `.env.local`（同 STATS-02 schema 测试先例）；端到端多进程 lost update 由部署期验证（advisory lock 机制已由单测 + integration 阻塞测试证明）
+- **关键约束（供 STATS-04-B / 05）**：聚合表 hourly/daily/totals=增量累加、hot_scores=全量覆盖；hot_score 事件驱动重算（无新事件 video 短期 stale 为 ADR-216 v1 已知边界）；retention（STATS-04-B）须跳过 `aggregated_at IS NULL`；多 worker 实例并发安全靠 `FOR UPDATE SKIP LOCKED`（事件不重复）+ per-video advisory lock（hot_score 不丢）
+- **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**
+
+## [STATS-04-B-RETENTION] apps/worker 视频播放统计 retention maintenance job（未聚合永不删 + 三表批量清理，SEQ-20260624-02 第 4 卡·B）
+- **完成时间**：2026-06-25
+- **记录时间**：2026-06-25
+- **执行模型**：claude-opus-4-8（卡建议 opus）
+- **拆卡**：母卡 STATS-04-AGGREGATE 拆 `-A`（聚合，commit `8a062b22`）/`-B`（retention，本条）。STATS-04 全拆完成。
+- **子代理**：
+  - Codex 对抗审（`codex exec` codex-cli，任务卡 + retention SQL 落盘后 commit 前）— **1 轮 PASS**（无 BLOCK）：8 个对抗点全 verified——① 未聚合（`aggregated_at IS NULL`）永不删（双谓词 NULL 比较不会误纳）② `ctid IN (SELECT ... LIMIT)` 批量收敛 + autocommit 每批独立提交（crash 仅丢未删批）③ advisory lock 三路径（拿锁→unlock→release / 没拿锁→不 unlock→release / unlock 失败→release(err) 销毁）④ 严格 `<` 边界保守（恰好 cutoff 保留）⑤ daily/totals/hot_scores 不出现在任何 DELETE ⑥ MAX_DELETE_ITERATIONS 防活锁 ⑦ 多实例并发安全（advisory lock 防重复扫 + 删除幂等）⑧ integration 用旧未聚合 pending 行真实覆盖硬不变量。2 LOW 测试硬化吸收：单测加负向断言（events SQL 无 `OR`/`aggregated_at IS NULL` 旁路）+ integration 加 89/91d 近边界用例
+- **修改文件**：
+  - `apps/worker/src/jobs/play-stats-retention.ts`（新建）— `runPlayStatsRetention(pool,log)`：job-level `pg_try_advisory_lock`（多实例 skip + unlock 失败 `release(err)` 销毁，同 auto-retire 范式）→ `deleteInBatches`（`ctid IN (SELECT ... LIMIT RETENTION_DELETE_BATCH)` 循环至不满批，autocommit）顺序清三表：events `aggregated_at IS NOT NULL AND < NOW()-90d`（**未聚合永不删**）/ visitors `bucket_date < CURRENT_DATE-400`（按 bucket_date 索引）/ hourly `bucket_hour < NOW()-90d`；daily/totals/hot_scores 永久不动；常量 `EVENTS_RETENTION_DAYS=90`/`DAILY_VISITORS_RETENTION_DAYS=400`/`HOURLY_RETENTION_DAYS=90`/`RETENTION_DELETE_BATCH` + `MAX_DELETE_ITERATIONS` 防御
+  - `apps/worker/src/config.ts`（修改）— `cron.playStatsRetention='15 4 * * *'`（避开 auto-retire 03:30 / bangumi 04:00，env `WORKER_CRON_PLAY_STATS_RETENTION` 覆盖）
+  - `apps/worker/src/index.ts`（修改）— `playStatsRetentionTask` 注册（`{scheduled:false}` → start/stop + 启动日志 cron 字段）
+  - `tests/unit/worker/jobs/play-stats-retention.test.ts`（新建，9 测）— mock 编排：advisory lock 取/skip/unlock 失败销毁 / 三表删除顺序+参数 / events 双谓词 + 负向无 OR 旁路 / visitors·hourly 谓词 / 批量循环满批继续不满批停 / daily·totals·hot 不触碰 / deleted metric
+  - `tests/integration/worker/play-stats-retention.test.ts`（新建，5 测，延后合并期）— 真 PG：events 仅删过期 aggregated（未聚合含很旧 + 近期保留）/ events 89-91d 近边界 / visitors 按 bucket_date / hourly 按 bucket_hour / daily·totals·hot 永久不动；beforeAll test-DB token 守卫 + beforeEach TRUNCATE 隔离
+  - `docs/task-queue.md`（STATS-04-B 🔄→✅）/ `docs/tasks.md`（删卡）/ `docs/changelog.md`（本条目）/ `docs/audit/adr-d-status.json`（verify 自动更新）
+- **新增依赖**：无（PG 内置 `pg_try_advisory_lock` + node-cron 既有）
+- **数据库变更**：无（消费 STATS-02 migration 128 六表 + idx_video_play_daily_visitors_date）
+- **门禁**：`typecheck`=0（root + 7 workspace）/ 改动文件 `eslint` clean（worktree 全量 lint 为 resovo 插件 cascade 环境冲突，临时 root:true 隔离验证 EXIT=0 后还原）/ `test:changed`=38（含 9 编排单测 + 既有 worker 零回归）/ `verify:adr-contracts`=0
+- **延后合并期**：**integration 数值测（5 例）**——需专用 test DB（库名含 test token）+ migrate ≥128，worktree 无 `.env.local`（同 STATS-04-A 先例）
+- **主链进度**：`01→02→03A→03B→04A→04B` 全 ✅；下一主链 STATS-05-A-PUBLIC-TYPES-READ（公共读模型 playCount，sonnet）
+- **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**
+
+## [STATS-05-A-PUBLIC-TYPES-READ] 公共读模型 Video.playCount 透传 + 前台三 surface 展示（SEQ-20260624-02 第 5 卡·A）
+- **完成时间**：2026-06-25
+- **记录时间**：2026-06-25
+- **执行模型**：claude-opus-4-8（**卡建议 sonnet，实际 opus 会话按全自动推进执行**——opus 胜任 sonnet 级字段透传、不触碰"主循环不擅自升级"红线，成本偏离登记）
+- **拆卡**：母卡 STATS-05 拆 `-A`（公共读模型 types+展示，本条）/`-B`（`/videos?sort=hot` 排序，opus）。
+- **子代理**：
+  - Codex 对抗审（`codex exec` codex-cli，落盘后 commit 前）— **2 轮 BLOCK→PASS**：
+    - 轮 1（2 BLOCK + 2 HIGH + 1 MEDIUM 全吸收）：① **BLOCK** 改错组件——detail 实际渲染 `DetailHero`（非我初改的 `VideoMeta`，后者 `<VideoMeta` 零渲染=死代码）→ 撤销 VideoMeta 改动、接 DetailHero meta 行；② **BLOCK** watch 非 N/A——实际渲染 `PlayerShell` 且已有 year/rating meta 行（初次 grep WatchPageClient 漏看 PlayerShell）→ PlayerShell meta 行接入；③ HIGH `playCount>0` 隐藏 0 违反验收"无统计行显示 0"→ 三处改**无条件渲染**（含 0）；④ HIGH 搜索卡片遗漏→明确边界：搜索用独立 `SearchResultRow`（ES 无 play 字段），播放次数延后 STATS-06；⑤ MEDIUM 缺组件渲染测试→补
+    - 轮 2：**PASS**（2 BLOCK + 2 HIGH 全闭环；SQL 层轮1 已 PASS 未重审；残留 MEDIUM 测试硬化已补：mock 加 playCount 防 `formatPlayCount(undefined)` 渲染 + detail/player 展示断言）
+- **修改文件**：
+  - `packages/types/src/video.types.ts`：`Video.playCount: number`（必填，PG 详情读路径总有）；`VideoCard = Pick<Video,...> & { playCount?: number }`（**可选**——ES 搜索卡片暂无、STATS-06 补，避免 breaking 所有手动构造点；前台 `?? 0` 兜底）
+  - `apps/api/src/db/queries/videos.internal.ts`：`VIDEO_JOIN` 加 `LEFT JOIN video_play_totals vpt ON vpt.video_id = v.id`（additive 一对零/一，不改行数 / COUNT）；`VIDEO_FULL_SELECT` 加 `COALESCE(vpt.total_play_count, 0) AS play_count`；`DbVideoRow.play_count?: string`；mapVideoRow + mapVideoCard 映射 `playCount: parseInt(row.play_count ?? '0', 10)`。**单点收敛**：改 VIDEO_JOIN/SELECT 一处覆盖全部前台读路径（listVideos/findVideoByShortId/listTrendingVideos/listVideosByTrendingTag/RatingDesc/CardsByIds 全配 VIDEO_JOIN 已验证；裸 `FROM videos v` 的 crawler UPDATE / countVideosByType 不用 VIDEO_FULL_SELECT 不受影响）
+  - `apps/web-next/src/components/video/VideoCard.tsx`：VideoCardMeta 无条件展示 `▶ {formatPlayCount(video.playCount ?? 0)}`（cards + related-via-VideoCard）
+  - `apps/web-next/src/components/detail/DetailHero.tsx`：meta 行无条件展示 `▶ {formatPlayCount(video.playCount)} 次播放`（detail 实际组件）
+  - `apps/web-next/src/components/player/PlayerShell.tsx`：标题 meta 行无条件展示（watch；仅加展示 span、未碰播放逻辑/状态机）
+  - `apps/web-next/src/lib/format-play-count.ts`（新建）：`formatPlayCount`（≥1万→"x.x万"，0→"0"）——3 处展示共用 DRY 单一真源
+  - `tests/unit/api/video-play-count-projection.test.ts`（新，7）：投影常量 + mapper 映射/COALESCE 0 容错
+  - `tests/unit/web-next/format-play-count.test.ts`（新，4）：格式化 + 0 显示
+  - `tests/unit/web-next/VideoCard.test.tsx`（改）：playCount 渲染断言（>0 万 / =0 显示 / 缺失 ??0）
+  - `tests/unit/web-next/detail-hero-line-names.test.tsx` + `player-shell-hydration.test.tsx`（改）：MOCK_VIDEO 加 playCount + detail-play-count/player-play-count 展示断言
+  - `docs/task-queue.md`（STATS-05-A 🔄→✅）/ `docs/tasks.md`（删卡）/ `docs/changelog.md`（本条目）/ `docs/audit/adr-d-status.json`（verify 自动更新）
+- **新增依赖**：无
+- **数据库变更**：无（消费 STATS-04 产出的 video_play_totals）
+- **门禁**：`typecheck`=0（root + 7 workspace）/ 改动文件 `eslint`=0（worktree 全量 lint 为 resovo cascade 环境冲突，临时 root:true 隔离验证后还原）/ **全量 `test:changed` 8379 passed**（types 基础包改动升全量 614 文件；唯一失败 `CrawlerRunsView.test.tsx`〔admin crawler ADR-150 status filter〕为**预存并发 flaky**——单独跑 33/33 passed、零 playCount/VideoCard 引用、与本卡无关，16 个 tests/unit 子目录穷举单跑全过）/ `verify:adr-contracts`=0（sql-schema-alignment 对齐）
+- **延后合并期**：**VIDEO/PLAYER e2e**——worktree；PlayerShell 仅 meta 行加展示 span 未碰播放交互（断点续播/线路切换/影院/字幕），player-shell-hydration 5 测 + layout/preview-mode 回归过
+- **边界（供 STATS-05-B / 06）**：本卡仅 PG 读路径展示（VideoCard from PG / DetailHero / PlayerShell）；ES 搜索卡片（SearchResultRow）playCount 展示延后 **STATS-06**（ES play fields + 同步）；不改排序语义（hot 排序 STATS-05-B）
+- **分支隔离**：成果留 `stats-01-adr`，按用户指示**不合并 dev**

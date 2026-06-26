@@ -3,23 +3,24 @@
 /**
  * GridSortBar — 视频网格左上排序条（共享，SEQ-20260624-01 / HANDOFF-39）
  *
- * 3 排序按钮：添加时间(latest) / 人气高低(hot) / 评分高低(rating)，消费 @resovo/types SORT_OPTIONS。
+ * 排序按钮按 mode 取值：category=添加时间/人气/评分（SORT_OPTIONS，默认 latest）；
+ * search=相关度/添加时间/人气/评分（SEARCH_SORT_OPTIONS，默认 relevance）。
  * URL `sort` 参数驱动（与 FilterArea 同源 useSearchParams/useRouter）：
- *   - 点选项 set ?sort= + reset page；选 DEFAULT_SORT(latest) 删 param 走后端默认（与「全部」对称）。
- *   - 激活态：searchParams.get('sort') ?? DEFAULT_SORT。
+ *   - 点选项 set ?sort= + reset page；选默认排序删 param 走后端默认（与「全部」对称）。
+ *   - 激活态：searchParams.get('sort') ?? defaultSort（按 mode）。
  * 右侧可选「计数」：total + totalLabelKey（本期仅总数，无 per-option 计数）。
  */
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
-import { SORT_OPTIONS, DEFAULT_SORT } from '@resovo/types'
-import type { SortOption } from '@resovo/types'
+import { SORT_OPTIONS, DEFAULT_SORT, SEARCH_SORT_OPTIONS, DEFAULT_SEARCH_SORT } from '@resovo/types'
+import type { SearchSortOption } from '@resovo/types'
 import type { GridSortBarProps } from './types'
 
 // ── SortButton ────────────────────────────────────────────────────────────────
 
 interface SortButtonProps {
-  readonly value: SortOption
+  readonly value: SearchSortOption
   readonly label: string
   readonly isActive: boolean
   readonly onClick: () => void
@@ -53,17 +54,24 @@ function SortButton({ value, label, isActive, onClick }: SortButtonProps) {
 
 // ── GridSortBar ───────────────────────────────────────────────────────────────
 
-export function GridSortBar({ total, totalLabelKey }: GridSortBarProps) {
+export function GridSortBar({ total, totalLabelKey, mode = 'category' }: GridSortBarProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const t = useTranslations()
 
-  const activeSort: SortOption = (searchParams.get('sort') as SortOption | null) ?? DEFAULT_SORT
+  // search：4 项含「相关度」(relevance)，无 ?sort= 时默认高亮 relevance（= 后端搜索默认排序，前后端一致，且可点回）。
+  // category：3 项，无 ?sort= 时默认高亮 latest（= 后端分类默认排序）。
+  const options = mode === 'search' ? SEARCH_SORT_OPTIONS : SORT_OPTIONS
+  const defaultSort: SearchSortOption = mode === 'search' ? DEFAULT_SEARCH_SORT : DEFAULT_SORT
 
-  function selectSort(value: SortOption) {
+  const activeSort: SearchSortOption =
+    (searchParams.get('sort') as SearchSortOption | null) ?? defaultSort
+
+  function selectSort(value: SearchSortOption) {
     const next = new URLSearchParams(searchParams.toString())
     next.delete('page')
-    if (value === DEFAULT_SORT) next.delete('sort')
+    // 选默认排序删 param 回后端默认（category=latest / search=relevance）；否则显式写 param。
+    if (value === defaultSort) next.delete('sort')
     else next.set('sort', value)
     router.push('?' + next.toString())
   }
@@ -85,7 +93,7 @@ export function GridSortBar({ total, totalLabelKey }: GridSortBarProps) {
         aria-label={t('filter.sortLabel')}
         style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-1)' }}
       >
-        {SORT_OPTIONS.map((value) => (
+        {options.map((value) => (
           <SortButton
             key={value}
             value={value}

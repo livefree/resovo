@@ -384,6 +384,7 @@ export function SearchPage() {
         {/* 排序条 + 结果计数（替代原 type tab 计数，置于结果区上方左侧） */}
         <div style={{ marginBottom: 'var(--space-4)' }}>
           <GridSortBar
+            mode="search"
             total={hasQuery && hasResults ? total : undefined}
             totalLabelKey="filter.countSearch"
           />

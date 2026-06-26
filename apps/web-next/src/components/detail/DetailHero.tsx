@@ -15,6 +15,7 @@ import { usePlayerStore } from '@/stores/playerStore'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import { Breadcrumb } from '@/components/primitives/breadcrumb/Breadcrumb'
 import { ALL_CATEGORIES } from '@/lib/categories'
+import { formatPlayCount } from '@/lib/format-play-count'
 import { formatCountryName, type Video, type VideoSource } from '@resovo/types'
 
 const SharedElement = SharedElementBase as SharedElementComponent
@@ -272,6 +273,8 @@ export function DetailHero({ video, episode = 1, sources = [] }: DetailHeroProps
                 <span>{video.runtimeMinutes} 分钟</span>
               </>
             )}
+            <span className="opacity-30">·</span>
+            <span data-testid="detail-play-count">▶ {formatPlayCount(video.playCount)} 次播放</span>
           </div>
 
           {video.genres.length > 0 && (

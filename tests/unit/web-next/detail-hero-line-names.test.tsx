@@ -65,6 +65,7 @@ const MOCK_VIDEO: Video = {
   tags: [],
   subtitleLangs: [],
   status: 'completed',
+  playCount: 88888,
 } as unknown as Video
 
 function makeSource(site: string, name: string, score: number, quality: string): VideoSource {
@@ -91,6 +92,11 @@ const MOCK_SOURCES = [
 
 describe('DetailHero 线路名 — BUGFIX-WATCH-EP-URL ③', () => {
   afterEach(() => cleanup())
+
+  it('meta 行展示播放次数（STATS-05-A，无条件渲染含 0）', () => {
+    render(<DetailHero video={MOCK_VIDEO} episode={1} sources={MOCK_SOURCES} />)
+    expect(screen.getByTestId('detail-play-count').textContent).toContain('8.9万')
+  })
 
   it('渲染主题化线路名（立春/雨水），非原始 siteDisplayName', () => {
     render(<DetailHero video={MOCK_VIDEO} episode={1} sources={MOCK_SOURCES} />)

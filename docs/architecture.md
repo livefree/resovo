@@ -977,6 +977,24 @@ UserPreferences = {
   - TS 类型：`CardSizeClass` / `CardSizeSettings` / `CARD_SIZE_DEFAULTS`（`packages/types/src/card-size.types.ts`，CARD-SIZE-TYPES-QUERIES 落地）
   - DB 查询：`listCardSizeSettings / findCardSizeSettings / updateCardSizeSettings`（`apps/api/src/db/queries/card-size-settings.ts`，CARD-SIZE-TYPES-QUERIES 落地）
 
+### 5.20 视频级播放量统计体系（ADR-216 / SEQ-20260624-02，Migration 128）
+
+视频级播放量统计：匿名播放事件真源 + 派生聚合（趋势/UV/累计/热度）+ 跨前台/搜索一致热度排序。**与 `watch_history`（登录续播）正交、不做行级对账**；**不复用** `feedback/playback`（source-health 信号）。决策真源 ADR-216（D-216-1~10）；schema 起号 128（127 已占本分支，SEQ 顺延条件触发）。STATS-02-SCHEMA 仅落数据底座（建表 + 类型 + query 骨架），写入/聚合/读取归 STATS-03/04/05。
+
+- `video_play_events`（**append-only 可重放事件真源**；只存 qualified play）：
+  - 关键列：`id BIGSERIAL PK`、`idempotency_key TEXT UNIQUE`（D-216-8 第一防线）、`video_id UUID FK→videos ON DELETE CASCADE`、`source_id UUID FK→video_sources ON DELETE SET NULL`、`episode_number INT NULL`、`event_type TEXT CHECK IN ('qualified_play')`（L3 单值边界，扩展走 amendment）、`play_session_id TEXT`、`visitor_hash TEXT`（HMAC 不可逆）、`visitor_is_ephemeral BOOLEAN NOT NULL DEFAULT false`（D-216-7 H1：fallback 行置 true，聚合仅对 false 计 UV）、`ip_hash TEXT NULL`、`user_id UUID FK→users ON DELETE SET NULL`（D-216-5 optionalAuthenticate 填充，匿名 NULL，写路径不查 users）、`watch_seconds INT CHECK ≥0`、`duration_seconds INT NULL CHECK >0`、`occurred_at TIMESTAMPTZ NOT NULL`（D-216-9 trusted/clamp 值）、`ingested_at`、`aggregated_at TIMESTAMPTZ NULL`（聚合幂等标记，未聚合永不删）。
+  - **双重幂等约束**：`uq_video_play_events_idempotency_key UNIQUE(idempotency_key)`（第一防线，**显式命名**供 STATS-03 精确捕获 `err.constraint`）+ `uq_video_play_events_session_video_episode UNIQUE(play_session_id, video_id, COALESCE(episode_number, 0))`（第二防线 null-safe 表达式索引，D-216-8）。写路径命中任一 `23505` 当幂等成功返回 202。
+  - 索引：`idx_video_play_events_pending (ingested_at) WHERE aggregated_at IS NULL`（D-216-10 聚合取数）、`idx_video_play_events_video_time (video_id, occurred_at DESC)`、`idx_video_play_events_occurred_at (occurred_at DESC)`。
+- `video_play_hourly`（PK `(video_id, bucket_hour)`）：近期趋势 + **hot_score 按窗口全量重算数据源**（D-216-3，30d 窗口 < 90d 保留故不受 events retention 影响）。计数列 BIGINT（play/anon/logged_in/total_watch_seconds）。索引 `idx_video_play_hourly_hour (bucket_hour DESC, play_count DESC)`。today=滚动 24h 读本表（D-216-2）。
+- `video_play_daily`（PK `(video_id, bucket_date)`）：后台分析 + week/month 近 7/30 自然日趋势真源（D-216-2）。含 `unique_visitor_count`（仅 NOT ephemeral 行计入）。索引 `idx_video_play_daily_date`。
+- `video_play_daily_visitors`（PK `(video_id, bucket_date, visitor_hash)`）：daily UV 去重 helper（运营表，非前台读模型）。索引 `idx_video_play_daily_visitors_date (bucket_date)`（D-216-6 retention 400 天清理）。
+- `video_play_totals`（PK `video_id`）：O(1) 累计展示读模型（STATS-05-A 左连 + COALESCE(0)）。`total_play_count BIGINT`、`last_played_at`。索引 `idx_video_play_totals_count (total_play_count DESC)`。
+- `video_hot_scores`（PK `video_id`）：跨前台/搜索一致热度**物化源**（D-216-3 必需，ES 无法引用瞬时 PG 计算）。`hot_score NUMERIC = 24h×1.0 + 7d×0.3 + 30d×0.1`（按窗口全量重算非增量累加）+ `play_count_24h/7d/30d BIGINT`（嵌套窗口，L1）+ `computed_at`。索引 `idx_video_hot_scores_hot (hot_score DESC, play_count_7d DESC)`。统一排序口径 `hot_score DESC NULLS LAST, play_count_7d DESC, total_play_count DESC, updated_at DESC`。
+- **retention（D-216-6 代码常量）**：events 聚合后 90 天 / daily_visitors 400 天 / hourly 90 天 / daily·totals·hot_scores 永久；maintenance job 绝不删 `aggregated_at IS NULL`。
+- TS 类型：`VideoPlayEvent / VideoPlayHourly / VideoPlayDaily / VideoPlayDailyVisitor / VideoPlayTotals / VideoHotScore`（`packages/types/src/video-play-stats.types.ts`，STATS-02 落地）。
+- DB 查询：骨架 `apps/api/src/db/queries/videoPlayStats.ts`（Db 行类型 + COLUMNS + mapRow；BIGINT/NUMERIC 经 mapRow parseInt/Number 转 number）；写入/聚合/读取查询函数由 STATS-03/04/05 新增。
+- schema 集成测：`tests/integration/api/video-play-stats-schema.test.ts`（只读 catalog 验 6 表 + 双唯一约束 + ephemeral 列 + occurred_at NOT NULL + event_type CHECK；独立 integration config，需 DB migrate ≥128）。
+
 ---
 
 ## 6. 视频状态机（DB 强约束）

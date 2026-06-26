@@ -34,12 +34,13 @@ import { MetricKpiCardRow } from '@/components/admin/dashboard/MetricKpiCardRow'
 import { RecentActivityCard } from '@/components/admin/dashboard/RecentActivityCard'
 import { SiteHealthCard } from '@/components/admin/dashboard/SiteHealthCard'
 import { AnalyticsView } from './AnalyticsView'
+import { VideoPlaysAnalyticsView } from './VideoPlaysAnalyticsView'
 import { AutoCrawlScheduleCard } from './AutoCrawlScheduleCard'
 import { QueueHealthCard } from './QueueHealthCard'
 
 // ── types ─────────────────────────────────────────────────────────
 
-type TabId = 'overview' | 'analytics'
+type TabId = 'overview' | 'analytics' | 'video-plays'
 
 // ── styles ────────────────────────────────────────────────────────
 
@@ -113,7 +114,8 @@ export function DashboardClient() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const toast = useToast()
-  const activeTab: TabId = (searchParams.get('tab') as TabId) === 'analytics' ? 'analytics' : 'overview'
+  const tabParam = searchParams.get('tab')
+  const activeTab: TabId = tabParam === 'analytics' || tabParam === 'video-plays' ? tabParam : 'overview'
 
   const [stats, setStats] = useState<ModerationStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
@@ -192,6 +194,7 @@ export function DashboardClient() {
       <div style={TAB_BAR_STYLE} data-dashboard-tabs>
         <button style={tabBtnStyle(activeTab === 'overview')} onClick={() => switchTab('overview')} data-tab="overview">概览</button>
         <button style={tabBtnStyle(activeTab === 'analytics')} onClick={() => switchTab('analytics')} data-tab="analytics">分析</button>
+        <button style={tabBtnStyle(activeTab === 'video-plays')} onClick={() => switchTab('video-plays')} data-tab="video-plays">视频播放</button>
       </div>
 
       {activeTab === 'overview' && (
@@ -244,6 +247,8 @@ export function DashboardClient() {
       )}
 
       {activeTab === 'analytics' && <AnalyticsView />}
+
+      {activeTab === 'video-plays' && <VideoPlaysAnalyticsView />}
     </div>
   )
 }
