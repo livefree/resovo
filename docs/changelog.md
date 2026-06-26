@@ -42,6 +42,26 @@
 
 ---
 
+## [STATS-05-B-PUBLIC-HOT] `/videos?sort=hot` 与 `/videos/trending` 改用播放聚合真源（ADR-216 / SEQ-20260624-02）
+- **完成时间**：2026-06-25
+- **记录时间**：2026-06-25
+- **执行模型**：claude-opus-4-8（主循环；卡建议 opus·模型对齐，排序语义变更）
+- **子代理**：Codex 对抗性独立审核（codex-cli 0.125.0，1 轮 PASS）——非 Task 工具 spawn，落盘后对实现做对抗审。
+- **来源**：SEQ-20260624-02 主链第 5 卡·B（`01→…→05A✅→05B`）；ADR-216 §后续工作行 77-78（替换 `/videos?sort=hot` 的 active source count 占位 + 替换 `/videos/trending` 的 updated_at recency）。依赖 STATS-04（聚合产出）+ STATS-05-A（vpt 已 JOIN）。
+- **产出**：
+  - **`/videos?sort=hot`**（`listVideos`，`apps/api/src/db/queries/videos.ts`）：sort=hot 时条件 `LEFT JOIN video_hot_scores vhs ON vhs.video_id = v.id`（additive，PK video_id，不改行数/COUNT；非 hot 排序 `hotJoin=''` 零改动）；orderBy.hot 改用 D-216-3 统一口径 `vhs.hot_score DESC NULLS LAST, vhs.play_count_7d DESC NULLS LAST, vpt.total_play_count DESC NULLS LAST, v.updated_at DESC`（vpt 复用 STATS-05-A 在 VIDEO_JOIN 的 LEFT JOIN）。**删活跃源计数占位**（原 `SOURCE_COUNT_SUBQUERY DESC`）。COUNT 查询不附加 vhs join（LEFT 不影响计数）。
+  - **`/videos/trending`**（`listTrendingVideos`）：新增 `TRENDING_WINDOW` 常量 map（period→窗口源+谓词）——`today`→`video_play_hourly`（`bucket_hour >= NOW()-INTERVAL '24 hours' AND bucket_hour <= NOW()`，D-216-9 防未来桶）；`week`/`month`→`video_play_daily`（`bucket_date >= CURRENT_DATE - 6/29 AND bucket_date <= CURRENT_DATE`，D-216-2 近 7/30 自然日）。改 `LEFT JOIN (SELECT video_id, SUM(play_count) AS window_plays FROM <源> WHERE <谓词> GROUP BY video_id) w ON w.video_id = v.id` + `ORDER BY w.window_plays DESC NULLS LAST, v.updated_at DESC`。**删 updated_at recency 占位过滤**（原 `v.updated_at >= NOW()-INTERVAL`）。
+  - **稳定 fallback**：聚合空窗（系统冷启动 / 窗口内零播放）→ window_plays 全 NULL → NULLS LAST 后退化为原 `updated_at DESC` 行为，不产出空列表。
+- **新增依赖**：无。
+- **数据库变更**：无（仅读端 SQL 改造；消费 STATS-02 已建表 video_hot_scores/hourly/daily + STATS-04 聚合产出）。
+- **边界与复用**：复用 `VIDEO_JOIN`（vpt）/`SOURCE_COUNT_SUBQUERY`/`mapVideoCard`；period→窗口源映射常量化（无重复实现）。**消费方零回归**：`listTrendingVideos` 还被 `home-curation.preview.ts` + `home-autofill/trending.ts`（period:'week'）当候选池消费——签名/返回 `VideoCard[]` 不变；无数据时退化为原 updated_at DESC 行为，home-autofill-core(33)+home-queries(15) 回归测试全过。VideoService.list/trending、routes/videos.ts 签名不变零改动。
+- **质量门禁**：typecheck=0（8 workspace）/ 改动文件 eslint=0（worktree cascade 经临时 `root:true` 隔离跑后还原）/ `verify:adr-contracts` EXIT=0（verify-endpoint-adr 250 admin 路由对齐〔本卡公共端点零新增 admin 路由〕+ verify-sql-schema-alignment ✅ 新 SQL 引用 hot_scores/hourly/daily 列全对齐 migration；error-message/d-numbers/enum-ssot ⚠️ 均 advisory 预存非本卡）/ test:changed=1126 passed（82 文件）。**VIDEO e2e 延后合并期**（worktree 无 .env.local，同 STATS-02/05-A 先例）。
+- **测试**：`tests/unit/api/videos-list-query.test.ts` +4 用例（hot LEFT JOIN + 统一排序口径 + 非 hot 不引入无谓 join + COUNT 不附加 hot join）；新增 `tests/unit/api/videos-trending-query.test.ts` 6 用例（today/week/month 三窗口源 + 防未来桶 + 排序 fallback + 删 recency 占位 + 公开过滤/type 参数化）。
+- **Codex 对抗审**：1 轮 PASS——0 BLOCK/HIGH/MEDIUM。喂入 ADR-216 D-216-2/3/9 冻结决策 + schema 事实 + 消费方约束 + diff，Codex 确认 SQL 语义、NULL 排序、防未来桶、注入面、消费方回归均无缺陷（设计直落冻结决策，缺陷面小）。
+- **[AI-CHECK]**：六问过——①正确性：trending 无数据退化原行为、非 hot 排序零改动，消费方测试全过，无回归；②边界复用：复用 VIDEO_JOIN/vpt/SOURCE_COUNT_SUBQUERY/mapVideoCard，窗口映射常量化不重复实现；③可扩展：orderBy + TRENDING_WINDOW map 可增量扩展，后续半衰期调整在 worker 侧、读端不变；④一致性：与既有 SQL 构造范式（参数化 idx、INTERVAL 字面量）一致；⑤改动收敛：仅 1 源 + 2 测试文件，service/route 签名零改动；⑥沉淀评估：窗口源映射为 trending 专属、不构成跨模块共享需求，不沉淀（理由记录）。
+
+---
+
 ## [META-24] ADR-173 起草：API 凭证统一管理框架 + 连接测试协议（SEQ-20260613-01 第 1 卡）
 - **完成时间**：2026-06-13
 - **记录时间**：2026-06-13 11:30
