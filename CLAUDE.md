@@ -143,6 +143,7 @@ npm run verify:adr-contracts # ADR 协议合规 3 类核验（端点/错误码/D
 | 质量门禁     | `docs/rules/quality-gates.md`         | 任务完成前、六问、AI-CHECK、偏离检测                                           |
 | 日志相关任务 | `docs/rules/logging-rules.md`         | logger / log / 日志 / pino / request_id / worker job / PII redact / client-log |
 | 文档治理     | `docs/rules/doc-governance.md`        | 文档清理、归档、索引更新、断链 / 错误引用、文档冲突、PHASE COMPLETE 收尾、季度归档 |
+| 模型路由     | `docs/rules/model-routing.md`         | 模型 ID、`--model`、建议模型、子代理模型、`opus` / `sonnet` / `haiku` 缩写映射            |
 
 ---
 
@@ -152,7 +153,7 @@ npm run verify:adr-contracts # ADR 协议合规 3 类核验（端点/错误码/D
 
 - **默认主循环**：`claude-sonnet-4-6`
 - 每个任务卡（tasks.md / task-queue.md）的"建议模型"字段指定启动主循环模型（`opus` / `sonnet` / `haiku`）
-- 会话启动时人工按照建议传 `--model <完整 ID>`（映射表见 `docs/archive/2026Q2/model_routing_patch_20260418.md`（已归档）第 3 节）
+- 会话启动时人工按照建议传 `--model <完整 ID>`（缩写 → 完整模型 ID 映射真源见 `docs/rules/model-routing.md` §1；归档补丁 `docs/archive/2026Q2/model_routing_patch_20260418.md` §3 的 S 级 `claude-opus-4-6` 为历史值，已被取代）
 - **主循环模型中途不可升级**：执行中发现任务难度高于预期时，必须写 BLOCKER 停止会话，不得擅自 spawn Opus 子代理替主循环做最终决策
 
 ### 强制升 Opus 子代理的情形

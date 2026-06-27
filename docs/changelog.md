@@ -6,7 +6,7 @@
 > source_of_truth: yes
 > supersedes: none
 > superseded_by: none
-> last_reviewed: 2026-06-24
+> last_reviewed: 2026-06-26
 
 > 本文件仅记录 SEQ-20260613-01（META-24）及以后的活跃变更。
 > 历史 changelog 已分段归档（四段）：
@@ -3024,3 +3024,24 @@
   - 本轮纯索引更新，零归档 / 零 git mv；下轮治理（≥2026-06-25）`moderation-console-ux-plan_20260610` 满 14 天可进归档判定。
   - `verify:docs-format` 残留（非本轮引入，存量债务）：[4] 23 项 frontmatter 缺失全在 `docs/archive/**`（历史快照，doc-governance §6 禁改 archive 内容）；[5] README 主题判重（`manual/README.md` 与 `docs/README.md` 同名不同 scope）为按文件名判重的误报，二者 scope 正交（manual navigation vs docs navigation），不修。
   - dev working tree 有未提交的 `video-play-stats-structure_20260624.md`（位于 `docs/designs/`，SEQ-20260624-02 进行中产物，未合并 main）→ 本轮 worktree 基于 main 不含该文件，README 活跃设计列表暂未纳入，待该序列合并后由其登记。
+
+---
+
+## [CHORE-AI-ENV-20260626] 模型路由映射真源迁出归档表 → docs/rules/model-routing.md
+- **完成时间**：2026-06-26
+- **记录时间**：2026-06-26 16:35
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无
+- **触发**：用户指令「复核 AI 开发环境现状」后授权「彻底修法」——承接 `69e2f675` ai-env 复审第 2 笔。
+- **根因**：CLAUDE.md L155「会话启动选模型」指向归档补丁 `model_routing_patch_20260418` §3，而该表 S 级仍写已退役的 `claude-opus-4-6`，与本月已修好的 arch-reviewer 模板 `claude-opus-4-8` 自相矛盾（活跃总纲引用一张陈旧归档表）。
+- **修改文件**：
+  - `docs/rules/model-routing.md` — 🆕 模型 ID 映射现行真源：§1 S=`claude-opus-4-8` / A=`claude-sonnet-4-6` / B=`claude-haiku-4-5-20251001`；§2 子代理↔模型对照（arch-reviewer 4-8 / doc-janitor haiku-4-5）；§3 升降档与执行审计回指 CLAUDE.md（避免双真源漂移）
+  - `CLAUDE.md` — L155 引用改指 `docs/rules/model-routing.md` §1 + 显式标注归档表 §3 的 4-6 为历史值/已被取代；「规范文件索引」表新增「模型路由」一行
+  - `docs/README.md` — §4 规则文档清单新增第 14 项 model-routing.md
+  - `docs/changelog.md` — last_reviewed 6-24→6-26；本条目
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：docs-only → `test:changed` 自动跳过（3 文件全文档类）；`check-docs-format` 改动前后均 25 项 pre-existing 遗留，零新增失败，新文件未进失败清单。
+- **注意事项**：
+  - 历史审计字段（`docs/archive/**` / `decisions.md` / `server_next_plan` / `tracks.md` 已集成 track）中的 4-6/4-7 保持原样（既成事实，doc-governance §6 禁改 archive）；归档补丁本身不改，仅在新文件 frontmatter 沿革段说明已被取代。
+  - `.claude/` 全量 gitignore：`arch-reviewer.md`(4-8) / `settings.json` 插件治理仅落本机磁盘、不入库，新文件 §2 已记账并要求改 `.claude/agents/*.md` 的 `model:` 字段时同步本表。
