@@ -51,6 +51,9 @@ npm run verify:no-bare-backdrop
 echo "[5e2/6] 文件大小硬上限守卫（CHG-SN-7-PRE-01 / CLAUDE.md §绝对禁止第 11 条）"
 npm run verify:file-size-budget
 
+echo "[5e3/6] verify:* 门禁脚本 ↔ 文档枚举漂移检测（审查规范改进 P1b / advisory）"
+npm run verify:script-doc-sync
+
 echo "[5f/6] ADR 协议合规自动核验（CHG-SN-5-CHECKLIST-AUDIT + CHG-SN-6-CHECKLIST-AUDIT-3 + RETRO-3-B/-4/-06）"
 echo "  - verify:endpoint-adr                 — 新增端点 → ADR §端点契约存在性"
 echo "  - verify:error-message                — ADR §错误码 message 模板对齐 (advisory)"

@@ -6,7 +6,7 @@
 > source_of_truth: yes
 > supersedes: none
 > superseded_by: none
-> last_reviewed: 2026-06-26
+> last_reviewed: 2026-06-27
 
 > 本文件仅记录 SEQ-20260613-01（META-24）及以后的活跃变更。
 > 历史 changelog 已分段归档（四段）：
@@ -3045,3 +3045,24 @@
 - **注意事项**：
   - 历史审计字段（`docs/archive/**` / `decisions.md` / `server_next_plan` / `tracks.md` 已集成 track）中的 4-6/4-7 保持原样（既成事实，doc-governance §6 禁改 archive）；归档补丁本身不改，仅在新文件 frontmatter 沿革段说明已被取代。
   - `.claude/` 全量 gitignore：`arch-reviewer.md`(4-8) / `settings.json` 插件治理仅落本机磁盘、不入库，新文件 §2 已记账并要求改 `.claude/agents/*.md` 的 `model:` 字段时同步本表。
+
+---
+
+## [CHORE-REVIEW-VERIFY-20260627] 新增审查门禁脚本 verify-review-trailer + verify-script-doc-sync
+- **完成时间**：2026-06-27
+- **记录时间**：2026-06-27 17:27
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（Codex stop-gate 自动审查并提出两轮缺陷修正，非 Task 子代理）
+- **触发**：用户「从开发角度评估审查规范质量」后授权「按建议改进」——评估短板 #1（绝对禁止 / 必须无脚本背书）+ #6（单一真源原则自相矛盾，§6 脚本枚举已漂移）。
+- **修改文件**：
+  - `scripts/verify-review-trailer.mjs` — 🆕 高危产物 commit 评审 trailer 核验：diff 触及 `docs/decisions.md` 或 admin-ui Props 契约（types.ts / .tsx `*Props` 块字段，双镜像区间相交、容忍多行声明）却缺 `Subagents: arch-reviewer` 或 `Review: <hash> PASS` trailer → 报违规；默认 advisory 观察期，`--strict` 升 FAIL fast
+  - `scripts/verify-script-doc-sync.mjs` — 🆕 verify:adr-contracts 成员 ↔ preflight / quality-gates §6 枚举漂移检测（实测揪出 4 处：§6 漏记 admin-shell-types-mirror / enum-ssot + 2 处 stale 引用 view-test-coverage / primitive-usage-ratio）
+  - `package.json` — 注册 verify:review-trailer / verify:script-doc-sync
+  - `scripts/preflight.sh` — `[5e3/6]` 接入 verify:script-doc-sync（advisory）
+  - `docs/changelog.md` — last_reviewed 6-26→6-27；本条目
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：typecheck=0 / lint=0 / test:changed 全量 8270 passed（package.json 配置改动按 ADR-180 升全量）。两脚本各 6 / 4 隔离用例验证，含 Codex 两轮缺陷修正：字段级改动漏检 + 非 PASS 评审误放行 + 多行 Props 声明漏检。
+- **注意事项**：
+  - verify:review-trailer 当前 advisory；存量清零后另起卡以 `--strict` 升 FAIL fast。不入 preflight（依赖 commit 历史，preflight 在 commit 前跑）→ 定位 CI / pre-push：`npm run verify:review-trailer -- --base origin/main`。
+  - verify:script-doc-sync 报出的 4 处漂移属既有文档债，本卡不顺手修（避免越范围），留后续文档治理处理。

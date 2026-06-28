@@ -63,6 +63,8 @@
     "verify:style-shorthand-conflict": "node scripts/verify-style-shorthand-conflict.mjs",
     "verify:file-size-budget": "node scripts/verify-file-size-budget.mjs",
     "verify:manual-coverage": "node scripts/verify-manual-coverage.mjs",
+    "verify:review-trailer": "node scripts/verify-review-trailer.mjs",
+    "verify:script-doc-sync": "node scripts/verify-script-doc-sync.mjs",
     "migrate": "node --env-file=.env.local --import tsx scripts/migrate.ts",
     "migrate:check": "node --env-file=.env.local --import tsx scripts/migrate.ts --dry-run",
     "clear:crawled-data": "node --env-file=.env.local --import tsx scripts/clear-crawled-data.ts",
