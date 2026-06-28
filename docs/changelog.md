@@ -3166,3 +3166,37 @@
 - **数据库变更**：无
 - **门禁**：typecheck=0 / lint=0 / test:changed=0；grep 确认 live 文档（CLAUDE.md / quality-gates / workflow-rules）N 编号已统一 N1–N13、无 N1–N12 残留。
 - **注意事项**：changelog 历史条目（8ac97adb 记 N1–N12 / 1f4b2ddb 记加 N13）为时序记录，按惯例不改。
+
+---
+
+## [META-55-ADR-20260627] ADR-216 立案 + 定稿：per-video 状态列退役、external refs 收口为元数据匹配状态单一真源（SEQ-20260627-01）
+- **完成时间**：2026-06-27
+- **记录时间**：2026-06-27 22:11
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：`arch-reviewer`(claude-opus-4-8) ×2〔初裁 A 变体 + 复议收回承重错误〕、`codex-rescue`(等效对抗审) ×2〔round-1 4 BLOCKER+3 CONCERN / round-2 1 BLOCKER+3 CONCERN+1 NIT〕
+- **触发**：用户报 `videos.douban_status=matched` 137 vs refs `douban auto_matched` 198 / `bangumi` 241 vs 277 / TMDB 无 `tmdb_status` 列的口径漂移。
+- **根因（实库只读诊断，未改数据）**：① douban 真漂移 60 条（持 applied primary ref 但列 unmatched，60/60 enrich 覆写）；② bangumi 假漂移 36 条（软删 anime 视频残留 auto_matched ref，CASCADE 不触发软删）；③ **深层（Codex B-1 揭示）**：列(video 级 matched) 与 derive overall(catalog-first，auto-consensus 保守判 candidate) 是两层语义——60 漂移行经 overall 仅 34 applied/28 candidate，137 现 matched 仅 123/14。
+- **产出文件**：
+  - `docs/decisions.md` — ADR-216 **Accepted**（方向 A 变体：消费方迁 `videoRefAppliedSql` video 级 applied 谓词〔含 auto_matched=等价旧 matched〕非 catalog overall；两谓词语义分工；enrich 一致性守卫；软删纯读期 join；列 DROP 拆独立 ADR）+ 软删处置表 + 两轮 arch-reviewer/Codex 摘要
+  - `docs/task-queue.md` — SEQ-20260627-01 立案 + 卡序（DC-216-1 谓词契约 / DC-216-2 软删处置表 / META-56 DROP-prep / META-57 守卫 / META-58 迁移 / META-59 软删过滤 / META-60 冻结）
+  - `docs/tasks.md` — META-55-ADR 卡（完成删卡）
+- **新增依赖**：无
+- **数据库变更**：无（ADR 决策，schema 改动在后续实现卡）
+- **门禁**：纯文档零代码；docs-format 无本次新增失败（既有 archive/README/旧时间格式遗留与本次无关）。
+- **注意事项**：用户 2026-06-27 裁可方向 A + matched 取 video 级语义，解锁 DC-216-1。ADR 文档随实现卡一并 commit（用户选项）。后续 DC-216-1→META-57→58→DC-216-2→59→56→60→独立 DROP ADR。
+
+---
+
+## [DC-216-1-20260627] videoRefAppliedSql 谓词契约（ADR-216 D-216-9 / SEQ-20260627-01）
+- **完成时间**：2026-06-27
+- **记录时间**：2026-06-27 22:40
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无新调用（谓词契约决策由 ADR-216 `arch-reviewer`(claude-opus-4-8) 两轮裁定背书 D-216-2/D-216-9）
+- **内容**：定义 video 级「外部条目是否已落地绑定」谓词单一真源——`videoRefAppliedSql`(SQL EXISTS 谓词)/`isVideoRefApplied`(JS 判定)/`VIDEO_REF_APPLIED_MATCH_STATUSES`(共享阈值)。阈值含 `auto_matched`（等价旧 `douban_status='matched'`）、强制 `is_primary`（Codex r2 C-1 invariant，实测 0 边角）。明确与 `METADATA_STATUS_JOIN_SQL` overall（catalog-first 运营优先级）的语义边界，**禁混用**（避免 B-1 范畴错误：catalog auto-consensus 保守判 candidate 误降级 auto 匹配行）。
+- **修改文件**：
+  - `apps/api/src/db/queries/video-ref-applied.ts`（新增）— 谓词常量 + SQL/JS 双侧，复用 `@/types` 的 `ExternalRefProvider`/`ExternalRefMatchStatus`（不造第三套类型域）
+  - `tests/unit/api/video-ref-applied.test.ts`（新增）— 10 测：阈值/子集/is_primary 强制/JS↔SQL 同源/SQL 结构/真值表
+- **新增依赖**：无
+- **数据库变更**：无（谓词引用 041 既有列 video_id/provider/is_primary/match_status）
+- **门禁**：typecheck=0 / lint=0 / test:changed=10 passed / verify:adr-contracts exit=0（新文件无违规，SQL 列对齐 schema）。
+- **注意事项**：契约层，不迁移消费方（META-58）/ 不改 enrich（META-57）。解锁 META-57（守卫复用 `isVideoRefApplied`）+ META-58（消费方迁 `videoRefAppliedSql`）。

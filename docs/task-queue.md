@@ -3241,3 +3241,64 @@
    - 创建时间：2026-06-24 23:55
    - 完成时间：2026-06-24 23:55
    - 验收要点：README §1/§2/§4 过期项修正；活区零真实断链确认；归档判定无候选（本轮零 git mv）；verify:docs-format 无新增问题。完成备注见 changelog [CHORE-DOCS-CLEANUP-20260624]。
+
+---
+
+## [SEQ-20260627-01] META — per-video 状态列与 video_external_refs 口径漂移根治
+
+- **状态**：🔄 执行中（META-55-ADR ✅ ADR-216 Accepted·待用户裁可解锁 DC-216-1；用户 2026-06-27「通过方案，开始执行」）
+- **创建时间**：2026-06-27 21:30 ｜ **最后更新时间**：2026-06-27 22:11
+- **来源**：用户报「`videos.douban_status=matched` 137 条 vs refs `douban auto_matched` 198；`bangumi` 241 vs 277；且 TMDB 无 `tmdb_status` 列」。本卡为根因诊断后的立案（诊断证据见下，已实库只读核验，未改任何数据）。
+- **目标**：消除 per-video 状态列（`videos.{douban,bangumi}_status`，migration 032/082）与 `video_external_refs` / `catalog_external_refs`（ADR-177/ADR-201 canonical）之间的**双真源漂移**；即时矫正存量错列；从源头阻止新漂移；对齐四源（douban/bangumi/tmdb/imdb）状态口径。
+
+### 根因诊断（实库只读核验，2026-06-27）
+
+口径漂移分三类、性质不同，**不可一刀切**：
+
+1. **douban 真漂移（数据正确性，需矫正）**：douban 列分布 matched=137 / candidate=180 / pending=29 / unmatched=6347；douban applied ref（`auto_matched`+`manual_confirmed`）共 200 条、**live video 199 条**。交叉核验：
+   - status=matched 137 条 ⇒ 100% 有 applied ref + catalog `douban_id`（**这部分一致**）；
+   - **60 条 live video 持有 `is_primary=true` 的 applied douban ref（`meta_score` 80–100、`enriched_at` 非空、catalog_id 存在）却 `douban_status='unmatched'`**（另 2 条 candidate）。这 60 条即「198 vs 137」差额主体。
+   - 写入来源：漂移行 ref `linked_by=auto/method=network`（58）+ `moderator/manual`（2）；且 **60/60 均 `ref.linked_at ≤ enriched_at`** —— ref 先写好，之后 MetadataEnrichService 又跑了一遍、按**自身独立判据**判为「未匹配」把列覆写成 `unmatched`。
+   - **根因**：identity/refs 子系统（ADR-177：blockingRecall/offlineRescore/rollup）与 MetadataEnrichService/DoubanService 列写入是**两套非事务耦合、判据不一致**的状态机；ADR-201 已把 refs 定为派生 canonical、把状态列降为 fallback，但**未回填存量、未冻结列的直接消费**，列遂滞后说谎。
+2. **bangumi 假漂移（无真漂移，仅卫生）**：bangumi(anime) 列 matched=241 / candidate=45 / unmatched=490；`bangumi auto_matched` ref 277 条 = **live 241（全部 `bangumi_status=matched`，100% 一致）+ 36 条挂在软删除 anime 视频上**。`video_external_refs` 对 `videos` 是 `ON DELETE CASCADE`，但**软删（`deleted_at` 置位）不触发 CASCADE**，故残留。「277 vs 241」差额=36 软删残留，非 live 漂移。douban 同样有 1 条软删残留。
+3. **tmdb 无状态列（结构正解，反证）**：tmdb 无 `tmdb_status` 列，却有 `auto_matched` ref 1260 + catalog exact 564。tmdb/imdb **单一 refs 真源 → 结构上不可漂移**，恰是目标范式；douban/bangumi 的「列 + refs 双真源」才是漂移病灶。（注：ADR-201 derive 注释「tmdb/imdb 无 refs 写入路径」已与现状不符——实有 1260 tmdb ref，注释待校。）
+
+**受影响的直接列消费方**（绕过 derive、直接 `WHERE douban_status/bangumi_status`，会因列滞后而漏算 ~60 douban 视频）：`moderation.ts:111`(`ENRICH_COMPLETE_SQL`)/`:216`、`staging.ts:167`/`:317`、`videos.ts:434`/`:644`/`:660`、`videos.status.ts:180`（待审列表筛选）。`metadata-status.derive.ts` 路径因 refs 优先已自动规避漂移（但 derive 与直接列消费并存=口径不一致）。
+
+### 范围 / 不做
+
+- **做**：①「单一真源」方向决策（ADR-216）；② 存量矫正（列←refs/catalog 回填，止血）；③ 源头防复发（enrich 不得在已有 applied ref 时把列写 `unmatched` / 判据统一 / 事务耦合）；④ 直接列消费方迁到 refs 派生谓词、冻结列作为可查询真源；⑤ 软删 ref 卫生（purge/tombstone）。
+- **不做**：本序列不新增任何外部抓取/匹配能力；不改 derive 的 refs-canonical 既定优先级（ADR-201）；不在 ADR 定向前物理 DROP 列。
+
+### 依赖与原子化
+
+- ADR-216 **先行硬前置**。跨 schema·script·service·多消费方查询 + **两谓词语义契约** → **强制拆卡 + 拆 2 张设计卡**（DC-216-1/DC-216-2，CLAUDE.md 强制升 Opus 情形 1「定义共享谓词契约」）。**串行主链（两轮对抗审定稿，详见 ADR-216 实施序列）**：`55-ADR → DC-216-1 谓词契约 → 57-ENRICH 守卫 → 58-CONSUMER 迁移〔迁 videoRefAppliedSql〕→ DC-216-2 软删处置表 → 59-REF 软删读期过滤 → 56-DROP-prep → 60-完全停写+冻结守卫 → 独立 DROP ADR`。**关键裁定（D-216-2，Codex B-1 推翻初裁后改裁）**：derive overall 是 **catalog-first**（catalog candidate 拦截 video auto_matched，实测 60 漂移行仅 34 applied/28 candidate），故消费方**不能迁 overall**、须迁 **video-ref-applied 谓词**（含 auto_matched，等价旧 matched）→ 60 行真止血、无 14 行降级。
+
+### 任务列表（按执行顺序）
+
+| 卡 | 状态 | 内容 | 范围项 | 建议模型 | 依赖 | 门禁 |
+|---|---|---|---|---|---|---|
+| **META-55-ADR** | ✅ 完成（待用户裁可解锁实现） | 起草定稿 ADR-216。arch-reviewer 两轮裁定（初裁 + 复议收回承重错误）+ Codex **两轮**对抗审（round-1 4B+3C / round-2 1B+3C+1NIT）全数吸收；方向 A 变体 Accepted、两谓词分工收口契约定稿、强制拆 DC-216-1/DC-216-2。 | docs | **opus**（主循环）+ `arch-reviewer`(opus)×2 + codex-rescue×2 | 无 | ✅ ADR Accepted；arch-reviewer 两轮 PASS；Codex 两轮 BLOCK 全处理；不写实现代码。**待用户裁可解锁 DC-216-1。** |
+| **DC-216-1-PREDICATE** | ✅ 完成 | **谓词语义契约（Opus·57+58 共同前置，D-216-9）**：定义 `videoRefAppliedSql` 导出常量（`EXISTS … is_primary AND match_status IN('auto_matched','manual_confirmed')`，阈值含 auto 写死=等价旧 matched）；明确两谓词边界（video-ref-applied=是否匹配/发布门禁/富集完成；catalog-overall=元数据状态列排序/工作队列，**不混用**）；JS↔SQL 对拍单测义务登记。**`is_primary` invariant（Codex r2 C-1）**：实测 0 边角但 041 无 schema 约束，须裁定谓词是否强制 is_primary + 约束测试守护。 | 契约 + 导出常量 + 测试 ≤3 | **opus**（共享谓词契约） | META-55-ADR Accepted | 谓词常量单一真源；两谓词边界文档化；对拍单测；is_primary invariant 约束测试；无第三套判据。 |
+| **META-57-ENRICH-GUARD** | ⬜ 待开始 | **根因守卫·非完全停写（D-216-3，B-2 吸收）**：enrich 写列前一致性守卫——已存在 applied video ref（同 `videoRefAppliedSql` 判据）时**不得覆写列为 unmatched**；列仍随 refs 演进（不冻结、无 stale 暴露）。MetadataEnrichService（:94/:183）/DoubanService（:263/:468）/BangumiService 同构。**完全停写并入 META-60**。 | service/queries/tests ≤4 | **opus**（enrich 匹配决策逻辑） | DC-216-1 | 单测：已有 applied ref 时 enrich 不覆写 unmatched；真未命中仍写；守卫判据=DC-216-1 同源；关键路径回归。 |
+| **META-58-CONSUMER-MIGRATE** | ⬜ 待开始 | **A 核心交付·迁移即止血（D-216-2）**：消费方改读 **`videoRefAppliedSql`**（非 overall）。**全清单**（C-1 扩展）：moderation.ts:111`ENRICH_COMPLETE_SQL`〔两口径整体换〕/:216、staging.ts:167/317、videos.ts:434/644/660、videos.status.ts:180、`datatable/distinct-whitelist.ts`、`routes/admin/videos.ts` query schema、server-next URL serialization/隐藏列/moderation 过滤 UI。**并入**：补 `idx_video_external_refs_video_provider_status` 索引（D-216-7）+ moderation/videos COUNT EXPLAIN 基线 + derive 头注校正（D-216-8）+ 改测试口径（C-3：admin-video-list/backfill-enrich/moderation-pending/VideoColumns）。 | queries/service/index/UI/tests ≤5（多消费方逐一对拍·或再拆 A/B） | **opus**（跨切口查询语义变更） | META-57 | 60 douban 欠计消除（迁 video-ref 谓词真止血、无 14 行降级）；各消费方口径一致；列表计数回归；不破坏 API 路径；JS↔SQL 守护；EXPLAIN 无热路径回归。 |
+| **DC-216-2-SOFTDEL-TABLE** | ⬜ 待开始 | **refs 读路径软删处置表（D-216-9，META-59 清单）**：三类逐路径裁定落表（类 A 必过滤含 derive 8 子查询+getMetadataProviderRefs / 类 B 单 video_id 直查不改 externalData·externalIdLoader·split-suggestions / 类 C 须改 home-autofill **douban+bangumi** gap + external-resources-stats / 待确认 video-merge-candidates 外层 gate）。**门禁=穷举全仓 `grep video_external_refs`，不止 ADR 现列**（Codex r2 B-1/C-3）。见 ADR-216「软删处置表」。 | docs/checklist ≤2 | sonnet | META-55-ADR Accepted | 处置表穷举全部 refs 读路径；类 A/C 改法明确；bangumi gap 纳入；external-resources-stats 基线变更注明。 |
+| **META-59-REF-HYGIENE** | ⬜ 待开始 | **软删纯读期过滤（D-216-4，零 schema·收回 tombstone，B-3 吸收）**：按 DC-216-2 处置表只改类 A/C——refs 读路径 JOIN videos 加 `deleted_at IS NULL`（derive 8 子查询 + getMetadataProviderRefs + home-autofill gap + external-resources-stats）；类 B 不动。恢复天然无损（refs 物理不动）。 | service/queries/tests ≤4 | sonnet | DC-216-2（可与 58 并行） | bangumi 36/douban 1 假漂移读期消除；external-resources-stats 统计转 live 口径（changelog 注明）；类 B 不误改；恢复软删 video 无损。 |
+| **META-56-DROP-PREP** | ⬜ 待开始 | **DROP-prep 对齐（非止血前置，D-216-2）**：DROP 列前一次性把列值对齐 refs（幂等、`--dry-run` + 参数化批写）。**方向与 `fix-douban-status-consistency.ts` 相反**（那脚本修「matched 虚标无 catalog」，本卡修「applied-ref 但 unmatched 列欠计」）。映射与 `videoRefAppliedSql` 同口径。 | scripts/tests ≤3 | sonnet | META-57 + META-58（迁移止血后，回填仅 DROP 卫生） | dry-run 圈定数对账；实跑后诊断漂移归零；幂等二次 0 变更；不触软删/已一致行。 |
+| **META-60-FREEZE-GUARD** | ⬜ 待开始 | **完全停写 + 列冻结守卫（D-216-1/D-216-3/D-216-5）**：读路径全迁后 enrich 完全停写列；CI/lint 守卫禁**运行时代码/新测试**读写 `{douban,bangumi}_status`（**非字面全仓 grep**，C-2：历史 migration/类型注释天然保留）；登记独立 **DROP ADR**（软泡期 ≥1 完整 enrich 周期 + 观察后 Opus ADR：DROP 列 + architecture.md 同步 + 同 commit 删 `statusColumnState`/SQL status 分支/`MetadataStatusSourceRow.{douban,bangumi}Status`）。 | lint/CI/service/docs ≤4 | sonnet（DROP ADR 另起 opus 卡） | 守卫命中运行时新增列读写即失败；完全停写后无 stale 暴露；DROP ADR 起草卡登记。 |
+
+### 关键约束与红线
+
+- **方向先行 + 契约先行**：ADR-216 未 Accepted 前不得动消费方/列/enrich；DC-216-1 谓词契约未定不得起 META-57/58（二者共用 `videoRefAppliedSql`）。
+- **两谓词不混用（D-216-2 核心）**：`videoRefAppliedSql`（video 级 applied）服务「是否匹配/发布门禁」；`METADATA_STATUS_JOIN_SQL` overall（catalog-first）服务「元数据状态列排序/工作队列」。**禁用 overall 回答「是否匹配」**（B-1 暴露的范畴错误：catalog candidate 会误降级 auto 匹配行）。
+- **口径同源**：DROP-prep 映射、ENRICH 守卫判据、CONSUMER 迁移谓词三者必须 = DC-216-1 的 `videoRefAppliedSql`，禁止再造判据。
+- **迁移即止血（D-216-2 修正后）**：迁 **video-ref-applied 谓词**（非 overall）才止血；META-56 回填仅服务 DROP 卫生，不阻塞 58。
+- **软删纯读期（D-216-4，收回 tombstone）**：零 schema 变更，refs 读路径按处置表 join `videos.deleted_at`；恢复无损；**禁物理 purge / 禁加 refs.deleted_at**。
+- **DROP 不在 ADR-216 拍板**：走 META-60 登记的独立 Opus ADR，前置软泡期 + architecture.md 同步 + 运行时代码零残留 + JS↔SQL status 分支同 commit 删。
+- **非代码产物门禁**：本任务卡 + ADR-216 修订稿 commit 前须过 Codex round-2 对抗审（workflow-rules「Codex 对抗性独立审核条款」；round-1 4 BLOCKER 已吸收）。
+
+### 合并 Gate
+
+- 每张实现卡跑 `npm run typecheck` / `lint` / 相关单测或 `test:changed` / `verify:adr-contracts`；矫正脚本卡补「实跑前 dry-run 对账 + 实跑后诊断复核漂移归零」。
+- ADMIN/VIDEO 触达卡（58）补对应 e2e；Phase complete 前全量单测 + `test:e2e`。
+- schema 变更（若 ADR 选 DROP/deprecate 列）必须同步 `docs/architecture.md`。
