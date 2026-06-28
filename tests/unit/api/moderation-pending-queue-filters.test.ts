@@ -43,12 +43,15 @@ describe('listPendingQueue — year/decade/enrichmentStatus 过滤（MODUX-P3-1-
     expect(main.params).toContain(2030)
   })
 
-  it("enrichmentStatus=complete → 派生片段（enriched_at NOT NULL + douban matched/bangumi）", async () => {
+  it("enrichmentStatus=complete → 派生片段（enriched_at NOT NULL + douban applied ref/bangumi）", async () => {
     const calls: Call[] = []
     await listPendingQueue(makeMockDb(calls), { enrichmentStatus: 'complete' }, 'actor')
     const sql = mainOf(calls).sql
     expect(sql).toContain("meta_quality->>'enriched_at') IS NOT NULL")
-    expect(sql).toContain("v.douban_status = 'matched'")
+    // META-58-A / ADR-216 D-216-2：douban「已富集」从 douban_status 列迁 video-ref-applied 谓词
+    expect(sql).toContain("ver.provider = 'douban'")
+    expect(sql).toContain("ver.match_status IN ('auto_matched', 'manual_confirmed')")
+    expect(sql).not.toContain("v.douban_status = 'matched'")
     expect(sql).toContain('mc.bangumi_subject_id IS NOT NULL')
   })
 

@@ -6,6 +6,8 @@
 
 import type { Pool } from 'pg'
 import type { VideoType } from '@/types'
+// META-58-A / ADR-216 D-216-2：requireDoubanMatched 就绪判定迁 video-ref-applied 谓词（非 douban_status 列）。
+import { videoRefAppliedSql } from './video-ref-applied'
 
 // ── 类型 ─────────────────────────────────────────────────────────
 
@@ -143,6 +145,7 @@ export async function listStagingVideos(
       SELECT
         v.id, v.short_id, v.slug, v.title, v.type, v.site_key,
         v.douban_status, v.source_check_status, v.meta_score,
+        ${videoRefAppliedSql('douban', 'v')} AS douban_applied,
         v.reviewed_at, v.updated_at,
         mc.title_en, mc.cover_url, mc.year,
         (SELECT COUNT(*)::text FROM video_sources vs
@@ -164,7 +167,7 @@ export async function listStagingVideos(
           WHEN active_source_count::int = 0 OR source_check_status = 'all_dead' THEN 'blocked'
           WHEN active_source_count::int >= $${minSourcesIdx}
                AND meta_score >= $${minScoreIdx}
-               AND ($${reqDoubanIdx}::boolean = false OR douban_status = 'matched')
+               AND ($${reqDoubanIdx}::boolean = false OR douban_applied)
                AND ($${reqCoverIdx}::boolean = false OR cover_url IS NOT NULL)
                AND source_check_status != 'all_dead'
           THEN 'ready'
@@ -314,7 +317,7 @@ export async function listReadyStagingVideoIds(
   let idx = 3
 
   if (rules.requireDoubanMatched) {
-    conditions.push(`v.douban_status = 'matched'`)
+    conditions.push(videoRefAppliedSql('douban', 'v'))
   }
   if (rules.requireCoverUrl) {
     conditions.push(`mc.cover_url IS NOT NULL`)

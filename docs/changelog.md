@@ -3219,3 +3219,21 @@
 - **数据库变更**：无（复用 video_external_refs 既有 primary ref 查询）
 - **门禁**：typecheck=0 / lint=0 / test:changed=30 文件 505 passed（含 metadataEnrich/bangumi-service 既有测试**零回归**——守卫复用已 mock 的 findPrimaryVideoExternalRef）/ verify:adr-contracts exit=0。
 - **注意事项**：守卫只防**新**覆写、不主动修既有 60 stale（下次 enrich 自纠 / 止血靠 META-58 消费方迁 video-ref 谓词 + META-56 DROP-prep 回填）。完全停写 + 列冻结留 META-60。
+
+---
+
+## [META-58-A-20260628] boolean applied 消费方迁移：moderation/staging 就绪判定（ADR-216 D-216-2 / SEQ-20260627-01）
+- **完成时间**：2026-06-28
+- **记录时间**：2026-06-28 00:46
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（迁移判据 = DC-216-1 `videoRefAppliedSql` 单一真源）
+- **内容**：把「是否匹配/发布门禁/富集完成」boolean 用途的 douban 判定从 `douban_status='matched'` 列迁到 `videoRefAppliedSql('douban','v')`（video 级 applied EXISTS）→ **那 60 漂移行（持 applied ref 但列 unmatched）在 moderation enrichmentStatus=complete + staging readiness/requireDoubanMatched 上止血**（现算 applied/complete/ready，无 14 行降级）。
+- **实现期拆卡发现（契约 gap）**：`douban_status`/`bangumi_status` 消费方分两类——boolean applied（本卡）与**多值过滤**（审核台/视频库 4 态下拉：moderation:216 / videos:434/437 / videos.status:180）。后者需 **video 级 per-state 谓词（candidate/missing/pending）**，超 DC-216-1（只定义 applied boolean）→ 拆 **META-58-B**（需 arch-reviewer 裁定契约扩展）。`videos` backfill 的 `unmatched` 态（≠ NOT applied）亦归 58-B。索引 `idx_video_external_refs_video_provider_status` 随 58-B（避免本卡 architecture.md 同步范围扩张）。
+- **修改文件**：
+  - `apps/api/src/db/queries/moderation.ts` — `ENRICH_COMPLETE_SQL` douban 部分迁 `videoRefAppliedSql`（bangumi 保留 catalog cache `bangumi_subject_id`，不读列、不阻退役）+ 注释
+  - `apps/api/src/db/queries/staging.ts` — base CTE 加 `douban_applied` 投影列 + classified readiness 用之（替 `douban_status='matched'`）+ requireDoubanMatched 迁谓词
+  - `tests/unit/api/moderation-pending-queue-filters.test.ts` — enrichmentStatus=complete 断言口径更新（C-3：douban_status 列 → video-ref applied 谓词）
+- **新增依赖**：无
+- **数据库变更**：无（videoRefAppliedSql EXISTS 引用 041 既有列）
+- **门禁**：typecheck=0 / lint=0 / test:changed=22 文件 250 passed（staging 既有测试零回归）/ verify:adr-contracts exit=0（SQL 列对齐）。
+- **注意事项**：staging 输出仍含 `douban_status` 展示列（前端状态展示，非过滤判定，退役留后续）；多值过滤 + backfill unmatched 态 + 索引归 META-58-B（前置 arch-reviewer video 级 4 态谓词契约）。

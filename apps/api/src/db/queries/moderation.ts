@@ -9,6 +9,9 @@ import { deriveAggregateState } from '@resovo/types'
 import type { DoubanStatus, BangumiStatus, SourceCheckStatus, VideoMetaQuality, EnrichmentStatus } from '@resovo/types'
 // META-12-A / ADR-170 AMENDMENT：复用 admin 路径同一投影逻辑（单一真源，禁止异源重复实现）
 import { buildEnrichmentSummary } from './videos.internal'
+// META-58-A / ADR-216 D-216-2：「已富集 douban」判定迁 video-ref-applied 谓词（非 douban_status 列），
+// 止血 60 漂移行（持 applied ref 但列 unmatched）。
+import { videoRefAppliedSql } from './video-ref-applied'
 
 export interface ModerationHistoryRow {
   id: string
@@ -106,9 +109,10 @@ export interface PendingQueueFilters {
 
 // MODUX-P3-1-B：富集状态派生 SQL 片段（真源语义 = admin-moderation.types.ts ENRICHMENT_STATUSES /
 //   docs/architecture.md §5.12）。**零用户输入零注入**（固定字符串，枚举值由 z.enum 上游校验）。
-//   raw：videos.meta_quality->>'enriched_at' / videos.douban_status / media_catalog.bangumi_subject_id /
+//   raw：videos.meta_quality->>'enriched_at' / video_external_refs(douban applied，via videoRefAppliedSql，
+//        ADR-216 D-216-2，替代旧 videos.douban_status='matched') / media_catalog.bangumi_subject_id /
 //        media_catalog.douban_id·tmdb_id·imdb_id。partial = NOT complete AND NOT missing（互斥穷尽）。
-const ENRICH_COMPLETE_SQL = `((v.meta_quality->>'enriched_at') IS NOT NULL AND (v.douban_status = 'matched' OR mc.bangumi_subject_id IS NOT NULL))`
+const ENRICH_COMPLETE_SQL = `((v.meta_quality->>'enriched_at') IS NOT NULL AND (${videoRefAppliedSql('douban', 'v')} OR mc.bangumi_subject_id IS NOT NULL))`
 const ENRICH_MISSING_SQL = `((v.meta_quality->>'enriched_at') IS NULL AND mc.douban_id IS NULL AND mc.tmdb_id IS NULL AND mc.imdb_id IS NULL AND mc.bangumi_subject_id IS NULL)`
 const ENRICHMENT_STATUS_SQL: Record<EnrichmentStatus, string> = {
   complete: ENRICH_COMPLETE_SQL,

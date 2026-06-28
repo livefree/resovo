@@ -53,7 +53,7 @@ _（**🎉 卡片尺寸体系全交付合并 main `01b32abf`（2026-06-24）**�
 
 ---
 
-_（**当前无 🔄 进行中卡片。SEQ-20260627-01 进行中**：META-55-ADR ✅ → DC-216-1 ✅〔commit 92aa118f〕→ META-57 ✅〔enrich 守卫，commit 待〕。下一卡 **META-58**（消费方迁 `videoRefAppliedSql`，A 核心交付·迁移即止血；含 C-1 扩展消费方 + 索引 + EXPLAIN 基线 + C-3 测试口径）。取卡前先查 🚨 BLOCKER。）_
+_（**当前无 🔄 进行中卡片。SEQ-20260627-01 进行中**：META-55-ADR ✅ → DC-216-1 ✅〔92aa118f〕→ META-57 ✅〔4b443649〕→ META-58-A ✅〔boolean applied 止血，commit 待〕。**下一卡 META-58-B 需前置 arch-reviewer**：实现期发现多值过滤（审核台/视频库 4 态下拉）超 DC-216-1（只 applied boolean），须 arch-reviewer 裁定 video 级 per-state 谓词契约扩展（candidate/missing/pending）再迁。取卡前先查 🚨 BLOCKER。）_
 
 ---
 
