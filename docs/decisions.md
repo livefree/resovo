@@ -13872,6 +13872,23 @@ export type TableColumn<T> = DataKindColumn<T> | ActionKindColumn<T> | MediaKind
 
 ---
 
+## ADR-150 AMENDMENT 4 — distinct 白名单移除 videos.douban_status（退役收尾 / ADR-216 D-216-12·B-2 / 2026-06-28）
+
+> Status: 🟢 Accepted（主循环 claude-opus-4-8 实施 + codex-rescue 对抗审；退役收尾非新架构决策——facet 选项早已静态枚举，本 AMENDMENT 仅移除死配置白名单键 + 防列 DROP 后误查）。
+
+**背景**：ADR-216 退役 `videos.douban_status` 列（过滤侧已迁 video 级谓词，META-58-B-1）。distinct 端点白名单 `DT_DISTINCT_COLUMN_SQL.videos.douban_status`（CHG-VSR-2 / AMENDMENT 3 加）声称为豆瓣状态 facet 数据源。
+
+**事实修正（修订 D-216-12 假设）**：arch-reviewer 第三轮 D-216-12 列 B-2 为「facet 改静态枚举」，前提是 facet 当前**动态**查 distinct 端点——经查**不成立**：前端 `VideoColumns.tsx:504` douban_status filter 用静态 `filterOptions: DOUBAN_STATUS_OPTIONS`（= `DOUBAN_STATUSES.map(...)`，4 态闭集）。admin-ui DataTable 列走 distinct 端点的**充要条件是声明 `filterDistinctTable`**（如 country 列 `filterDistinctTable: 'media_catalog'`，VideoColumns.tsx:450 / Codex 实证 EnumFilter 分支）——douban_status 列**从未声明** `filterDistinctTable`、仅有静态 `filterOptions`，故**从来不可能**触发 `distinctFetcher`，facet **早已静态**；全仓零 `/distinct?table=videos&column=douban_status` 调用。distinct 白名单 `videos.douban_status` 键自 CHG-VSR-2 起即为**死配置**。
+
+**决策**：
+- 移除 `DT_DISTINCT_COLUMN_SQL.videos.douban_status` 键（`distinct-whitelist.ts`）。`videos` 表仍保 `type` / `source_check_status` / `bangumi_status` 白名单列（满足「每表 ≥1 列」约束）。
+- **bangumi_status 白名单键保留**（D-216-11：bangumi_status 列暂留）。注：bangumi distinct 键**此刻亦已是死配置**（`BANGUMI_STATUS_OPTIONS` 同为静态 4 态枚举、列亦未声明 `filterDistinctTable`），保留非因其有用，仅因本卡 ADR-216 范围只限 douban——随 META-61 bangumi 退役时一并清理。
+- `datatable-shared.test.ts` 断言同步（douban_status `toBe` → `toBeUndefined` 守护移除，保留 bangumi_status/country）。
+
+**零回归依据**：前端 douban_status facet 用静态 `DOUBAN_STATUS_OPTIONS`（不变）；distinct 端点零 douban_status 调用；移除后该列自然落入 `COLUMN_NOT_WHITELISTED` 403（distinct 端点对退役列正确拒绝）。§端点契约表为表级粒度（「7 表白名单」+ col 运行时 lookup，不列级枚举），无需同步。**纯死配置移除，无前端/API 行为变更。**
+
+---
+
 ## ADR-151 — task 级 cancel 端点协议（CHG-SN-9-CW1-B-ADR / Bug-A 修复）
 
 > **Status**: 🟢 Accepted（2026-05-25 / arch-reviewer Opus A− CONDITIONAL → 主循环修订 R3+Y3+G1 后等同 A / 详见末段评审结论）

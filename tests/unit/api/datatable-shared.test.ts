@@ -79,10 +79,14 @@ describe('distinct-whitelist (ADR-150 D-150-3)', () => {
     expect(DT_DISTINCT_TABLES).toContain('media_catalog')
   })
 
-  it('CHG-VSR-2 新 distinct 列：videos.douban_status/bangumi_status + media_catalog.country', () => {
-    expect(DT_DISTINCT_COLUMN_SQL.videos.douban_status).toBe('videos.douban_status')
+  // douban_status 退役移除（ADR-216 D-216-12 / ADR-150 AMENDMENT 4），bangumi/country 保留
+  it('distinct 列：videos.bangumi_status + media_catalog.country（douban_status 退役移除）', () => {
     expect(DT_DISTINCT_COLUMN_SQL.videos.bangumi_status).toBe('videos.bangumi_status')
     expect(DT_DISTINCT_COLUMN_SQL.media_catalog.country).toBe('media_catalog.country')
+    // douban_status 列退役：distinct 白名单键移除（facet 用静态 DOUBAN_STATUS_OPTIONS，原键为死配置）
+    expect(DT_DISTINCT_COLUMN_SQL.videos.douban_status).toBeUndefined()
+    // bangumi_status 暂留（D-216-11，退役随 META-61）
+    expect(DT_DISTINCT_COLUMN_SQL.videos.bangumi_status).toBeDefined()
   })
 
   it('DT_DISTINCT_COLUMN_SQL 每表至少 1 列', () => {

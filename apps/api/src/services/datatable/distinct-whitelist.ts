@@ -56,8 +56,9 @@ export const DT_DISTINCT_COLUMN_SQL: Record<DtDistinctTable, Record<string, stri
   videos: {
     type: 'videos.type',
     source_check_status: 'videos.source_check_status',
-    // CHG-VSR-2（§2.6）：豆瓣 / Bangumi 匹配状态 facet（均在 videos 表，无跨表）
-    douban_status: 'videos.douban_status',
+    // douban_status 已移除（ADR-216 D-216-12 / ADR-150 AMENDMENT 4）——douban_status 列退役，
+    // 前端 facet 用静态 DOUBAN_STATUS_OPTIONS（列未声明 filterDistinctTable、不走 distinct 端点），此键为死配置。
+    // bangumi_status 暂留（D-216-11：bangumi 列退役随 META-61，其 distinct 键同为死配置但列未退役）。
     bangumi_status: 'videos.bangumi_status',
   },
   // CHG-VSR-2（D-150-VSR2-1）：country 在 media_catalog（mc.country），逻辑名=实表名，无需 DT_DISTINCT_FROM 映射

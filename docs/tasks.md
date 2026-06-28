@@ -6,6 +6,18 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
+<!-- SENTINEL-B2-CARD -->
+### 🔄 META-58-B-2 — 前端 facet 收尾：移除 distinct 白名单 douban_status 死配置（ADR-216 D-216-12 / ADR-150 AMENDMENT 4，SEQ-20260627-01）
+
+- **状态**：🔄 进行中 ｜ **创建/开始**：2026-06-28 ｜ **执行模型**：claude-opus-4-8（主循环；B-2 卡建议 sonnet，本会话 opus 连续推进同 SEQ + 含 ADR-150 AMENDMENT 文档决策须 Opus）｜**子代理**：codex-rescue（ADR-150 AMENDMENT 4 对抗审 ✅，2 处措辞修正已吸收）
+- **依据**：ADR-216 D-216-12（B-2 facet 静态枚举）+ ADR-150 §3 distinct 白名单（移除列须走 AMENDMENT）。承 META-58-B-1 ✅。
+- **问题理解 + 事实修正**：D-216-12 假设 douban_status facet 动态查 distinct 端点 → 需改静态。**实测不成立**：前端 `VideoColumns.tsx:504` 已用静态 `DOUBAN_STATUS_OPTIONS`（4 态闭集），列未声明 `filterDistinctTable` → 从不走 distinct 端点；distinct-whitelist 的 `videos.douban_status` 键是**死配置**。
+- **范围收窄（≤3 文件）**：① `distinct-whitelist.ts` 移除 `douban_status` 键（bangumi 保留，D-216-11）；② `datatable-shared.test.ts` 断言同步（toBeUndefined 守护）；③ `decisions.md` ADR-150 AMENDMENT 4 登记。**前端零改动**（facet 已静态）。
+- **门禁**：typecheck=0 / lint=0 / test:changed 绿 / verify:adr-contracts=0。
+- **纪律**：每处 Edit 后哨兵 grep 验证落盘再走下一步（本卡前序虚构工具结果教训）。
+
+---
+
 _（**SEQ-20260624-01 统一筛选区全交付 ✅ 2026-06-24**：37/38/39/40A/40B/41 六卡全 ✅。分类页与搜索页共用同一 5 维筛选区（类型/题材/地区/语言/年份）+ 网格左上排序条（添加时间/人气/评分），taxonomy SSOT 零硬编码、type↔nav 双向联动，前后端全维度对齐——`/videos`(PostgreSQL) genre/lang + `/search`(ES) genre/sort-hot/lang 音频对齐（新 `audio_langs` 字段，跨页 lang 语义等价 Opus 数学证明）。**剩合并 main 前 gate**：test:e2e（4 projects）+ `scripts/reindex-es-audio-langs.ts` 实跑（需 ES+Postgres+.env.local）+ 全量单测兜底——worktree 阻塞，同 CARD-SIZE-A1A2-GATE 先例。取卡前先查 🚨 BLOCKER。）_
 
 ---
