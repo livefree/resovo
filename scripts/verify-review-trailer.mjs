@@ -17,8 +17,8 @@
  *   - packages/admin-ui/src/**\/*.tsx 内 `interface/type *Props` 块的字段增删改（含声明变更 / 整文件增删）
  *
  * 判据：上述 commit 的 message 必须含以下任一 trailer：
- *   - `Subagents:` 值含 `arch-reviewer`
- *   - `Review:` 值为实际 `PASS`（非 PASS / FAIL / BLOCK / pending / n-a 一律不计）
+ *   - `Subagents:` 值含 `arch-reviewer` 且为 Opus（`arch-reviewer (claude-opus-...)`；CLAUDE.md §绝对禁止 + workflow-rules §共享组件 API 强制 Opus）
+ *   - `Review:` 值为实际 `PASS`（arch-reviewer/Opus 的 PASS 记录；非 PASS / FAIL / BLOCK / pending / n-a 一律不计）
  *
  * 用法：
  *   node scripts/verify-review-trailer.mjs                      # 核验 HEAD 单个 commit
@@ -137,15 +137,24 @@ function reviewReasons(sha, files) {
   return reasons
 }
 
-/** trailer 判据：Subagents 含 arch-reviewer，或 Review 为实际 PASS（非 PASS/FAIL/BLOCK/pending/n-a 一律不计） */
+/** trailer 判据：Subagents 含 arch-reviewer 且为 Opus（CLAUDE.md §绝对禁止 + workflow-rules §共享组件 API：
+ *  必须 `arch-reviewer (claude-opus-...)`，非 Opus 的 arch-reviewer 不计），或 Review 为实际 PASS
+ *  （arch-reviewer/Opus 的 PASS 记录；非 PASS / FAIL / BLOCK / pending / n-a 一律不计）。 */
 function trailerSatisfies(body) {
   for (const line of body.split('\n')) {
     const m = line.match(/^([A-Za-z][A-Za-z-]*):\s*(.+)$/)
     if (!m) continue
     const key = m[1].toLowerCase()
     const val = m[2].trim()
-    if (key === 'subagents' && /arch-reviewer/i.test(val)) return true
-    if (key === 'review' && /\bpass\b/i.test(val)) return true
+    if (key === 'subagents') {
+      // 精确取 arch-reviewer 自身括号内的模型再判 Opus，避免与同行其它子代理的模型串扰
+      // （如 `arch-reviewer (claude-sonnet-4-6), doc-janitor (claude-opus-4-8)` 不应放行）
+      const ar = val.match(/arch-reviewer\s*\(([^)]*)\)/i)
+      if (ar && /claude-opus/i.test(ar[1])) return true
+    }
+    // Review 须为 `<hash> PASS`（git-rules）：大写 PASS verdict + hash 形 token 同存；
+    // 小写散文「did not pass」/ 裸 `PASS`（无 hash）/ `pending` / `n/a` 一律不计
+    if (key === 'review' && /\bPASS\b/.test(val) && /\b[0-9a-f]{7,40}\b/i.test(val)) return true
   }
   return false
 }
@@ -181,7 +190,7 @@ function main() {
       console.error(`  ${v.subject}`)
       for (const r of v.reasons) console.error(`      ↳ ${r}`)
     }
-    console.error('\n判据：上述 commit 须含 `Subagents: arch-reviewer (...)` 或 `Review: <hash> PASS` trailer。')
+    console.error('\n判据：上述 commit 须含 `Subagents: arch-reviewer (claude-opus-...)` 或 `Review: <hash> PASS` trailer。')
     console.error('依据：CLAUDE.md §绝对禁止 + §模型路由「强制升 Opus」+ workflow-rules §共享组件 API 改动 Opus trailer 核验。')
     console.error('补救：① 事后 spawn arch-reviewer (Opus) 审 4 维度 → ② git commit --amend 补 trailer（参 workflow-rules §事后追溯路径）。')
     if (opts.strict) process.exit(1)

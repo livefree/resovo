@@ -125,9 +125,11 @@ adr_closure:   YES/NO/NA (N11)  # ADR 验证段勾对 + D-N changelog 闭环（�
 
 ## 6. 协议合规自动核验（CHG-SN-5-CHECKLIST-AUDIT 新增）
 
-针对 M-SN-5 累计 5 次同型号"ADR 明示但 commit 静默跳过"偏离（06-PATCH R-MID-1 / 09-PATCH perf baseline / 10-PATCH response 字段 / 11 整卡 ADR 缺失 / 11-PATCH NEW-P0），引入 3 类自动化脚本 + 4 类文档强制规则。
+针对 M-SN-5 累计 5 次同型号"ADR 明示但 commit 静默跳过"偏离（06-PATCH R-MID-1 / 09-PATCH perf baseline / 10-PATCH response 字段 / 11 整卡 ADR 缺失 / 11-PATCH NEW-P0），引入多类自动化核验脚本（详见下方编号 1–10）+ 4 类文档强制规则。
 
-### 6 类核心脚本（preflight 集成，npm run verify:adr-contracts 聚合）
+### 核心脚本（preflight 集成，npm run verify:adr-contracts 聚合 + 审查 trailer / 文档同步守卫）
+
+> **本节登记范围**：协议合规核验（`verify:adr-contracts` 聚合的 7 成员）+ 审查 trailer（`verify:review-trailer`）+ 脚本-文档同步（`verify:script-doc-sync`）这三组**治理门禁**。其余 `verify:*` 各有归属、不在本节也不在 `verify:script-doc-sync` 的 §6 漂移核验内：① preflight / 专属规范 独立守卫（`verify:docs-format` / `verify:token-isolation` / `verify:token-references` / `verify:server-next-isolation` / `verify:admin-guardrails`（含 `:all` 变体）/ `verify:no-bare-backdrop` / `verify:file-size-budget` / `verify:manual-coverage`，各由其专属规范或 doc-governance 登记，见 `preflight.sh` `[5x/6]`）；② 领域 / 基础设施工具（npm 脚本 `verify:crawler` / `verify:baseline`，及直跑脚本 `scripts/verify-bangumi-token.ts` / `verify-douban-adapter.ts` / `verify-imgh-121.ts` / `verify-env.sh` 等，非协议门禁）。
 
 1. **`npm run verify:endpoint-adr`**（FAIL fast 阻塞 CI）：扫 `apps/api/src/routes/admin/*.ts` 内 `fastify.{get,post,put,patch,delete}` 调用，提取 (method, path)，比对 `docs/decisions.md` 各 ADR §端点契约 markdown table；不在 ADR 表中的 admin 路由 → 失败 + 提示起 ADR 卡（参 ADR-104/-105/-117 模式）；legacy 路由通过 `scripts/lib/admin-routes-allowlist.json` 显式豁免
 
@@ -146,6 +148,12 @@ adr_closure:   YES/NO/NA (N11)  # ADR 验证段勾对 + D-N changelog 闭环（�
 6. **`npm run test:integration`**（CHG-SN-6-INTEGRATION-TEST / RETRO 2/7）：跑真实 PG 子集集成测试（vitest.integration.config.ts），验证 admin route SQL 执行不抛 DatabaseError；与 unit mock 互补；与 verify:sql-schema-alignment 互补（静态扫描 + 真实执行双层）；CI 可独立调度（preflight 不集成；本地按需运行）
 
 7. **`npm run verify:style-shorthand-conflict`**（CHG-SN-6-RETRO-3-B 落地 advisory / CHG-SN-6-RETRO-4 清零 17 处 / **CHG-SN-6-06 升级 FAIL fast**）：静态扫描 `apps/server-next/src` + `apps/web-next/src` + `packages/admin-ui/src` 的 `.tsx` 文件内 `: React.CSSProperties = {...}` / `style={{...}}` 块，检测 9 类 shorthand（`font` / `border` / `background` / `margin` / `padding` / `overflow` / `borderRadius` / `inset` / `flex`）与对应 longhand 同存 → React rerender 警告 "Updating a style property during rerender ... when a conflicting property is set ..."；db3b7a48 + 9e592df3 + 32392a80 + e4417fe5 累计 31 处清零后落地 FAIL fast 防回归；命中即 CI 阻塞，按提示拆 longhand 或改 fontFamily 范式修复
+
+8. **`npm run verify:admin-shell-types-mirror`** + **`npm run verify:enum-ssot`**（均 verify:adr-contracts 成员）：前者核验 `packages/admin-ui` shell types ↔ server-next 双源镜像一致；后者 ADR-157 D-157-4 视频枚举字面量守卫（advisory / baseline 截止 2026-07-26）。
+
+9. **`npm run verify:review-trailer`**（advisory 观察期，`--strict` 升 FAIL fast；CI / pre-push 调用、**非 preflight**——依赖 commit 历史）：commit diff 触及 `docs/decisions.md` 或 `packages/admin-ui/src/**` 公开 Props（types.ts / .tsx `*Props` 块字段，双镜像区间相交、容忍多行声明）却缺 `Subagents: arch-reviewer (claude-opus-...)` 或 `Review: <hash> PASS` trailer → 报违规。为下方「4 类文档强制规则」第 7 项「共享组件 API 改动 Opus trailer」+ CLAUDE.md §绝对禁止补脚本 enforcement（审查规范评估 P0 / 2026-06-27）。
+
+10. **`npm run verify:script-doc-sync`**（advisory，preflight `[5e3/6]`）：以 package.json 为权威，核验 verify:adr-contracts 成员 ↔ 本节枚举 / preflight 枚举漂移 + 文档 stale 引用（审查规范评估 P1b / 2026-06-27）。
 
 **测试分层执行边界（ADR-180 / SEQ-20260604-02）**：日常 commit 前单测门禁为增量 `npm run test:changed`（见 `docs/rules/test-rules.md` §分层执行策略）；`npm run test:guarded`（Phase 隔离清单门禁）与 `npm run preflight` **保持全量语义不变、不接入增量**——guarded 是基线对比，增量漏选会使隔离清单 diff 失真（D-180-6）。全量兜底三节点见 `docs/rules/workflow-rules.md`。
 
@@ -176,7 +184,7 @@ adr_closure:   YES/NO/NA (N11)  # ADR 验证段勾对 + D-N changelog 闭环（�
 | 1 | 视图测试 ≥ 9 用例 / 视图卡 | `apps/server-next/src/app/admin/<view>/_client/*Client.tsx` + `apps/web-next/src/**/*Client.tsx` 对应 `tests/unit/components/<area>/<view>.test.tsx` `it()` 数 ≥ 9 | `verify:view-test-coverage`（M-SN-6 完善后落地，当前手工 grep） | CHG-SN-5-13-PATCH P2-2（沉淀指标）+ CHG-SN-6-RETRO-1（RETROACTIVE 补齐） |
 | 2 | 共享原语占比 ≥ 80% | 新增视图 JSX 节点中 `import from '@resovo/admin-ui'` / 共享 primitives 与 inline `<div>` 比例 ≥ 80% | `verify:primitive-usage-ratio`（M-SN-6 完善后落地，当前手工 review） | CHG-SN-5-12 DataTable 一体化（共享原语试点）|
 | 3 | R-MID-1 audit payload 内容断言 | 所有写操作测试断言 `audit_logs` 行数 + payload 关键字段非空（`expect.objectContaining({actionType, targetKind, targetId, beforeJsonb, afterJsonb})`）；新增写端点自动加入 `tests/unit/api/audit-log-coverage.test.ts` 白名单 | `tests/unit/api/audit-log-coverage.test.ts` PAYLOAD_REQUIRED + EXEMPT（已强制 9+11） | CHG-SN-5-CHECKLIST-AUDIT-2 R-MID-1 5 次系统化 |
-| 4 | schema 三层防护 | `npm run verify:adr-contracts` 4 类核验全绿（端点 + 错误码 + D-N + sql-schema-alignment）+ `tests/integration/api/**` 真实 PG 覆盖核心查询 + `npm run migrate:check` preflight 头部前置 | `verify:adr-contracts` + `test:integration` + `migrate:check` | CHG-SN-5-CHECKLIST-AUDIT + AUDIT-3 + CHG-SN-6-INTEGRATION-TEST + CI-MIGRATE-DRY-RUN |
+| 4 | schema 三层防护 | `npm run verify:adr-contracts` 7 类核验全绿（端点 / 错误码 / D-N / sql-schema / style-shorthand / shell-types-mirror / enum-ssot）+ `tests/integration/api/**` 真实 PG 覆盖核心查询 + `npm run migrate:check` preflight 头部前置 | `verify:adr-contracts` + `test:integration` + `migrate:check` | CHG-SN-5-CHECKLIST-AUDIT + AUDIT-3 + CHG-SN-6-INTEGRATION-TEST + CI-MIGRATE-DRY-RUN |
 | 5 | 任务卡范围 ≤ 5 项（**全卡型**，CHG-CARD-ATOM 扩展） | 单张卡改动项 > 5 → 强制拆 `-A/-B`（任意卡型；原子化四问见 workflow-rules §任务卡原子化判据：改动项 / 跨层混合 / 验收口径唯一 / 依赖链深度）；milestone 内范围 > 5 项卡数 / 总卡数 ≥ 20% → 阶段评级降一档 | 手工统计（commit message 关键词 grep；CHG-CARD-ATOM-VERIFY 待立案自动化）| M-SN-5 数据观察 "PATCH 范围 ≥ 5 项 → 完成度反比" + CHG-VIR-9/11/12 拆卡 100% 完成度佐证（workflow-rules 已沉淀）|
 
 **评级联动**（plan §5.3 A / B / C 修订）：

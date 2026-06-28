@@ -3086,3 +3086,21 @@
   - 零信号丢失映射经 Opus + Codex 双审：原 §2(7)+§3(7)+§4(7)=21 项全部有落点，无任何检查点在去重名义下删除（§2 末尾 note + §3 桩留存映射）。
   - 中期可选项（另起卡）：verify:ai-check-block 把 [AI-CHECK] 9 键接入 CI 校验；简化规则阈值（≤3 文件 / ≤30 行）放宽评估。
   - `decisions.md` L1465「AI-CHECK 六问」历史引用不动（改 ADR 历史且会触发 verify-review-trailer，别名已保留）。
+
+---
+
+## [FIX-REVIEW-VERIFY-CODEX-20260627] Codex 对抗审收口：verify-review-trailer 强制 Opus + §6 verifier 登记 / 范围
+- **完成时间**：2026-06-27
+- **记录时间**：2026-06-27 18:09
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：codex:codex-rescue (codex) — 对 P0/P1a 落盘产物多轮对抗审，逐项 BLOCK → 修订 → ALLOW
+- **触发**：CHORE-REVIEW-VERIFY + DOCS-CHECKLIST-MERGE 提交后，Codex stop-gate 多轮发现 verifier ↔ 治理文档不一致。
+- **修改文件**：
+  - `scripts/verify-review-trailer.mjs` — trailer 判据修 2 处：① arch-reviewer 必须 Opus（精确解析其自身括号模型 `arch-reviewer\s*\(([^)]*)\)`，防多子代理串扰，如 `arch-reviewer (sonnet), doc-janitor (opus)` 不放行）；② Review 须 `<hash> PASS`（大写 PASS + hex hash 同存，拒裸 PASS / 散文 pass / pending）；对齐 CLAUDE.md §绝对禁止 + workflow-rules §共享组件 API
+  - `scripts/verify-script-doc-sync.mjs` — stale 检查跳过标注「待落地 / 完善后落地 / 登记范围 / 非协议门禁」的行（被显式排除 / 计划中的 verify: 名非 stale；predicate 严格等于注释，防自身漂移）
+  - `docs/rules/quality-gates.md` — §6 加「本节登记范围」声明（穷尽分类：adr-contracts 7 成员 + review-trailer + script-doc-sync 治理门禁 vs 排除的 preflight 守卫 / 领域工具）+ 登记 admin-shell-types-mirror / enum-ssot / review-trailer / script-doc-sync；修正 §6「3 类」、§7「4 类」陈旧计数为「多类」/「7 类」
+  - `docs/changelog.md` — 本条目
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：typecheck=0 / lint=0 / test:changed=0；verify:review-trailer 隔离用例（串扰 / 非 Opus / 裸 PASS / hash PASS / 多行 Props 等）全绿；verify:script-doc-sync 0 漂移。Codex 终审 A1/A2/B1/B2/B3/B4 + 文件路径 + SKIP_LINE 收口。
+- **注意事项**：本批为 verifier ↔ 治理文档精确对齐，使 verify:review-trailer 判据严格落实 CLAUDE.md/workflow-rules 的 Opus 强制；verify:review-trailer 仍 advisory（存量清零后另起卡升 --strict）。

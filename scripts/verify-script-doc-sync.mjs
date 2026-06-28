@@ -60,10 +60,16 @@ function main() {
   }
 
   // 2. 反向：文档出现 verify:<name> 字面但 package.json 已无此脚本 → stale 引用
+  //    跳过明确标注「待落地 / 完善后落地 / 登记范围 / 非协议门禁」的行——这些 verify: 名是计划中
+  //    或被显式 scope-exclude 的（§6 登记范围声明 / §7 待落地脚本），非 stale，不应误报。
   const pkgVerifySet = new Set(Object.keys(scripts).filter((k) => k.startsWith('verify:')))
+  const SKIP_LINE = /待落地|完善后落地|登记范围|非协议门禁/
   const docRefs = new Set()
   for (const text of [preflightText, qgText]) {
-    for (const m of text.matchAll(/\bverify:[\w-]+/g)) docRefs.add(m[0])
+    for (const line of text.split('\n')) {
+      if (SKIP_LINE.test(line)) continue
+      for (const m of line.matchAll(/\bverify:[\w-]+/g)) docRefs.add(m[0])
+    }
   }
   for (const ref of docRefs) {
     if (!pkgVerifySet.has(ref)) {
