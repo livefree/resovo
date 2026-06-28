@@ -152,10 +152,14 @@ function trailerSatisfies(body) {
       const ar = val.match(/arch-reviewer\s*\(([^)]*)\)/i)
       if (ar && /claude-opus/i.test(ar[1])) return true
     }
-    // Review 须严格匹配 git-rules `<hash> PASS`：值以 hex hash + 紧随的大写 PASS verdict 起始。
-    // 仅子串含 PASS 不够——杜绝失败/非终结评审误判为通过：`<hash> FAIL` / `<hash> FAIL, earlier PASS`
-    // / `<hash> did not PASS`（PASS 不紧随 hash）/ 裸 `PASS`（无 hash）/ 散文 `pass` / `pending` / `n/a` 一律不计。
-    if (key === 'review' && /^[0-9a-fA-F]{7,40}\s+PASS\b/.test(val)) return true
+    // Review 须严格匹配 git-rules `<hash> PASS`：
+    //   ① 值以 hex hash + 紧随的干净大写 PASS verdict 起始（PASS 后须为空白 / `(` / 行尾，
+    //      排除 `PASS-FAIL` / `PASSED` / `PASSABLE` 等非纯 PASS token）；
+    //   ② 全行不含任何负面 verdict（FAIL / BLOCK / REJECT / PENDING）。
+    // 杜绝 `<hash> FAIL` / `<hash> PASS then FAIL` / `<hash> did not PASS` / 裸 `PASS` / 散文 pass / pending / n/a。
+    if (key === 'review'
+        && /^[0-9a-fA-F]{7,40}\s+PASS(?:\s|\(|$)/.test(val)
+        && !/\b(?:FAIL|BLOCK|REJECT|PENDING)\b/i.test(val)) return true
   }
   return false
 }

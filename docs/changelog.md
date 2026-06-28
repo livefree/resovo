@@ -3120,3 +3120,18 @@
 - **数据库变更**：无
 - **门禁**：typecheck=0 / lint=0 / test:changed=0；隔离用例 8/8 全绿。
 - **注意事项**：Subagents 路径仍以「`arch-reviewer (claude-opus-...)` 存在」为准——这是 CLAUDE.md §绝对禁止定义的审计记录语义（记录 arch-reviewer 已介入），非 verdict 编码，不在本次收紧范围。
+
+---
+
+## [FIX-REVIEW-TRAILER-PASS-2-20260627] verify-review-trailer：Review verdict 定性拒非 PASS（PASS-FAIL / PASS…FAIL）
+- **完成时间**：2026-06-27
+- **记录时间**：2026-06-27 18:19
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（Codex stop-gate 复审发现 `<hash> PASS\b` 仍漏 `PASS-FAIL` / `PASS then FAIL`）
+- **触发**：FIX-REVIEW-TRAILER-PASS（80103152）后，`/^hash\s+PASS\b/` 的 `\b` 仍让 `<hash> PASS-FAIL`、`<hash> PASS then FAIL`（起始 hash PASS、后接 FAIL）漏过。
+- **修改文件**：
+  - `scripts/verify-review-trailer.mjs` — Review 判据加双重约束：① PASS 须干净终结 token（后接空白 / `(` / 行尾，排除 PASS-FAIL / PASSED）；② 全行不含负面 verdict（FAIL / BLOCK / REJECT / PENDING）。隔离用例 8/8：PASS-FAIL / PASS…FAIL / PASSED / FAIL / PASS,BLOCK 全拒，`<hash> PASS` 与 `(2 rounds)` 尾注过。
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：typecheck=0 / lint=0 / test:changed=0。
+- **注意事项**：verify-review-trailer 的 Review 路径判据至此对「非 PASS verdict 混入」收敛完毕。
