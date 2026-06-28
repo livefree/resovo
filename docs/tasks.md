@@ -6,18 +6,6 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-<!-- SENTINEL-B2-CARD -->
-### 🔄 META-58-B-2 — 前端 facet 收尾：移除 distinct 白名单 douban_status 死配置（ADR-216 D-216-12 / ADR-150 AMENDMENT 4，SEQ-20260627-01）
-
-- **状态**：🔄 进行中 ｜ **创建/开始**：2026-06-28 ｜ **执行模型**：claude-opus-4-8（主循环；B-2 卡建议 sonnet，本会话 opus 连续推进同 SEQ + 含 ADR-150 AMENDMENT 文档决策须 Opus）｜**子代理**：codex-rescue（ADR-150 AMENDMENT 4 对抗审 ✅，2 处措辞修正已吸收）
-- **依据**：ADR-216 D-216-12（B-2 facet 静态枚举）+ ADR-150 §3 distinct 白名单（移除列须走 AMENDMENT）。承 META-58-B-1 ✅。
-- **问题理解 + 事实修正**：D-216-12 假设 douban_status facet 动态查 distinct 端点 → 需改静态。**实测不成立**：前端 `VideoColumns.tsx:504` 已用静态 `DOUBAN_STATUS_OPTIONS`（4 态闭集），列未声明 `filterDistinctTable` → 从不走 distinct 端点；distinct-whitelist 的 `videos.douban_status` 键是**死配置**。
-- **范围收窄（≤3 文件）**：① `distinct-whitelist.ts` 移除 `douban_status` 键（bangumi 保留，D-216-11）；② `datatable-shared.test.ts` 断言同步（toBeUndefined 守护）；③ `decisions.md` ADR-150 AMENDMENT 4 登记。**前端零改动**（facet 已静态）。
-- **门禁**：typecheck=0 / lint=0 / test:changed 绿 / verify:adr-contracts=0。
-- **纪律**：每处 Edit 后哨兵 grep 验证落盘再走下一步（本卡前序虚构工具结果教训）。
-
----
-
 _（**SEQ-20260624-01 统一筛选区全交付 ✅ 2026-06-24**：37/38/39/40A/40B/41 六卡全 ✅。分类页与搜索页共用同一 5 维筛选区（类型/题材/地区/语言/年份）+ 网格左上排序条（添加时间/人气/评分），taxonomy SSOT 零硬编码、type↔nav 双向联动，前后端全维度对齐——`/videos`(PostgreSQL) genre/lang + `/search`(ES) genre/sort-hot/lang 音频对齐（新 `audio_langs` 字段，跨页 lang 语义等价 Opus 数学证明）。**剩合并 main 前 gate**：test:e2e（4 projects）+ `scripts/reindex-es-audio-langs.ts` 实跑（需 ES+Postgres+.env.local）+ 全量单测兜底——worktree 阻塞，同 CARD-SIZE-A1A2-GATE 先例。取卡前先查 🚨 BLOCKER。）_
 
 ---
@@ -65,7 +53,7 @@ _（**🎉 卡片尺寸体系全交付合并 main `01b32abf`（2026-06-24）**�
 
 ---
 
-_（**当前无 🔄 进行中卡片。SEQ-20260627-01 进行中**：META-55-ADR ✅ → DC-216-1 ✅〔92aa118f〕→ META-57 ✅〔4b443649〕→ META-58-A ✅〔b8443a09〕→ META-58-B 契约裁定 ✅〔c388d25e〕→ **META-58-B-1 ✅**（后端 douban 4 态过滤谓词 + 多值迁移；过滤侧迁 refs+meta_quality 真源；Codex 对抗审 2 处 BLOCK 修正：pending 兜底穷尽 `IS DISTINCT FROM` + 投影迁移整体延 META-60；门禁 typecheck=0/lint=0/test:changed 1202/verify=0）。**下一卡 META-58-B-2**（前端 facet 静态枚举，依赖 B-1）。**B-1 延后项（D-216-13）已并入 META-60**：投影迁移（moderation:344 / VIDEO_FULL_SELECT / videos.status:207）+ derive douban 列兜底清理（cache-only 误升 applied，须列停写后做）。**bangumi 退役另起 META-61**（无 `meta_quality.bangumi_match_status` 信号）。取卡前先查 🚨 BLOCKER。）_
+_（**当前无 🔄 进行中卡片。SEQ-20260627-01 进行中**：META-55-ADR ✅ → DC-216-1 ✅〔92aa118f〕→ META-57 ✅〔4b443649〕→ META-58-A ✅〔b8443a09〕→ META-58-B 契约裁定 ✅〔c388d25e〕→ **META-58-B-1 ✅**（后端 douban 4 态过滤谓词 + 多值迁移；过滤侧迁 refs+meta_quality 真源；Codex 对抗审 2 处 BLOCK 修正：pending 兜底穷尽 `IS DISTINCT FROM` + 投影迁移整体延 META-60；门禁 typecheck=0/lint=0/test:changed 1202/verify=0）。**META-58-B-2 ✅**（distinct 死配置移除 + ADR-150 AMENDMENT 4）→ **下一卡 DC-216-2**（软删处置表）/ META-59 / META-56 / META-60 / META-61。**B-1 延后项（D-216-13）已并入 META-60**：投影迁移（moderation:344 / VIDEO_FULL_SELECT / videos.status:207）+ derive douban 列兜底清理（cache-only 误升 applied，须列停写后做）。**bangumi 退役另起 META-61**（无 `meta_quality.bangumi_match_status` 信号）。取卡前先查 🚨 BLOCKER。）_
 
 ---
 

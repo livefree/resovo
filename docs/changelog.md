@@ -3259,3 +3259,15 @@
 - **数据库变更**：无（谓词引用 041/032/077 既有列）
 - **门禁**：typecheck=0 / lint=0 / test:changed=93 文件 1202 passed / verify:adr-contracts exit=0
 - **注意事项**：**B-1 延后项并入 META-60（D-216-13）**：① 全部投影迁移（moderation:344 / VIDEO_FULL_SELECT / videos.status:207）② derive douban 列兜底清理（cache-only 兜底误升 applied，须列停写 + META-56 DROP-prep 对齐 cache 后做）。过滤侧已迁、投影侧暂留旧列 → 存量漂移行瞬时「过滤命中但投影显旧态」不一致，META-57 守卫止新血 + META-56 回填消除。bangumi_status 退役另起 META-61（无 `bangumi_match_status` 信号）。下一卡 META-58-B-2（前端 facet 静态枚举）。
+
+## [META-58-B-2-20260628] distinct 白名单移除 douban_status 死配置（ADR-216 D-216-12 / ADR-150 AMENDMENT 4 / SEQ-20260627-01）
+- **完成时间**：2026-06-28
+- **记录时间**：2026-06-28 05:00
+- **执行模型**：claude-opus-4-8（主循环；B-2 卡建议 sonnet，本会话 opus 连续推进同 SEQ + ADR AMENDMENT 须 Opus）
+- **子代理**：codex-rescue（ADR-150 AMENDMENT 4 对抗审，2 处措辞修正吸收）
+- **内容 + 事实修正**：移除后台 DataTable distinct 端点白名单 `DT_DISTINCT_COLUMN_SQL.videos.douban_status`。修正 D-216-12 假设：前端 `VideoColumns.tsx:504` 早用静态 `DOUBAN_STATUS_OPTIONS`（列未声明 `filterDistinctTable`→从不查 distinct 端点），白名单键为死配置。前端零改动；bangumi 保留（D-216-11）。
+- **修改文件**：`distinct-whitelist.ts`（移除 douban_status 键）/ `datatable-shared.test.ts`（toBeUndefined 守护）/ `decisions.md`（ADR-150 AMENDMENT 4）
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：typecheck=0 / lint=0 / test:changed=18 文件 293 passed / verify:adr-contracts=0
+- **注意事项**：bangumi distinct 键同为死配置但列暂留（D-216-11），随 META-61 一并清理。code 已在 commit 291244b4，本次补 changelog + 工作流收尾。SEQ-20260627-01 下一卡 DC-216-2。
