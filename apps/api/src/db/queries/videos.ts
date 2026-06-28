@@ -18,6 +18,7 @@ import {
   SOURCE_COUNT_SUBQUERY, SUBTITLE_LANGS_SUBQUERY,
 } from './videos.internal'
 import { METADATA_STATUS_JOIN_SQL, METADATA_OVERALL_RANK, METADATA_ISSUE_RANK } from './metadata-status.derive'
+import { doubanRefStateFilterSql, doubanRefStateSql } from './video-ref-applied'
 
 export type { DbVideoRow } from './videos.internal'
 export { buildEnrichmentSummary } from './videos.internal'
@@ -431,8 +432,8 @@ export async function listAdminVideos(
     params.push(filters.isPublished)
   }
   if (filters.doubanStatus?.length) {
-    conditions.push(`v.douban_status = ANY($${idx++}::text[])`)
-    params.push(filters.doubanStatus)
+    // META-58-B-1 / ADR-216 D-216-10：douban 多值过滤迁 video 级 4 态谓词 OR 组合（refs + meta_quality 真源）
+    conditions.push(doubanRefStateFilterSql(filters.doubanStatus, 'v'))
   }
   if (filters.bangumiStatus?.length) {
     conditions.push(`v.bangumi_status = ANY($${idx++}::text[])`)
@@ -641,7 +642,8 @@ export async function listVideosForBackfillEnrich(
   if (mode === 'never') {
     conditions.push('v.meta_quality IS NULL')
   } else if (mode === 'unmatched') {
-    conditions.push("(v.douban_status = 'unmatched' OR v.bangumi_status = 'unmatched')")
+    // META-58-B-1 / ADR-216 D-216-10：douban 半迁 4 态谓词（refs + meta_quality）；bangumi 半暂留（D-216-11）
+    conditions.push(`(${doubanRefStateSql('unmatched', 'v')} OR v.bangumi_status = 'unmatched')`)
   } else if (mode === 'missing-characters') {
     conditions.push(ANIME_MISSING_CHARS)
   } else if (mode === 'tmdb-missing') {
@@ -657,7 +659,8 @@ export async function listVideosForBackfillEnrich(
     params.push(TV_FAMILY_TYPES)
   } else {
     conditions.push(
-      "(v.meta_quality IS NULL OR v.douban_status = 'unmatched' OR v.bangumi_status = 'unmatched' OR " +
+      // META-58-B-1 / ADR-216 D-216-10：douban unmatched 半迁 4 态谓词；meta_quality IS NULL（never）+ bangumi 半暂留
+      `(v.meta_quality IS NULL OR ${doubanRefStateSql('unmatched', 'v')} OR v.bangumi_status = 'unmatched' OR ` +
       ANIME_MISSING_CHARS + ')'
     )
   }

@@ -11,7 +11,7 @@ import type { DoubanStatus, BangumiStatus, SourceCheckStatus, VideoMetaQuality, 
 import { buildEnrichmentSummary } from './videos.internal'
 // META-58-A / ADR-216 D-216-2：「已富集 douban」判定迁 video-ref-applied 谓词（非 douban_status 列），
 // 止血 60 漂移行（持 applied ref 但列 unmatched）。
-import { videoRefAppliedSql } from './video-ref-applied'
+import { doubanRefStateSql, videoRefAppliedSql } from './video-ref-applied'
 
 export interface ModerationHistoryRow {
   id: string
@@ -96,7 +96,8 @@ export interface PendingQueueFilters {
   limit?: number
   type?: string
   sourceCheckStatus?: string
-  doubanStatus?: string
+  // META-58-B-1 / ADR-216 D-216-10：route :32 已 z.enum(DOUBAN_STATUSES) 校验 → 收窄为闭集枚举（喂 doubanRefStateSql）
+  doubanStatus?: DoubanStatus
   hasStaffNote?: boolean
   needsManualReview?: boolean
   /** CHG-350：title ILIKE 模糊搜索 — trim 后 ≤ 200 字符 */
@@ -217,8 +218,8 @@ export async function listPendingQueue(
     params.push(filters.sourceCheckStatus)
   }
   if (filters.doubanStatus) {
-    conditions.push(`v.douban_status = $${idx++}`)
-    params.push(filters.doubanStatus)
+    // META-58-B-1 / ADR-216 D-216-10：douban 状态过滤迁 video 级 4 态谓词（refs + meta_quality 真源，非 douban_status 列）
+    conditions.push(doubanRefStateSql(filters.doubanStatus, 'v'))
   }
   if (filters.hasStaffNote === true) {
     conditions.push(`v.staff_note IS NOT NULL`)

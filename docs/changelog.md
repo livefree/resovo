@@ -3237,3 +3237,25 @@
 - **数据库变更**：无（videoRefAppliedSql EXISTS 引用 041 既有列）
 - **门禁**：typecheck=0 / lint=0 / test:changed=22 文件 250 passed（staging 既有测试零回归）/ verify:adr-contracts exit=0（SQL 列对齐）。
 - **注意事项**：staging 输出仍含 `douban_status` 展示列（前端状态展示，非过滤判定，退役留后续）；多值过滤 + backfill unmatched 态 + 索引归 META-58-B（前置 arch-reviewer video 级 4 态谓词契约）。
+
+---
+
+## [META-58-B-1-20260628] 后端 douban 4 态过滤谓词 + 多值过滤迁移（ADR-216 D-216-10/13 / SEQ-20260627-01）
+- **完成时间**：2026-06-28
+- **记录时间**：2026-06-28 03:35
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8)〔第三轮 4 态谓词契约裁定 D-216-10/11/12，已记 c388d25e〕、codex-rescue〔对抗审 2 处 BLOCK 修正，agentId a187e6f3〕
+- **内容**：旧 `videos.douban_status` 列（032，4 态）**过滤侧**迁 video 级谓词——matched/candidate 取 `video_external_refs` 真源、unmatched/pending 取 `meta_quality.douban_match_status`（越出纯 refs 边界）。审核台/视频库 4 态下拉 + rescore 不再读漂移列值。
+- **Codex 对抗审 2 处 BLOCK 修正**：① **穷尽性**——D-216-10 原 pending `meta_quality IS NULL OR dms IS NULL` 非穷尽，漂移中间态（dms∈{auto/candidate/manual} 但无 ref）4 态皆 false → 「全选 4 态仍漏行」bug；改 pending 兜底 `IS DISTINCT FROM 'unmatched'`（含 never enrich NULL + 中间态），保穷尽互斥。② **投影迁移整体延 META-60**——D-216-12 漏列 moderation:344 + VIDEO_FULL_SELECT 投影，单独迁部分投影造成口径分裂 + 耦合 derive `statusColumnState`，故投影（含 videos.status:207 回退）整体延 META-60。
+- **修改文件**：
+  - `apps/api/src/db/queries/video-ref-applied.ts` — 加过滤侧 4 导出（`DoubanRefStateInput` / `matchesDoubanRefState` JS 逐态 / `doubanRefStateSql` SQL 单态穷尽四分 / `doubanRefStateFilterSql` SQL 多态 OR），共享 `VIDEO_REF_APPLIED_MATCH_STATUSES` 真源
+  - `apps/api/src/db/queries/moderation.ts` — listPendingQueue douban 单值过滤迁谓词 + `PendingQueueFilters.doubanStatus` 收窄 `string`→`DoubanStatus`（route :32 已 z.enum 校验）
+  - `apps/api/src/db/queries/videos.ts` — listAdminVideos douban 多值过滤迁 `doubanRefStateFilterSql` + listVideosForBackfillEnrich rescore unmatched douban 半迁谓词（:644/:660，bangumi 半保留）
+  - `apps/api/src/db/queries/videos.status.ts` — 列表 douban 单值过滤迁谓词（投影 :207 不动，延 META-60）
+  - `tests/unit/api/video-ref-applied.test.ts` — 4 态谓词对拍（穷尽四分恰好命中 1 态 + candidate 非 primary slice 守护 + pending IS DISTINCT FROM + JS↔SQL）
+  - `tests/unit/api/backfill-enrich-query.test.ts` / `tests/unit/api/admin-video-list.test.ts` — 过滤口径断言更新（旧列 → 谓词，bangumi 半保留参数化）
+  - `docs/decisions.md` — ADR-216 D-216-13（实现落地 + Codex 修正 + 投影/derive 延后裁定）
+- **新增依赖**：无
+- **数据库变更**：无（谓词引用 041/032/077 既有列）
+- **门禁**：typecheck=0 / lint=0 / test:changed=93 文件 1202 passed / verify:adr-contracts exit=0
+- **注意事项**：**B-1 延后项并入 META-60（D-216-13）**：① 全部投影迁移（moderation:344 / VIDEO_FULL_SELECT / videos.status:207）② derive douban 列兜底清理（cache-only 兜底误升 applied，须列停写 + META-56 DROP-prep 对齐 cache 后做）。过滤侧已迁、投影侧暂留旧列 → 存量漂移行瞬时「过滤命中但投影显旧态」不一致，META-57 守卫止新血 + META-56 回填消除。bangumi_status 退役另起 META-61（无 `bangumi_match_status` 信号）。下一卡 META-58-B-2（前端 facet 静态枚举）。

@@ -6,6 +6,7 @@
 import type { Pool, PoolClient } from 'pg'
 import type { VideoCard, VideoType, DoubanStatus, BangumiStatus, SourceCheckStatus, TrendingTag, VideoMetaQuality } from '@/types'
 import type { DbVideoRow } from './videos.internal'
+import { doubanRefStateSql } from './video-ref-applied'
 import {
   VIDEO_FULL_SELECT, VIDEO_JOIN,
   SOURCE_COUNT_SUBQUERY, SUBTITLE_LANGS_SUBQUERY,
@@ -177,8 +178,8 @@ export async function listPendingReviewVideos(
     )`)
   }
   if (params.doubanStatus) {
-    conditions.push(`v.douban_status = $${idx++}`)
-    filterParams.push(params.doubanStatus)
+    // META-58-B-1 / ADR-216 D-216-10：douban 状态过滤迁 video 级 4 态谓词（refs + meta_quality 真源）
+    conditions.push(doubanRefStateSql(params.doubanStatus, 'v'))
   }
   if (params.sourceCheckStatus) {
     conditions.push(`v.source_check_status = $${idx++}`)

@@ -53,7 +53,7 @@ _（**🎉 卡片尺寸体系全交付合并 main `01b32abf`（2026-06-24）**�
 
 ---
 
-_（**当前无 🔄 进行中卡片。SEQ-20260627-01 进行中**：META-55-ADR ✅ → DC-216-1 ✅〔92aa118f〕→ META-57 ✅〔4b443649〕→ META-58-A ✅〔b8443a09〕→ **META-58-B arch-reviewer 第三轮契约裁定 ✅**（ADR-216 增补 D-216-10/11/12 定稿）。**重大裁定**：① video 级 4 态谓词（candidate **非 primary** / unmatched·pending 用 `meta_quality` 信号区分）；② **bangumi 退役范围收窄**——ADR-216 只退 `douban_status`，`bangumi_status` 暂留（无 `meta_quality.bangumi_match_status` 信号），另起独立卡 META-61；③ 拆 **58-B-1**（后端 douban 4 态谓词 + 多值迁移，**下一卡待实现**）/ **58-B-2**（前端 facet 静态枚举）。取卡前先查 🚨 BLOCKER。）_
+_（**当前无 🔄 进行中卡片。SEQ-20260627-01 进行中**：META-55-ADR ✅ → DC-216-1 ✅〔92aa118f〕→ META-57 ✅〔4b443649〕→ META-58-A ✅〔b8443a09〕→ META-58-B 契约裁定 ✅〔c388d25e〕→ **META-58-B-1 ✅**（后端 douban 4 态过滤谓词 + 多值迁移；过滤侧迁 refs+meta_quality 真源；Codex 对抗审 2 处 BLOCK 修正：pending 兜底穷尽 `IS DISTINCT FROM` + 投影迁移整体延 META-60；门禁 typecheck=0/lint=0/test:changed 1202/verify=0）。**下一卡 META-58-B-2**（前端 facet 静态枚举，依赖 B-1）。**B-1 延后项（D-216-13）已并入 META-60**：投影迁移（moderation:344 / VIDEO_FULL_SELECT / videos.status:207）+ derive douban 列兜底清理（cache-only 误升 applied，须列停写后做）。**bangumi 退役另起 META-61**（无 `meta_quality.bangumi_match_status` 信号）。取卡前先查 🚨 BLOCKER。）_
 
 ---
 

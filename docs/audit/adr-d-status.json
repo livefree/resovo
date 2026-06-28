@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-06-28T07:58:25.420Z",
+  "generatedAt": "2026-06-28T10:51:42.620Z",
   "summary": {
-    "closedTotal": 599,
-    "pendingTotal": 95
+    "closedTotal": 602,
+    "pendingTotal": 93
   },
   "perAdr": [
     {
@@ -688,13 +688,11 @@
     },
     {
       "adrId": "ADR-216",
-      "total": 12,
-      "closed": 3,
+      "total": 13,
+      "closed": 6,
       "pending": [
         "D-216-1",
-        "D-216-10",
         "D-216-11",
-        "D-216-12",
         "D-216-4",
         "D-216-5",
         "D-216-6",
