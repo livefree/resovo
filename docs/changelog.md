@@ -3104,3 +3104,19 @@
 - **数据库变更**：无
 - **门禁**：typecheck=0 / lint=0 / test:changed=0；verify:review-trailer 隔离用例（串扰 / 非 Opus / 裸 PASS / hash PASS / 多行 Props 等）全绿；verify:script-doc-sync 0 漂移。Codex 终审 A1/A2/B1/B2/B3/B4 + 文件路径 + SKIP_LINE 收口。
 - **注意事项**：本批为 verifier ↔ 治理文档精确对齐，使 verify:review-trailer 判据严格落实 CLAUDE.md/workflow-rules 的 Opus 强制；verify:review-trailer 仍 advisory（存量清零后另起卡升 --strict）。
+
+---
+
+## [FIX-REVIEW-TRAILER-PASS-20260627] verify-review-trailer：Review 判据严格匹配 `<hash> PASS`（拒失败评审混入）
+- **完成时间**：2026-06-27
+- **记录时间**：2026-06-27 18:15
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（Codex stop-gate 自动审查发现「predicate can pass failing reviews」）
+- **触发**：FIX-REVIEW-VERIFY-CODEX 提交后，Codex stop-gate 发现 Review 路径用「含 PASS 子串 + 含 hash」两个独立测试，`<hash> FAIL, earlier PASS` / `<hash> did not PASS` 等失败评审会被误放行。
+- **修改文件**：
+  - `scripts/verify-review-trailer.mjs` — Review 判据改为严格 `/^[0-9a-fA-F]{7,40}\s+PASS\b/`（值须以 hex hash 紧随大写 PASS verdict 起始）；隔离用例 8/8：FAIL+PASS 混入 / 否定式 did not PASS / FAIL / 裸 PASS 全拒，`<hash> PASS` 与 `<hash> PASS (2 rounds)` 过，Opus / 串扰回归正确
+  - `docs/changelog.md` — 本条目
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：typecheck=0 / lint=0 / test:changed=0；隔离用例 8/8 全绿。
+- **注意事项**：Subagents 路径仍以「`arch-reviewer (claude-opus-...)` 存在」为准——这是 CLAUDE.md §绝对禁止定义的审计记录语义（记录 arch-reviewer 已介入），非 verdict 编码，不在本次收紧范围。
