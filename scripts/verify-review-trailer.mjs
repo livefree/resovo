@@ -139,8 +139,22 @@ function reviewReasons(sha, files) {
 
 /** trailer 判据：Subagents 含 arch-reviewer 且为 Opus（CLAUDE.md §绝对禁止 + workflow-rules §共享组件 API：
  *  必须 `arch-reviewer (claude-opus-...)`，非 Opus 的 arch-reviewer 不计），或 Review 为实际 PASS
- *  （arch-reviewer/Opus 的 PASS 记录；非 PASS / FAIL / BLOCK / pending / n-a 一律不计）。 */
+ *  （arch-reviewer/Opus 的 PASS 记录；非 PASS / FAIL / BLOCK / pending / n-a 一律不计）。
+ *
+ *  ⚠️ 已知限制（trailer 门禁固有）：本判据校验「评审 trailer 是否存在且well-formed、且无显式失败
+ *  verdict」，**无法验证评审实际结论真伪**——`Subagents: arch-reviewer (opus)` 是 CLAUDE.md 定义的
+ *  参与/审计记录（非 verdict 编码），提交者若对失败评审仍贴该 trailer、或伪造 `Review: <hash> PASS`，
+ *  trailer 解析无从分辨（须靠评审产物本身 + 流程诚信）。故本守卫定位 advisory 审计辅助，非 verdict oracle。
+ *  下方「全局否决」尽力拦截**显式**失败：任一 review/subagents trailer 行含 FAIL/BLOCK/REJECT/PENDING 即整体不通过。 */
 function trailerSatisfies(body) {
+  // 全局否决：评审失败 verdict 出现在任一 review/subagents trailer 行 → 整体不通过，
+  // 即便另有看似通过的 trailer（防 `Subagents: arch-reviewer (opus)` + `Review: <hash> FAIL` 类 false-pass）。
+  for (const line of body.split('\n')) {
+    if (/^(?:review|subagents|reviewed-by)\b/i.test(line.trim()) &&
+        /\b(?:FAIL|BLOCK|REJECT|PENDING)\b/i.test(line)) {
+      return false
+    }
+  }
   for (const line of body.split('\n')) {
     const m = line.match(/^([A-Za-z][A-Za-z-]*):\s*(.+)$/)
     if (!m) continue

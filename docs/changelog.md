@@ -3135,3 +3135,18 @@
 - **数据库变更**：无
 - **门禁**：typecheck=0 / lint=0 / test:changed=0。
 - **注意事项**：verify-review-trailer 的 Review 路径判据至此对「非 PASS verdict 混入」收敛完毕。
+
+---
+
+## [FIX-REVIEW-TRAILER-VETO-20260627] verify-review-trailer：全局否决显式失败 verdict + 如实声明固有限制
+- **完成时间**：2026-06-27
+- **记录时间**：2026-06-27 18:27
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（Codex stop-gate 复审「can false-pass ADR review failures」）
+- **触发**：Codex stop-gate 指出 trailer presence ≠ 评审已通过——`Subagents: arch-reviewer (opus)` + `Review: <hash> FAIL` 并存会 false-pass。
+- **修改文件**：
+  - `scripts/verify-review-trailer.mjs` — 加全局否决：任一 review/subagents/reviewed-by trailer 行含 FAIL/BLOCK/REJECT/PENDING → 整体不通过（拦截显式 false-pass）；脚本头部如实声明固有限制：trailer 门禁仅校验「存在 + well-formed + 无显式失败」，无法验证评审结论真伪（presence 是 CLAUDE.md 审计记录语义、可被沉默失败/伪造规避），故定位 advisory 审计辅助、非 verdict oracle。隔离用例 5/5：FAIL/BLOCK 并存否决、单 arch-reviewer(opus)/Review PASS/含 codex 多子代理通过。
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：typecheck=0 / lint=0 / test:changed=0。
+- **注意事项**：残余「无法验证沉默/伪造的 pass」是 trailer 解析固有限制，已在脚本与 §6 如实标注；进一步根除须改为核验评审产物本身（独立卡，超出 advisory 守卫范畴）。

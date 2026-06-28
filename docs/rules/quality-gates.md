@@ -151,7 +151,7 @@ adr_closure:   YES/NO/NA (N11)  # ADR 验证段勾对 + D-N changelog 闭环（�
 
 8. **`npm run verify:admin-shell-types-mirror`** + **`npm run verify:enum-ssot`**（均 verify:adr-contracts 成员）：前者核验 `packages/admin-ui` shell types ↔ server-next 双源镜像一致；后者 ADR-157 D-157-4 视频枚举字面量守卫（advisory / baseline 截止 2026-07-26）。
 
-9. **`npm run verify:review-trailer`**（advisory 观察期，`--strict` 升 FAIL fast；CI / pre-push 调用、**非 preflight**——依赖 commit 历史）：commit diff 触及 `docs/decisions.md` 或 `packages/admin-ui/src/**` 公开 Props（types.ts / .tsx `*Props` 块字段，双镜像区间相交、容忍多行声明）却缺 `Subagents: arch-reviewer (claude-opus-...)` 或 `Review: <hash> PASS` trailer → 报违规。为下方「4 类文档强制规则」第 7 项「共享组件 API 改动 Opus trailer」+ CLAUDE.md §绝对禁止补脚本 enforcement（审查规范评估 P0 / 2026-06-27）。
+9. **`npm run verify:review-trailer`**（advisory 观察期，`--strict` 升 FAIL fast；CI / pre-push 调用、**非 preflight**——依赖 commit 历史）：commit diff 触及 `docs/decisions.md` 或 `packages/admin-ui/src/**` 公开 Props（types.ts / .tsx `*Props` 块字段，双镜像区间相交、容忍多行声明）却缺 `Subagents: arch-reviewer (claude-opus-...)` 或 `Review: <hash> PASS` trailer → 报违规。为下方「4 类文档强制规则」第 7 项「共享组件 API 改动 Opus trailer」+ CLAUDE.md §绝对禁止补脚本 enforcement（审查规范评估 P0 / 2026-06-27）。**已知限制**：trailer 门禁仅校验「trailer 存在 + well-formed + 无显式失败 verdict」，无法验证评审结论真伪（`Subagents: arch-reviewer (opus)` 是 CLAUDE.md 审计记录语义、非 verdict 编码，可被沉默失败 / 伪造 `Review: PASS` 规避）；根除须核验评审产物本身（独立卡，超 advisory 守卫范畴）。
 
 10. **`npm run verify:script-doc-sync`**（advisory，preflight `[5e3/6]`）：以 package.json 为权威，核验 verify:adr-contracts 成员 ↔ 本节枚举 / preflight 枚举漂移 + 文档 stale 引用（审查规范评估 P1b / 2026-06-27）。
 
