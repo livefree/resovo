@@ -24164,3 +24164,19 @@ DC-216-2 门禁=**穷举 refs 读路径并逐条归类**（不止上表，Codex 
 - **I-1r2（externalData 函数名错）→ 吸收**：改 `listVideoExternalRefs`/`findPrimaryVideoExternalRef`。
 
 **两轮 Codex（5 BLOCKER + 6 CONCERN + 2 NIT）+ 两轮 arch-reviewer 全数收敛，ADR-216 方向与收口契约定稿，待用户裁可解锁 DC-216-1。**
+
+### META-58-B 实现期增补：video 级 4 态谓词契约 + bangumi 退役范围收窄（arch-reviewer 裁定 claude-opus-4-8 / 2026-06-28）
+
+META-58-A 落地后发现多值过滤消费方（审核台/视频库 4 态下拉）超 DC-216-1（只 applied boolean），arch-reviewer 第三次裁定 video 级 4 态谓词契约，揭示两处代码事实纠正卡片假设：
+
+- **D-216-10（video 级 4 态谓词定义）**：旧列 4 态（032）迁 video 级谓词，**douban 真源信号 = `meta_quality.douban_match_status`**（video.types.ts 4 态，对齐 video_external_refs.match_status + unmatched）：
+  - `matched` = `videoRefAppliedSql`（is_primary applied，DC-216-1 复用）
+  - `candidate` = `NOT matched AND EXISTS(video_external_refs WHERE provider=X AND match_status='candidate')`——**不加 is_primary**（关键事实：candidate ref 默认 `is_primary=false`，`MetadataEnrichService.ts:551`/`BangumiService.ts:567`，加 is_primary 则恒空筛不出 candidate 态）；`AND NOT matched` 人工恢复旧列单值互斥。
+  - `unmatched` = `NOT matched AND NOT candidate AND meta_quality->>'douban_match_status'='unmatched'`（跑过没匹配）
+  - `pending` = `NOT matched AND NOT candidate AND (meta_quality IS NULL OR douban_match_status IS NULL)`——**pending 权威信号 = `meta_quality IS NULL`**（never enrich，对齐 videos.ts:642），**非 `enriched_at`**。
+  - **拒绝 unmatched/pending 合并为 not_applied**：破坏运营「Job 积压未跑 vs 跑过匹配不上」区分 + `getRescoreVideos` unmatched 重跑工作流（价值排序 #1 正确性 + #4 一致）。
+  - 4 态谓词**越出纯 refs 边界**（unmatched/pending 依赖 meta_quality 信号列），jsdoc 须显式声明（与 videoRefAppliedSql 纯 refs 的契约差异）。
+- **D-216-11（bangumi 退役范围排除——重大范围收窄）**：**ADR-216 退役范围只含 `douban_status`，`bangumi_status` 暂留**。理由：bangumi 在 meta_quality **无对等 `bangumi_match_status` 信号**（grep 零命中），无法表达 unmatched/pending；退役 bangumi_status 列会永久丢失 bangumi 匹配状态。**bangumi_status 退役另起独立卡**，前置补 `meta_quality.bangumi_match_status` 信号（独立 schema/信号契约卡，强制 Opus）。`videos.ts:438` bangumi 多值过滤本卡**不迁移**。
+- **D-216-12（契约组织 + 对拍 + 连带面）**：4 态谓词**扩展 `video-ref-applied.ts`**（不新建，共享 `VIDEO_REF_APPLIED_MATCH_STATUSES` 真源）；**JS↔SQL 双向对拍单测必须**（4 态互斥性 + candidate 非 primary + pending 用 meta_quality，沿用 derive.ts:414-419 铁律）。**连带退役面**（卡片未列，实现卡须纳入）：`videos.status.ts:207` `SELECT v.douban_status` 投影、`videos.ts:644` getRescoreVideos unmatched、`metadata-status.derive.ts:471-473` douban_status 兜底分支（死代码清理）、`distinct-whitelist.ts:60-61`（facet 改静态枚举 + ADR-150 AMENDMENT 登记）。索引 `idx_video_external_refs_video_provider_status` 卡片假设不存在，建议先用现有 `(video_id)` 索引上线（功能正确）、性能瓶颈再起独立索引卡（对齐 derive.ts:411 原则）。
+- **拆卡（强制，> 5 项跨 3 层）**：**META-58-B-1**（后端 4 态谓词扩展 + JS 对拍 + douban 多值过滤迁移〔moderation:219 / videos:434 / videos.status:180+207 投影 / videos:644 douban 半〕 + derive 兜底清理 + 本增补）；**META-58-B-2**（前端 facet 静态枚举 + distinct-whitelist AMENDMENT + URL/隐藏列/moderation UI 零回归验证，依赖 B-1）；**独立后续 bangumi_status 退役卡**（前置 meta_quality.bangumi_match_status 信号）。
+- **风险**：① bangumi 信号缺口（已由 D-216-11 排除范围规避）② candidate 非 primary（D-216-10 锁定，单测守护）③ pending/unmatched 信号选 meta_quality IS NULL 非 enriched_at（D-216-10）。
