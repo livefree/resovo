@@ -94,7 +94,7 @@ npm run verify:adr-contracts # ADR 协议合规 3 类核验（端点/错误码/D
 每个任务完成前必须通过质量门禁，完整规则见 `docs/rules/quality-gates.md`：
 
 - 开发前输出：问题理解 / 根因判断 / 方案 / 涉及文件
-- 开发后输出：自审清单（合并版 N1–N12，旧称六问 + 偏离检测）+ [AI-CHECK] 结论块
+- 开发后输出：合并版自审清单（判断点 N1–N13 见 quality-gates §2；旧称六问 + 偏离检测）+ [AI-CHECK] 结论块
 - 同一模块连续 3 次污染 streak → 强制重构评估
 
 ---

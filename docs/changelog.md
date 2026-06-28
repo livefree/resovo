@@ -3150,3 +3150,19 @@
 - **数据库变更**：无
 - **门禁**：typecheck=0 / lint=0 / test:changed=0。
 - **注意事项**：残余「无法验证沉默/伪造的 pass」是 trailer 解析固有限制，已在脚本与 §6 如实标注；进一步根除须改为核验评审产物本身（独立卡，超出 advisory 守卫范畴）。
+
+---
+
+## [FIX-CLAUDEMD-N13-20260627] CLAUDE.md 修正 N1–N12 → N1–N13，与 §2 自审清单契约对齐
+- **完成时间**：2026-06-27
+- **记录时间**：2026-06-27 18:32
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（Codex stop-gate「CLAUDE.md contradicts the new N1-N13 quality-gate contract」）
+- **触发**：P1a 合并时 CLAUDE.md L97 写「N1–N12」，随后 Codex 收口给 §2 加 N13（D5 独立"范围蔓延"项）漏改 CLAUDE.md → live 文档自相矛盾。
+- **修改文件**：
+  - `CLAUDE.md` — L97「开发后输出」改为「合并版自审清单（判断点 N1–N13 见 quality-gates §2；旧称六问 + 偏离检测）」，对齐 §2 实际编号并指向真源防再漂移
+  - `docs/changelog.md` — 本条目
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：typecheck=0 / lint=0 / test:changed=0；grep 确认 live 文档（CLAUDE.md / quality-gates / workflow-rules）N 编号已统一 N1–N13、无 N1–N12 残留。
+- **注意事项**：changelog 历史条目（8ac97adb 记 N1–N12 / 1f4b2ddb 记加 N13）为时序记录，按惯例不改。
