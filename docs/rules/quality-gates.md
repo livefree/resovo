@@ -6,7 +6,7 @@
 > source_of_truth: yes
 > supersedes: CLAUDE.md §"开发门禁与质量机制"（2026-04-12 拆出）
 > superseded_by: none
-> last_reviewed: 2026-04-12
+> last_reviewed: 2026-06-27
 
 ---
 
@@ -26,76 +26,77 @@
 
 ---
 
-## 2. 开发后七问自检（CHG-SN-5-CHECKLIST-AUDIT 修订）
+## 2. 开发后自审清单（合并版 — P1a-MERGE 收口；原 §2 七问 + §3 偏离 + §4 二元判定去重）
 
-每次代码修改完成后，必须逐项回答（是/否 + 简要说明）：
+每次代码修改完成后，逐项判断（默认一行 是/否；标 ⟐ 的项**命中才需展开说明**），完成后输出 §4 [AI-CHECK] 块：
 
-1. 是否引入整页刷新或类似行为？
-2. 是否新增重复逻辑或重复状态？
-3. 是否有逻辑应下沉但仍留在组件中？
-4. 是否破坏现有分层（Route/Service/DB queries 越层调用）或复用结构？
-5. 是否存在需拆分的函数（多逻辑阶段 / 3 层嵌套 / 超 80 行非声明性结构）或需拆分的文件（多主要概念 / 超 400 行且无法一句话描述唯一职责）？
-6. 是否引入潜在技术债？
-7. **若任务含 audit log 写入位点（`auditSvc.write(...)`）→ 对应 service test 是否有 `expect(...write).toHaveBeenCalledWith(expect.objectContaining({ actionType, targetKind, targetId, beforeJsonb, afterJsonb }))` 等 payload 内容显式断言**？（参 `tests/unit/api/sources-matrix-service.test.ts` 模板；R-MID-1 教训第 5 次系统化）
+- **N1** 是否引入整页刷新或类似行为？〔源 §2-Q1〕
+- **N2** 是否新增重复逻辑或重复状态？〔源 §2-Q2 ∪ §4-重复逻辑〕
+- **N3** 是否有逻辑应下沉（共享层 / Service / Hook / util）但仍留在组件中？〔源 §2-Q3〕
+- **N4** 是否破坏分层（Route→Service→DB queries 越层调用）/ 跨模块访问内部实现 / 破坏复用结构？〔源 §2-Q4 ∪ §4-分层 ∪ §4-跨模块〕
+- **N5** 是否存在需拆分的函数或文件？（判定阈值见下方「函数与文件规模硬约束」段）〔源 §2-Q5 ∪ §4-规模×2 ∪ 规模硬约束段〕
+- **N6** ⟐ 是否引入潜在技术债 / hack / 补丁式（if·分支·临时逻辑）解决结构问题？〔源 §2-Q6 ∪ §3-D1 ∪ §4-hack〕
+- **N7** 是否为兼容旧逻辑引入额外复杂度？〔源 §3-D2〕
+- **N8** 状态 / 数据流是否开始不清晰（多来源、重复、归属不明）？〔源 §3-D3〕
+- **N9** 组件职责是否膨胀（展示 + 逻辑 + 请求混合）？〔源 §3-D4〕
+- **N12** 是否存在隐式副作用或吞异常（空 catch / 静默 swallow）？〔源 §4-副作用；对齐 CLAUDE.md §绝对禁止"空的 catch 块"〕
+- **N13** ⟐ 修改同一功能时是否持续触及无关代码（改动范围蔓延）？〔源 §3-D5〕
 
----
+**专项条款（仅在任务命中前置条件时必检，否则在 [AI-CHECK] 标 NA）：**
 
-## 3. 偏离检测（CHG-SN-5-CHECKLIST-AUDIT 修订扩 6/7）
+- **N10** ⟐【任务含 audit 写入位点 `auditSvc.write(...)` 时必检】对应 service test 是否有 payload 内容显式断言 `expect(...write).toHaveBeenCalledWith(expect.objectContaining({ actionType, targetKind, targetId, beforeJsonb, afterJsonb }))`？（参 `tests/unit/api/sources-matrix-service.test.ts` 模板；R-MID-1 教训第 5 次系统化）〔源 §2-Q7〕
+- **N11** ⟐【任务卡含 ADR 实施 / PATCH 时必检】
+  - a. ADR §验证段是否仍有未勾项？——对账 §1 第 5 项开工前贴出的验证段清单（R-CHECKLIST-2 修订）〔源 §3-D6〕
+  - b. ADR §决策要点 D-NNN-N 偏离编号是否在 changelog 显式闭环？（参 ADR-117 D-117-1..10 模式；`npm run verify:adr-d-numbers` 核验；遵守 §6 该脚本的「changelog D-N 字面=闭环」规约守卫）〔源 §3-D7〕
 
-每次任务结束后，逐项判断：
+**结构劣化展开（原 §3"命中即追加"——命中 N6 / N7 / N8 / N9 / N13 任意一条必须追加）：** ① 此属"结构开始劣化"信号 ② 劣化点位置（文件 / 模块）③ 本次为何仍选最小修复 ④ 是否建议进入重构（是 / 否 + 理由）。并按 §5 判断连续污染 streak 是否 +1。
 
-1. 是否通过补丁（if / 分支 / 临时逻辑）解决结构问题
-2. 是否为了兼容旧逻辑引入额外复杂度
-3. 状态或数据流是否开始不清晰（多来源、重复）
-4. 组件职责是否膨胀（展示 + 逻辑 + 请求混合）
-5. 修改同一功能时是否持续触及无关代码
-6. **ADR §验证段是否有未勾项**？（R-CHECKLIST-2 修订；若任务卡含 ADR 实施则必检）
-7. **ADR §决策要点 D-NNN-N 偏离编号是否在 changelog 显式闭环**？（参 ADR-117 D-117-1..10 模式；npm run verify:adr-d-numbers 核验）
-
-命中任意 1 条，必须追加：
-- 当前属于"结构开始劣化"信号
-- 劣化点位置（文件/模块）
-- 本次为何仍选择最小修复
-- 是否建议进入重构阶段（是/否 + 理由）
+> **零信号丢失映射**（P1a-MERGE / arch-reviewer Opus `claude-opus-4-8` 审定 + Codex 对抗审收口）：原 §2(7)+§3(7)+§4(7)=21 项全部有落点——N1–N13 为独立判断点；§4 六条 YES/NO 行并入 N2/N4/N5/N6（语义保留，[AI-CHECK] 块仍逐项机器可读输出）；§3-D1 并入 N6、D5 独立为 N13、§4-副作用独立为 N12。结构劣化项 N6/N7/N8/N9/N13 的"命中即追加说明"由上方「结构劣化展开」块统一承接。无任何检查点在去重名义下删除。
 
 ---
 
-## 4. [AI-CHECK] 综合结论
+## 3. 偏离检测（已并入 §2 合并清单 — P1a-MERGE）
 
-每次任务结束，完成六问和偏离检测后，必须输出：
+原偏离检测 7 项已去重并入 §2：D1→N6、D2→N7、D3→N8、D4→N9、D5→N13（独立"范围蔓延"项）、D6→N11.a、D7→N11.b。「命中即追加劣化说明」（劣化信号 / 位置 / 为何最小修复 / 是否进重构）由 §2「结构劣化展开」块统一承接（覆盖 N6/N7/N8/N9/N13）。本节编号保留以维持 §4–§7 引用稳定。
+
+---
+
+## 4. [AI-CHECK] 综合结论（机器可读，下游审计 / 脚本消费）
+
+每次任务结束、完成 §2 合并清单后，必须输出以下机器可读结论块（键名稳定，值 YES/NO/NA；括号内为对应 §2 清单项）：
 
 ```
 [AI-CHECK]
-结构检查：
-• 是否违反分层（Route→Service→DB）：YES / NO
-• 是否跨模块访问内部实现：YES / NO
-代码质量：
-• 是否新增重复逻辑：YES / NO
-• 是否存在 hack / 临时补丁：YES / NO
-规模检查：
-• 是否存在需拆分的函数（多逻辑阶段 / 3层嵌套 / 超80行非声明性）：YES / NO
-• 是否存在需拆分的文件（多主要概念 / 超400行且无法一句话描述职责）：YES / NO
-安全性：
-• 是否存在隐式副作用或吞异常：YES / NO
-结论：SAFE / NEED FIX
+layering:      YES/NO    (N4)   # 违反分层 Route→Service→DB
+cross_module:  YES/NO    (N4)   # 跨模块访问内部实现
+dup_logic:     YES/NO    (N2)   # 新增重复逻辑 / 状态
+hack_patch:    YES/NO    (N6)   # hack / 补丁式解决结构问题
+fn_split:      YES/NO    (N5)   # 需拆分的函数
+file_split:    YES/NO    (N5)   # 需拆分的文件
+side_effect:   YES/NO    (N12)  # 隐式副作用 / 吞异常
+audit_payload: YES/NO/NA (N10)  # audit 写入 payload 显式断言（无写入位点=NA）
+adr_closure:   YES/NO/NA (N11)  # ADR 验证段勾对 + D-N changelog 闭环（无 ADR 实施=NA）
+结论: SAFE / NEED FIX
 ```
 
-结论为 NEED FIX 时，必须在下一任务开始前修复，或写入 BLOCKER 等待人工判断。
+- 前 7 键（layering..side_effect）= 原 §4 七行 YES/NO 信号，语义与顺序保留、仅键名英文化以稳定下游解析。
+- 后 2 键（audit_payload / adr_closure）= P1a-MERGE 新增，把原本只能自报的 N10/N11 专项接入机器对账（净增能力）。
+- 结论为 **NEED FIX** 时，必须在下一任务开始前修复，或写入 BLOCKER 等待人工判断。
 
-> **简化规则**：以下**全部满足**时，可将六问+偏离检测合并为一句，但 [AI-CHECK] 结论块必须输出：
+> **简化规则**：以下**全部满足**时，§2 合并清单可压成一句结论，但 [AI-CHECK] 块必须完整输出：
 > 1. 改动文件 ≤ 3 个
-> 2. 无新增函数/组件/Hook
+> 2. 无新增函数 / 组件 / Hook
 > 3. 不涉及 Service / DB query / Zustand store
 > 4. 改动行数 ≤ 30 行（不含空行和注释）
 >
-> 不满足上述任意一条 → 必须走完整六问 + 偏离检测 + [AI-CHECK]。
+> 不满足上述任意一条 → 必须走完整 §2 合并清单 + [AI-CHECK]。
 
 ---
 
 ## 5. 连续污染检测
 
 针对同一模块连续任务，维护污染连续计数（streak）：
-- 以下任一情况出现，streak +1：重复逻辑增加、状态复杂度上升、需要额外补丁维持功能
+- 以下任一情况出现，streak +1：重复逻辑增加、状态复杂度上升、需要额外补丁维持功能（与 §2 联动：结构劣化项 N6/N7/N8/N9/N13 + 重复逻辑 N2 命中即为本计数 +1 的输入信号）
 - 未出现则 streak 归零
 
 **streak 连续达到 3 时（硬规则）**：

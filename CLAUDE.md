@@ -94,7 +94,7 @@ npm run verify:adr-contracts # ADR 协议合规 3 类核验（端点/错误码/D
 每个任务完成前必须通过质量门禁，完整规则见 `docs/rules/quality-gates.md`：
 
 - 开发前输出：问题理解 / 根因判断 / 方案 / 涉及文件
-- 开发后输出：六问自检 + 偏离检测 + [AI-CHECK] 结论块
+- 开发后输出：自审清单（合并版 N1–N12，旧称六问 + 偏离检测）+ [AI-CHECK] 结论块
 - 同一模块连续 3 次污染 streak → 强制重构评估
 
 ---
@@ -140,7 +140,7 @@ npm run verify:adr-contracts # ADR 协议合规 3 类核验（端点/错误码/D
 | 任务工作流   | `docs/rules/workflow-rules.md`        | 开工、选任务、BLOCKER、PHASE COMPLETE、独立审核、Codex 审核、方案审核          |
 | 并行开发     | `docs/rules/parallel-dev-rules.md`    | 并行、多轨道、Track、同时开发、并发任务、track 分支                            |
 | Git 提交     | `docs/rules/git-rules.md`             | commit、branch、merge、TASK-ID                                                 |
-| 质量门禁     | `docs/rules/quality-gates.md`         | 任务完成前、六问、AI-CHECK、偏离检测                                           |
+| 质量门禁     | `docs/rules/quality-gates.md`         | 任务完成前、自审清单、六问、AI-CHECK、偏离检测                                 |
 | 日志相关任务 | `docs/rules/logging-rules.md`         | logger / log / 日志 / pino / request_id / worker job / PII redact / client-log |
 | 文档治理     | `docs/rules/doc-governance.md`        | 文档清理、归档、索引更新、断链 / 错误引用、文档冲突、PHASE COMPLETE 收尾、季度归档 |
 | 模型路由     | `docs/rules/model-routing.md`         | 模型 ID、`--model`、建议模型、子代理模型、`opus` / `sonnet` / `haiku` 缩写映射            |

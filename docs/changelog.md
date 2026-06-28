@@ -3066,3 +3066,23 @@
 - **注意事项**：
   - verify:review-trailer 当前 advisory；存量清零后另起卡以 `--strict` 升 FAIL fast。不入 preflight（依赖 commit 历史，preflight 在 commit 前跑）→ 定位 CI / pre-push：`npm run verify:review-trailer -- --base origin/main`。
   - verify:script-doc-sync 报出的 4 处漂移属既有文档债，本卡不顺手修（避免越范围），留后续文档治理处理。
+
+---
+
+## [DOCS-CHECKLIST-MERGE-20260627] P1a 合并开发后三套自审清单为 N1–N13 + 机器可读 [AI-CHECK]
+- **完成时间**：2026-06-27
+- **记录时间**：2026-06-27 17:27
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8) — 出合并方案 + 零信号丢失映射；codex:codex-rescue (codex) — 对抗审，BLOCK 3 处 must-fix → 修订后 ALLOW
+- **触发**：审查规范评估短板 #5（清单疲劳，单任务 ~30 勾选项）+ #9（§2 七问 / §3 偏离 / §4 AI-CHECK 高度重叠）；用户授权 spawn Opus 出方案 + 落盘后过 Codex 再 commit。
+- **修改文件**：
+  - `docs/rules/quality-gates.md` — §2 改为「合并版自审清单 N1–N13」（11 主线 + N10/N11 命中才展开专项 + 结构劣化展开块）；§3 去重为编号桩（保 §4–§7 引用稳定）；§4 [AI-CHECK] 改 9 键英文化机器块（保原 7 二元信号 + 新增 audit_payload / adr_closure）；§5 加污染联动；last_reviewed 4-12→6-27
+  - `CLAUDE.md` — §质量门禁「开发后输出」+ 规范索引表关键词同步（保留「六问 / 偏离检测」作检索别名）
+  - `docs/changelog.md` — 本条目
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：typecheck=0 / lint=0 / test:changed 全量 8270 passed；verify:docs-format 改动前后均 25 项 pre-existing 遗留、零新增（quality-gates / CLAUDE 未进失败列表）。Codex 对抗审 ALLOW（surface 1/2/4 PASS，N6 黄线判可接受）。
+- **注意事项**：
+  - 零信号丢失映射经 Opus + Codex 双审：原 §2(7)+§3(7)+§4(7)=21 项全部有落点，无任何检查点在去重名义下删除（§2 末尾 note + §3 桩留存映射）。
+  - 中期可选项（另起卡）：verify:ai-check-block 把 [AI-CHECK] 9 键接入 CI 校验；简化规则阈值（≤3 文件 / ≤30 行）放宽评估。
+  - `decisions.md` L1465「AI-CHECK 六问」历史引用不动（改 ADR 历史且会触发 verify-review-trailer，别名已保留）。
