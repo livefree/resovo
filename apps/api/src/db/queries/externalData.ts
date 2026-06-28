@@ -617,7 +617,7 @@ export async function updateExternalRefMatchStatus(
  * 返回 null 表示尚无 primary 绑定。
  */
 export async function findPrimaryVideoExternalRef(
-  db: Pool,
+  db: Pool | PoolClient,
   videoId: string,
   provider: ExternalRefProvider,
 ): Promise<VideoExternalRef | null> {

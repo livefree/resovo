@@ -23,6 +23,7 @@ import { MediaCatalogService } from './MediaCatalogService'
 import { BangumiService } from './BangumiService'
 import { TmdbConfirmService, type TmdbMediaType } from './TmdbConfirmService'
 import { isAmbiguousLocalMatch } from './BangumiService.utils'
+import { guardEnrichStatusAgainstAppliedRef } from './enrich-status-guard'
 import { baseLogger } from '@/api/lib/logger'
 import { normalizeForExternalMatch } from './TitleNormalizer'
 import { isPinyin } from './PinyinDetector'
@@ -180,8 +181,14 @@ export class MetadataEnrichService {
 
     metaQuality.enriched_at = new Date().toISOString()
 
+    // META-57 / ADR-216 D-216-3：已有 applied douban ref 时不把列降为 unmatched（消除
+    // ref(linked_at) ≤ enriched_at 覆写竞态；仅守 unmatched 降级，列仍随 refs 演进）。
+    const guardedDoubanStatus = await guardEnrichStatusAgainstAppliedRef(
+      this.db, videoId, 'douban', doubanStatus,
+    )
+
     await videosQueries.updateVideoEnrichStatus(this.db, videoId, {
-      doubanStatus, metaScore, metaQuality,
+      doubanStatus: guardedDoubanStatus, metaScore, metaQuality,
     })
     await videosQueries.updateVideoSourceCheckStatus(this.db, videoId, sourceStatus)
   }

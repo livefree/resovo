@@ -3200,3 +3200,22 @@
 - **数据库变更**：无（谓词引用 041 既有列 video_id/provider/is_primary/match_status）
 - **门禁**：typecheck=0 / lint=0 / test:changed=10 passed / verify:adr-contracts exit=0（新文件无违规，SQL 列对齐 schema）。
 - **注意事项**：契约层，不迁移消费方（META-58）/ 不改 enrich（META-57）。解锁 META-57（守卫复用 `isVideoRefApplied`）+ META-58（消费方迁 `videoRefAppliedSql`）。
+
+---
+
+## [META-57-20260628] enrich 写列一致性守卫（ADR-216 D-216-3 / SEQ-20260627-01）
+- **完成时间**：2026-06-28
+- **记录时间**：2026-06-28 00:35
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（守卫逻辑非新架构决策，判据由 DC-216-1 / ADR-216 D-216-3 定）
+- **内容**：根因封堵——enrich 写 `videos.{douban,bangumi}_status` 列前一致性守卫。`guardEnrichStatusAgainstAppliedRef`：computed='unmatched' 但该 video 已有 applied primary ref → 返回 'matched'（反映 ref 真相），消除「ref(linked_at) ≤ enriched_at」覆写竞态（60/60 漂移产生机制）；**仅守 unmatched 降级**，matched/candidate/pending 原样（不完全停写，列随 refs 演进——完全停写留 META-60）。`hasAppliedVideoRef` 复用既有 `findPrimaryVideoExternalRef` + DC-216-1 `isVideoRefApplied`（单一真源，不造判据/查询）。
+- **修改文件**：
+  - `apps/api/src/services/enrich-status-guard.ts`（新增）— guard + hasAppliedVideoRef（Pool|PoolClient）
+  - `apps/api/src/db/queries/externalData.ts` — `findPrimaryVideoExternalRef` 签名 `Pool`→`Pool|PoolClient`（供 bangumi 事务内复用，放宽兼容）
+  - `apps/api/src/services/MetadataEnrichService.ts` — enrich 写 douban_status 前守卫（:183 区）
+  - `apps/api/src/services/BangumiService.ts` — bangumi none 分支（:160）+ conflict 分支（:596）守卫（live 无漂移、防御性同构）
+  - `tests/unit/api/enrich-status-guard.test.ts`（新增）— 7 测：applied/candidate/null × guard 短路/provider 透传
+- **新增依赖**：无
+- **数据库变更**：无（复用 video_external_refs 既有 primary ref 查询）
+- **门禁**：typecheck=0 / lint=0 / test:changed=30 文件 505 passed（含 metadataEnrich/bangumi-service 既有测试**零回归**——守卫复用已 mock 的 findPrimaryVideoExternalRef）/ verify:adr-contracts exit=0。
+- **注意事项**：守卫只防**新**覆写、不主动修既有 60 stale（下次 enrich 自纠 / 止血靠 META-58 消费方迁 video-ref 谓词 + META-56 DROP-prep 回填）。完全停写 + 列冻结留 META-60。

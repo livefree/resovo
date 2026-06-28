@@ -53,7 +53,7 @@ _（**🎉 卡片尺寸体系全交付合并 main `01b32abf`（2026-06-24）**�
 
 ---
 
-_（**当前无 🔄 进行中卡片。SEQ-20260627-01 状态列漂移根治进行中**：META-55-ADR ✅〔ADR-216 Accepted，两轮 Opus + 两轮 Codex〕→ DC-216-1 ✅〔videoRefAppliedSql 谓词契约，commit 待〕。下一卡 **META-57**（enrich 一致性守卫，复用 isVideoRefApplied）。取卡前先查 🚨 BLOCKER。）_
+_（**当前无 🔄 进行中卡片。SEQ-20260627-01 进行中**：META-55-ADR ✅ → DC-216-1 ✅〔commit 92aa118f〕→ META-57 ✅〔enrich 守卫，commit 待〕。下一卡 **META-58**（消费方迁 `videoRefAppliedSql`，A 核心交付·迁移即止血；含 C-1 扩展消费方 + 索引 + EXPLAIN 基线 + C-3 测试口径）。取卡前先查 🚨 BLOCKER。）_
 
 ---
 
