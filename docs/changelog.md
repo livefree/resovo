@@ -3301,3 +3301,17 @@
 - **基线变更**：external-resources 治理概览统计从含软删降到 live 口径（如 bangumi 277→241）
 - **门禁**：typecheck=0 / lint=0 / test:changed=12 文件 227 passed / verify:adr-contracts=0
 - **注意事项**：derive 类B 未改；其余类B（externalData/split-suggestions/video-merge-candidates/video-ref-applied）全不动；catalog_external_refs NOT EXISTS 不 gate（catalog 级无 per-video 软删概念）。下一卡 META-56（DROP-prep）。
+
+## [META-56-20260628] DROP-prep 对齐脚本：applied ref 但 douban_status 欠计→matched（ADR-216 D-216-2 / SEQ-20260627-01）
+- **完成时间**：2026-06-28
+- **记录时间**：2026-06-28 19:00
+- **执行模型**：claude-opus-4-8（主循环；META-56 卡建议 sonnet，本会话 opus 连续推进同 SEQ）
+- **子代理**：无
+- **内容**：新增 `scripts/align-douban-status-to-refs.ts` — DROP-prep 一次性对齐脚本。圈定有 applied douban ref（`videoRefAppliedSql` DC-216-1 单一真源：is_primary + match_status IN auto_matched/manual_confirmed）但 `douban_status != matched` 的 live video（欠计漂移，立案 60 行）→ UPDATE `douban_status='matched'`。
+- **方向**：与 `fix-douban-status-consistency.ts` 相反（那修「matched 虚标无 catalog」虚高→降级；本卡修「applied-ref 但列非 matched」欠计→升 matched）。
+- **安全设计**：幂等（UPDATE 自带 videoRefAppliedSql 谓词 + `IS DISTINCT FROM 'matched'`，防 TOCTOU + 二次跑 0 行）；`--dry-run`（仅圈定打印不写 DB）；参数化 `id = ANY($1::uuid[])` 批写 + 事务（BEGIN/COMMIT/ROLLBACK）；仅 douban（bangumi 退役另起 META-61）；SELECT/UPDATE 双侧 `deleted_at IS NULL` gate（**Codex stop-gate 修正**：防 SELECT 后被软删的 video 仍被 UPDATE 触及）/不触已一致行。VITEST 守卫 + export 纯 SQL builder 可单测。
+- **修改文件**：`scripts/align-douban-status-to-refs.ts`（新）/ `tests/unit/scripts/align-douban-status-to-refs.test.ts`（新，6 测：parseArgs + SQL builder 断言）
+- **新增依赖**：无
+- **数据库变更**：无 schema（运维期一次性数据对齐）
+- **门禁**：typecheck=0 / lint=0 / test:changed 6 passed / verify:adr-contracts=0
+- **注意事项**：**实跑属运维步**（部署期 `--dry-run` 对账 → real 写）。对齐后消除 B-1 遗留的过滤-投影不一致（至 META-60 投影迁移前窗口）。下一卡 META-60（完全停写 + 投影/derive 收尾）。
