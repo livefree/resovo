@@ -176,6 +176,8 @@ function TrackSkeleton() {
       style={{
         display: 'flex',
         gap: 'var(--card-gap)',
+        /* paddingTop: 给卡片 hover 浮起留头空间（与 Top10Track 一致，防 skeleton→loaded 跳变，HANDOFF-47-B） */
+        paddingTop: 'var(--space-3)',
         paddingBottom: 'var(--shelf-bottom-padding)',
         overflowX: 'hidden',
       }}
@@ -209,6 +211,8 @@ function Top10Track({ items }: { readonly items: Top10Item[] }) {
           overflowX: 'auto',
           scrollSnapType: 'x mandatory',
           scrollbarWidth: 'none',
+          /* paddingTop: overflow-x:auto 强制 overflow-y 裁剪 → 给卡片 hover 浮起留头空间（HANDOFF-47-B） */
+          paddingTop: 'var(--space-3)',
           paddingBottom: 'var(--shelf-bottom-padding)',
         }}
       >

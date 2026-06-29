@@ -58,6 +58,8 @@ export function VideoGrid({
     gap: 'var(--page-inline-gap)',
     scrollSnapType: 'x mandatory',
     scrollbarWidth: 'none',
+    // paddingTop: overflow-x:auto 强制 overflow-y 裁剪 → 给卡片 hover 浮起留头空间（HANDOFF-47-B；loading+loaded 共用）
+    paddingTop: 'var(--space-3)',
     paddingBottom: '4px',
   }
 

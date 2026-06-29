@@ -3387,3 +3387,19 @@
 - **数据库变更**：无
 - **门禁**：typecheck=0（全 7 workspace）/ lint=0（4 successful）/ test:changed 6 文件 54 测全过（含 VideoCard 19）。**真实 dev server Playwright getComputedStyle 实测**：① `--shadow-card-hover` 解析为 tokens.css 逐字值；② grid 上下文（首页 CardGrid，45 卡）hover→`transform: matrix(1.03, 0, 0, 1.03, 0, -6)` + `box-shadow` 解析为 `--shadow-card-hover`（`rgba(0,0,0,0.28) 0 8px 24px -8px, rgba(0,0,0,0.08) 0 2px 6px`）+ root `z-index:1`；③ `--motion-scale=0.25`→`matrix(1.0075, 0, 0, 1.0075, 0, -1.5)` 按比缩小；④ `.scroll-row`（详情页）paddingTop=12px、hover 浮起后海报顶在横滚框内（headroom 2px、**不裁顶**）；⑤ `prefers-reduced-motion: reduce`→`transform: none` + 保留 shadow + `transition: none`；⑥ `--ease-page`（ADR-044）等既有 token 无回归、HMR 干净重建无 PostCSS 报错（唯一 console error 为未登录 `users/me/preferences` 401，与改动无关）。**关键路径**：VideoCard ubiquitous，点击/导航/Fast Takeover 单测 19 全过 + 行为 DOM 零改。
 - **注意事项**：浮起作用于海报 wrapper（非整卡，meta 文字不缩放、避免 reflow 抖动）；海报 wrapper 无 overflow-hidden（StackedPosterFrame 阴影外露设计）故 hover shadow 可见。后续 HANDOFF-47-B：内联横滚容器留白 + 跨上下文 Playwright 全量回归（首页 Shelf/TopTenRow/Featured · 分类 · 搜索 · 详情/播放）。CSS 注释续守「勿写裸 `*/` 序列」（HANDOFF-46 踩坑）。
+
+## [HANDOFF-47-B-20260629] 卡片 hover 浮起：内联横滚容器留白 + 跨上下文全量回归（SEQ-20260629-02）
+- **完成时间**：2026-06-29
+- **记录时间**：2026-06-29
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（纯加 `paddingTop` 留白，无逻辑/无 Props 变更，同 47-A）
+- **背景**：47-A 落地 hover 浮起机制 + `.scroll-row`（CSS 类容器）留白；本卡补齐**内联样式横滚容器**——`overflow-x:auto` 强制 `overflow-y` 裁剪，浮起（-6px translate + scale 扩张 ≈9.8px）会裁顶，须补 `padding-top`。完成「卡片 hover 浮起」主题（47-A + 47-B）。
+- **内容**（统一 `paddingTop: 'var(--space-3)'`〔12px〕，与 47-A `.scroll-row` 一致）：
+  - `Shelf.tsx`：`PosterTrack`（overflowX:auto）+ `HorizontalTrackSkeleton`（overflowX:hidden，防 skeleton→loaded 跳变）补 paddingTop。
+  - `VideoGrid.tsx`：`scrollContainerStyle`（loading skeleton + loaded 共用）补 paddingTop。
+  - `TopTenRow.tsx`：`Top10Track`（overflowX:auto，渲染 VideoCard）+ `TrackSkeleton`（防跳变）补 paddingTop。
+- **范围取舍**：**DailyAnimeRow 排除**——经核实其用 `SafeImage` 直渲（非 VideoCard）、无 `.video-card-lift`，不受浮起影响。ADR-044/048 曲线收敛仍留 HANDOFF-48（需评审）。
+- **修改文件**：`apps/web-next/src/components/video/Shelf.tsx`、`apps/web-next/src/components/video/VideoGrid.tsx`、`apps/web-next/src/components/home/TopTenRow.tsx`
+- **新增文件**：无 ｜ **新增依赖**：无 ｜ **数据库变更**：无
+- **门禁**：typecheck=0（全 7 workspace）/ lint=0（4 successful）/ test:changed 2 文件 8 测全过（ShelfRow 5 + HomeBrandFiltering 3）。**跨上下文 Playwright 全量回归**：① 首页 4 横滚容器（`top10-track` + `movie/series/anime-grid`）paddingTop=12px + hover 浮起 `matrix(1.03,0,0,1.03,0,-6)` 后海报顶在框内（headroom 2px、**不裁顶**）；FeaturedRow（CardGrid grid）/ DailyAnimeRow（SafeImage）正确不在横滚列表；② 分类 `/en/movie` grid（无 scroll 祖先，安全）hover 浮起 + shadow 解析为 `--shadow-card-hover`；③ 搜索 `/en/search?q=a` 20 卡 grid hover 浮起；④ **导航回归**：navigate 卡点击→`/en/movie/WZlqYXKW` 详情页、takeover 卡海报点击→`/en/watch/GhmFO3_O?ep=1` Fast Takeover **均正常无回归**。**关键路径**：VideoCard ubiquitous，点击/导航/Fast Takeover 实测通过。
+- **注意事项**：TopTenRow rank badge 锚定卡 wrapper、浮起仅作用海报 → hover 时番号与海报有轻微视差（可接受，非本卡耦合范围）；skeleton 与 loaded 同补 paddingTop 避免加载跳变。**SEQ-20260629-02 卡片 hover 浮起主题（47-A + 47-B）全交付**：全站 VideoCard grid + 全部横滚容器浮起对齐设计稿、不裁顶。剩余 HANDOFF-48（曲线收敛，需 ADR 评审）/ HANDOFF-49（微交互审计）。

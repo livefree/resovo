@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（**SEQ-20260629-02 动效对齐进行中**：HANDOFF-46 + AMEND ✅（motion token 基座，`globals.css` 镜像 `tokens.css` 10 duration + 5 easing）→ **HANDOFF-47-A ✅ 2026-06-29**（卡片 hover 浮起：镜像 `--shadow-card-hover`〔逐字 tokens.css line 74 rgb〕+ `.video-card-lift`/`.video-card-poster` 浮起规则〔`translateY(-6px) scale(1.03)` + shadow，门控 `(hover:hover)`/`prefers-reduced-motion`/`--motion-scale` + `z-index:1`〕+ VideoCard 两分支加类〔无 Props 变更〕+ `.scroll-row` padding-top；门禁全绿 + Playwright 实测 grid hover/motion-scale 缩放/`.scroll-row` 不裁顶/reduced-motion/无回归，详见 changelog [HANDOFF-47-A-20260629]）。后续：**HANDOFF-47-B**（内联横滚容器 Shelf/VideoGrid-scroll/TopTenRow 留白 + 跨上下文 Playwright 全量回归）/ HANDOFF-48（ADR-044·048 曲线收敛，需评审）/ HANDOFF-49（微交互审计）见 task-queue SEQ-20260629-02。取卡前先查 🚨 BLOCKER。）_
+_（**SEQ-20260629-02 动效对齐进行中**：HANDOFF-46 + AMEND ✅（motion token 基座，`globals.css` 镜像 `tokens.css` 10 duration + 5 easing）→ **卡片 hover 浮起 47-A + 47-B ✅ 全交付 2026-06-29**：47-A 镜像 `--shadow-card-hover`〔逐字 tokens.css line 74 rgb〕+ `.video-card-lift`/`.video-card-poster` 浮起规则〔`translateY(-6px) scale(1.03)` + shadow，门控 `(hover:hover)`/`prefers-reduced-motion`/`--motion-scale` + `z-index:1`〕+ VideoCard 两分支加类〔无 Props 变更〕+ `.scroll-row` padding-top；47-B 补内联横滚容器（Shelf/VideoGrid-scroll/TopTenRow）`paddingTop: var(--space-3)`，DailyAnimeRow 排除〔SafeImage 非 VideoCard〕。全站 VideoCard（首页/分类/搜索/相关）grid + 全部横滚容器浮起对齐设计稿、不裁顶；门禁全绿 + 跨上下文 Playwright 全量回归（含 navigate→详情 / takeover→/watch 无回归），详见 changelog [HANDOFF-47-A/B-20260629]。后续 HANDOFF-48（ADR-044·048 曲线收敛，需评审）/ HANDOFF-49（微交互审计）见 task-queue SEQ-20260629-02。取卡前先查 🚨 BLOCKER。）_
 
 
 ### ⏸️ IMGH-P4-A — 方案C worker：确定性出口写 checked_at + fetchImageDimensions 判别式 + A-SCAN 门（ADR-213，SEQ-20260621-02）

@@ -222,6 +222,8 @@ function HorizontalTrackSkeleton({ cardWidth, aspectRatio, testId }: {
       style={{
         display: 'flex',
         gap: 'var(--card-gap)',
+        /* paddingTop: 给 HANDOFF-47 卡片 hover 浮起留头空间（与 PosterTrack 一致，防 skeleton→loaded 跳变） */
+        paddingTop: 'var(--space-3)',
         paddingBottom: 'var(--shelf-bottom-padding)',
         overflowX: 'hidden',
       }}
@@ -257,6 +259,8 @@ function PosterTrack({ videos, testId }: { readonly videos: VideoCardType[]; rea
           overflowX: 'auto',
           scrollSnapType: 'x mandatory',
           scrollbarWidth: 'none',
+          /* paddingTop: overflow-x:auto 强制 overflow-y 裁剪 → 给卡片 hover 浮起留头空间（HANDOFF-47-B） */
+          paddingTop: 'var(--space-3)',
           paddingBottom: 'var(--shelf-bottom-padding)',
         }}
       >
