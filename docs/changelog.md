@@ -3271,3 +3271,16 @@
 - **数据库变更**：无
 - **门禁**：typecheck=0 / lint=0 / test:changed=18 文件 293 passed / verify:adr-contracts=0
 - **注意事项**：bangumi distinct 键同为死配置但列暂留（D-216-11），随 META-61 一并清理。code 已在 commit 291244b4，本次补 changelog + 工作流收尾。SEQ-20260627-01 下一卡 DC-216-2。
+
+## [DC-216-2-20260628] refs 读路径软删处置表穷举归类（ADR-216 D-216-4/D-216-9 / SEQ-20260627-01）
+- **完成时间**：2026-06-28
+- **记录时间**：2026-06-28 14:00
+- **执行模型**：claude-opus-4-8（主循环；ADR 处置表设计须 Opus）
+- **子代理**：codex-rescue（处置表对抗审，后台 a971042a；Codex stop-gate 标记 video-merge-candidates 事实错误，已修）
+- **内容**：穷举全仓 `grep video_external_refs` = 13 文件，三类逐路径软删处置裁定落 ADR-216 处置表（META-59 实施清单）。**类A**（必过滤）metadata-status.derive.ts 8 子查询；**类B**（外层 gate）externalData/externalIdLoader/split-suggestions/video-merge-candidates/`video-ref-applied.ts`（谓词 invariant：EXISTS 不自 gate、依赖外层）/moderation；**类C**（聚合/gap 须改）home-autofill-douban/-bangumi/external-resources-stats；**N/A**（写/审计）MetadataEnrichService:146/BangumiService:196/DoubanService:239,362。
+- **关键事实修正**：video-merge-candidates 本会话误判「`:69 JOIN videos deleted_at` 已 gate + :70-72 EXISTS」——**该 JOIN+EXISTS 结构不存在**，是读取乱码时虚构。实为 `external_ids` per-video 展示投影（:73-81，`jsonb_agg ... FROM video_external_refs r WHERE r.video_id=v.id`）+ 外层 `fetchVideoDetailsForCandidates(videoIds)` `WHERE v.id=ANY($1::uuid[])`（调用方 gate）→ 类B（per-video 非聚合、不污染计数）。Codex stop-gate 标 factually wrong，已逐字节 ground-truth 修正 + 重核其余全部 gate 声明（staging:148/320、videos.status:182、videos:436/646/663、video-ref-applied 消费方）无误。
+- **修改文件**：`docs/decisions.md`（处置表补全 + video-merge-candidates 修正 + 穷举闭合注）/ `docs/tasks.md`（删卡 + SEQ 注释 DC-216-2 ✅）
+- **新增依赖**：无
+- **数据库变更**：无（纯分析/文档）
+- **门禁**：docs-only，`verify:adr-contracts`=0
+- **注意事项**：类A/C 软删 read-time join 实施 = META-59。**video-ref-applied invariant**：新消费方必须在外层 gate `v.deleted_at IS NULL`（谓词 EXISTS 不自 gate）。

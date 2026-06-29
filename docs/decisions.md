@@ -24117,17 +24117,19 @@ A2-0 本 ADR（docs + Codex）→ A2-1 SCHEMA（migration 126 单行全局 + typ
 | 类 | 路径 | 该不该过滤软删 | 改法 |
 |---|---|---|---|
 | **A 必过滤** | `metadata-status.derive.ts` `getMetadataProviderRefs`（两 DISTINCT ON）+ `METADATA_STATUS_JOIN_SQL`（8 子查询） | 是（**bangumi 277→241 假漂移修复点**） | 加 `JOIN videos … deleted_at IS NULL` |
-| **A 必过滤** | moderation / staging / videos 列表消费方 | 是（本就 live 列表） | 迁 `videoRefAppliedSql`（已含 live video join） |
+| **B 不改（外层 gate·DC-216-2 核实）** | moderation/staging/videos 列表消费方（经 `video-ref-applied.ts` 谓词 videoRefAppliedSql/doubanRefStateSql/doubanRefStateFilterSql） | 否（外层已 gate） | **修正原表「已含 live video join」误判**：谓词 EXISTS **不自 gate** `deleted_at`，安全性靠外层 videos 已 gate（实测全 gate：moderation:205 / videos:365,633 / videos.status:130 / staging:116,312）；**invariant：新消费方必须在外层 `v.deleted_at IS NULL`** |
 | **A 已正确** | `home-autofill-douban.ts:listDoubanCandidateSourceRows` | 是 | 已 `JOIN videos … deleted_at IS NULL`（:102），**无需改** |
 | **B 不改** | `externalData.ts:listVideoExternalRefs`(:565)/`findPrimaryVideoExternalRef`(:619)〔Codex r2 I-1 名校正〕 | 否（按单 `video_id` 直查，调用方已 gate 可见性） | 不改（加 join 无收益增成本） |
 | **B 不改** | `externalIdLoader.ts:loadExternalIdSummaries` | 否（videoIds 由上游 identity job 已圈定） | 不改 |
 | **B 不改（Codex r2 C-3 补）** | `split-suggestions.ts:38-43` `WHERE ver.video_id=$1 AND match_status<>'rejected'` | 否（单 `video_id` 直查） | 不改 |
-| **待确认（Codex r2 C-3 补）** | `video-merge-candidates.ts:74-80` `WHERE r.video_id=v.id AND is_primary AND applied`，关联外层 `videos v` | 取决外层 `videos v` 是否已 gate `deleted_at` | DC-216-2 核：已 gate→类 B 不改；否则类 A 加过滤 |
+| **B 不改（DC-216-2 核实 ✅ 闭合）** | `video-merge-candidates.ts:73-81` `external_ids` 相关子查询（:77 `FROM video_external_refs r WHERE r.video_id=v.id AND is_primary AND match_status IN('manual_confirmed','auto_matched')`，jsonb_agg 展示用） | 否（per-video 展示投影 + 调用方提供 videoIds） | **修正本会话误判**（原写「:69 JOIN videos deleted_at 已 gate」**该 JOIN 不存在**）：实为 `fetchVideoDetailsForCandidates(videoIds: string[])`，外层 `FROM videos v … WHERE v.id = ANY($1::uuid[])`（按显式 videoIds 列表，调用方=identity 折叠管线 stage 5 提供 live 候选，**无 deleted_at gate**）；refs 为 **per-video 展示投影**（非跨 video 聚合），即便传入软删 id 仅影响该行展示、不污染计数 → 类 B（同 externalData 由调用方 gate；Codex r2 C-3 待确认项闭合） |
 | **C 须改结构** | `home-autofill-douban.ts:listDoubanGapSourceRows`(:168) `NOT EXISTS … is_primary AND manual_confirmed` 判缺口 | 是（软删 video 的人工确认不该让条目退出缺口池，恢复后又缺映射） | 改 `NOT EXISTS(… JOIN videos … deleted_at IS NULL)` |
 | **C 须改结构（Codex r2 B-1 补）** | `home-autofill-bangumi.ts:listBangumiGapSourceRows`(:165-168) 同构 `NOT EXISTS … is_primary AND manual_confirmed` | 是（与 douban gap 同构）。**现状无污染**（bangumi 软删 36 全 `auto_matched`，gap 只看 `manual_confirmed`），结构上须过滤防未来软删 `manual_confirmed` 污染 | 同 douban gap |
 | **C 须改 + 注明基线变更** | `external-resources-stats.ts:aggregateExternalRefMatch`(:85-97) 纯 `COUNT GROUP BY` 无 video join | 是（**277 vs 241 统计虚高源头**；治理概览应统计 live 口径） | 加 `JOIN videos … deleted_at IS NULL`；ADR/changelog 注明历史统计基线变更 |
 
 DC-216-2 门禁=**穷举 refs 读路径并逐条归类**（不止上表，Codex r2 C-3）：落地时复跑全仓 `grep video_external_refs` 补全 + 核 `video-merge-candidates` 外层 gate。无"天然不该过滤软删"的现存恢复/审计路径（类 B 是按 video_id 的属性查询，非全表审计）。
+
+**DC-216-2 穷举闭合（2026-06-28，本会话复跑 `grep -rln video_external_refs` 全仓 13 文件）**：上表读路径分类已穷举全部 13 引用文件。**新增确认**：① `video-ref-applied.ts`（B-1 谓词生成器）归类 B（外层 gate，见上表 invariant 行）② `video-merge-candidates.ts`（`fetchVideoDetailsForCandidates`）待确认项闭合为类 B——`external_ids` per-video 展示投影（:73-81，refs :77），外层 `WHERE v.id = ANY($1::uuid[])` 按显式 videoIds（调用方 gate），per-video 非聚合不污染（**更正本会话曾误写 :69 deleted_at JOIN，该结构不存在**）。**N/A 非读路径（写/审计，不入软删读过滤）**：`MetadataEnrichService.ts:146`（审计 from_table 标记）/ `BangumiService.ts:196`（INSERT 写 ref）/ `DoubanService.ts:239,362`（confirm 写 manual_confirmed）。**命名核实**：douban gap 文件为 `home-autofill-douban.ts`（非 `home-autofill.ts`，上表已正确）。类 A/C 实施清单交 META-59。
 
 ### 实施序列影响（两轮裁定后定稿，覆盖立案初排 + 初裁重排）
 
