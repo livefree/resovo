@@ -3349,13 +3349,13 @@
 
 | 任务 | 状态 | 摘要 | 范围 | 模型 | 依赖 | 门禁 |
 | --- | --- | --- | --- | --- | --- | --- |
-| **HANDOFF-46** | ✅ 完成（2026-06-29；详见 changelog [HANDOFF-46-20260629]） | **动效 token 基座对齐**：`globals.css` 追加设计稿 canonical motion 词表——6 档 duration（`--duration-instant/fast/base/slow/slower/slowest` = 0/120/200/320/480/720ms）+ 5 种 easing（`--easing-linear/ease-in/ease-out/ease-in-out/spring`，spring=`cubic-bezier(0.34,1.56,0.64,1)`），值逐字对齐 `primitives/motion.ts`；theme-independent 仅 `:root`；纯加性、零消费端改动（对齐设计方 Integration Plan PR-1「补齐 tokens、不碰消费端」）。 | `globals.css` 仅追加 token 块（前端单层） | **opus**（主循环；motion.ts 值逐字转录、非新架构决策，无子代理） | 无 | ✅ typecheck=0 / lint=0 / test:changed（CSS 非 docs-only，无关联测试 exit 0）/ 真实 dev server Playwright getComputedStyle 实测 6+5 token 全解析为设计值、既有 token 无回归 |
+| **HANDOFF-46**（+ AMEND） | ✅ 完成（2026-06-29；详见 changelog [HANDOFF-46-20260629] + [HANDOFF-46-AMEND-20260629]） | **动效 token 基座对齐**：`globals.css` 镜像区追加 motion token 块（**手动镜像** `src/css/tokens.css`〔AUTO-GENERATED，真源 `primitives/motion.ts`〕，同 primitive/semantic 镜像块范式 + 「重新生成后需同步」维护承诺）——**10 档 duration**（`instant/fast/base/slow/slower/slowest` = 0/120/200/320/480/720ms + `fade/push/snap/shimmer` = 200/240/260/1400ms）+ 5 种 easing（`linear/ease-in/ease-out/ease-in-out/spring`，spring=`cubic-bezier(0.34,1.56,0.64,1)`），与 tokens.css line 109-123 逐字一致；theme-independent 仅 `:root`；纯加性、零消费端改动（对齐设计方 Integration Plan PR-1「补齐 tokens、不碰消费端」）。**AMEND（审核修正）**：初版 `50c5317b` 误标「SSOT」+ 只镜像 6 档 + 游离镜像区 → 改回 tokens.css 镜像 + 补齐 10 档 + 归位镜像区。 | `globals.css` 仅追加/重建镜像块（前端单层）+ docs 同步 | **opus**（主循环；tokens.css 值逐字镜像、非新架构决策，无子代理） | 无 | ✅ typecheck=0 / lint=0 / test:changed exit0 / 真实 dev server Playwright getComputedStyle 实测 10+5 token 全解析为 tokens.css 值、既有 token 无回归、PostCSS 编译干净 |
 
 ### 关键约束与红线
 
-- **值逐字对齐设计方**（`primitives/motion.ts`），不自造 duration/easing 数值。
-- **颜色/曲线零硬编码漂移**：易用 CSS 变量统一词表；后续消费端一律 `var(--duration-X)` / `var(--easing-X)`，禁散落字面值。
-- **既有 ADR token 不动**：ADR-044（`--ease-page`）/ ADR-048（`--shared-element-*` / `takeover-*` / `route-stack-*`）的自定义曲线**本卡不重指向**——重指向是行为变更，须 ADR 评审（HANDOFF-48）。canonical 词表与既有 ADR token 暂并存，过渡态显式登记。
+- **镜像非真源**：motion 块是 `src/css/tokens.css`（AUTO-GENERATED，真源 `primitives/motion.ts`）的**手动镜像**，值逐字对齐、不自造、不在 globals.css 当真源改；`build-css.ts` 重新生成 tokens.css 后须同步此镜像块（与 primitive/semantic 镜像同维护契约）。**勿标 SSOT**（初版踩坑，AMEND 已修）。
+- **颜色/曲线零硬编码漂移**：统一用 CSS 变量；后续消费端一律 `var(--duration-X)` / `var(--easing-X)`，禁散落字面值。
+- **既有 ADR token 不动**：ADR-044（`--ease-page`）/ ADR-048（`--shared-element-*` / `takeover-*` / `route-stack-*`）的自定义曲线**本卡不重指向**——重指向是行为变更，须 ADR 评审（HANDOFF-48）。motion 镜像块与既有 ADR token 暂并存，过渡态显式登记。
 - **CSS 注释 `*/` 陷阱（本卡踩坑）**：注释正文含 `-*/`（glob+路径分隔）会提前闭合 CSS 注释 → PostCSS「Unexpected '/'」整段破坏 app CSS；**typecheck/lint 不走 PostCSS 不报**，须 dev 编译/Playwright 兜底。后续 CSS 注释勿写裸 `*/` 序列。
 
 ### 后续卡登记（本序列，未立案）

@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（**SEQ-20260629-02 动效对齐 — HANDOFF-46 ✅ 2026-06-29**：动效 token 基座落地（`globals.css` 追加设计稿 canonical motion 词表：6 档 duration `--duration-instant/fast/base/slow/slower/slowest` + 5 种 easing `--easing-linear/ease-in/ease-out/ease-in-out/spring`，逐字对齐 `primitives/motion.ts`，纯加性零消费端）。后续 HANDOFF-47（卡片 hover 浮起）/ 48（ADR-044·048 曲线收敛，需评审）/ 49（微交互审计）见 task-queue SEQ-20260629-02。取卡前先查 🚨 BLOCKER。）_
+_（**SEQ-20260629-02 动效对齐 — HANDOFF-46 + AMEND ✅ 2026-06-29**：motion token 基座落地（`globals.css` 镜像区追加 motion 块，**手动镜像** `tokens.css`〔真源 `primitives/motion.ts`〕：10 档 duration〔6 scale + fade/push/snap/shimmer〕+ 5 种 easing，逐字一致、纯加性零消费端）。审核 AMEND 已将初版 `50c5317b` 的「SSOT」误标改回 tokens.css 镜像、6→10 档、归位镜像区。后续 HANDOFF-47（卡片 hover 浮起）/ 48（ADR-044·048 曲线收敛，需评审）/ 49（微交互审计）见 task-queue SEQ-20260629-02。取卡前先查 🚨 BLOCKER。）_
 
 
 ### ⏸️ IMGH-P4-A — 方案C worker：确定性出口写 checked_at + fetchImageDimensions 判别式 + A-SCAN 门（ADR-213，SEQ-20260621-02）
