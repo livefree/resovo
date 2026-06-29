@@ -3413,3 +3413,17 @@
 - **新增依赖**：无 ｜ **数据库变更**：无
 - **门禁**：typecheck=0 / lint=0 / test:changed exit0（CSS 改动无关联测试）｜ **真实 dev server Playwright getComputedStyle 实测**：位移恒 `matrix(1.03,0,0,1.03,0,-6)`（不随 `--motion-scale` 变）；transition 时长随强度缩放 `--motion-scale`=1→0.2s、1.5→0.3s（更慢更显著）、0→0s（即时无动画）；box-shadow 仍解析为 `--shadow-card-hover`。
 - **注意事项**：强度越高 = 时长越长 = 动效越足（与 globals.css:522/532 同向）；`--motion-scale=0`（关闭）= 即时无动画但 hover 态仍应用（与全站 motion-scale=0 行为一致）；如需「关闭=完全不浮起」属另行产品决策（OS `prefers-reduced-motion` 已提供无浮起路径）。
+
+## [HANDOFF-47-C-20260629] 移除卡片 hover 暗化遮罩（用户反馈，SEQ-20260629-02）
+- **完成时间**：2026-06-29
+- **记录时间**：2026-06-29
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（删除内部 UI 子组件，无 Props/API/schema/ADR 变更）
+- **触发**：用户反馈「卡片悬浮时整体变暗，移除变暗」。
+- **根因**：VideoCard 既有 `PosterHoverDim`（`group-hover/poster:bg-black/40` 40% 黑遮罩，takeover + navigate 两分支共用）在 hover 时暗化海报。
+- **影响核实**：`PosterHoverDim` 仅 VideoCard.tsx 内部定义+使用（无外部引用、无测试断言），`pointer-events-none` 不参与点击；takeover 分支 `FloatingPlayButton` 自带 `backdrop-blur(8px)` + 20% 白底 + 白图标、不依赖暗化获取对比 → 移除后播放按钮仍可见。
+- **内容**：`VideoCard.tsx` 删除 `PosterHoverDim` function + docstring + 两处 `<PosterHoverDim />` 调用（takeover / navigate）。未动 FloatingPlayButton 淡入、HANDOFF-47 浮起、标题 hover 变色等其他 hover 行为。
+- **修改文件**：`apps/web-next/src/components/video/VideoCard.tsx`
+- **新增文件**：无 ｜ **新增依赖**：无 ｜ **数据库变更**：无
+- **门禁**：typecheck=0（全 7 workspace）/ lint=0（4 successful）/ test:changed 6 文件 54 测全过（VideoCard 19 测通过，证实无测试依赖 PosterHoverDim）。**真实 dev server Playwright getComputedStyle 实测**：hover takeover 卡海报 wrapper 后台无任何黑色叠加（`blackDimOnHover=[]`、`bg-black` DOM 不存在）；播放按钮仍淡入（opacity 0→1）；HANDOFF-47 浮起仍正常（`matrix(1.03,0,0,1.03,0,-6)`）。**关键路径**：VideoCard ubiquitous，点击/导航/Fast Takeover 不受影响（移除的是 pointer-events-none 叠加层，仅可提升点击可靠性；47-B 已实测 navigate→详情 / takeover→/watch 正常）。
+- **注意事项**：移除后 hover 态保留 FloatingPlayButton 淡入 + 卡片浮起 + 标题变强调色三项视觉反馈，无海报暗化。

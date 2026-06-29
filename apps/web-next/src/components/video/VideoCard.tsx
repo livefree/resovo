@@ -59,16 +59,6 @@ function VideoCardCover({ video }: { video: VideoCardType }) {
 }
 
 /**
- * 海报 hover 暗化遮罩（两分支共用，纯视觉 pointer-events-none，依赖父级 group/poster）。
- * 技术债：沿用既有 `bg-black/40` Tailwind 字面色以保 takeover DOM 逐字一致；token 化留待后续 token 卡。
- */
-function PosterHoverDim() {
-  return (
-    <div className="absolute inset-0 rounded-lg overflow-hidden bg-black/0 group-hover/poster:bg-black/40 transition-colors duration-300 pointer-events-none z-20" />
-  )
-}
-
-/**
  * 标题 + 年份 meta 区（两分支共用）。
  * @param titleLinksToDetail true=标题自带 <Link>（takeover：海报→播放器、标题→详情，两出口）；
  *   false=标题裸 <p>（navigate：整卡根已是 <Link>，**不可设 true，否则嵌套 <Link> 非法 + 双可点区**）。
@@ -148,8 +138,6 @@ function VideoCardTakeover({ video, className }: { video: VideoCardType; classNa
           onClick={handlePosterClick}
         />
 
-        <PosterHoverDim />
-
         <FloatingPlayButton />
 
         <TagLayer {...videoCardToTagProps(video)} />
@@ -176,8 +164,6 @@ function VideoCardNavigate({ video, className }: { video: VideoCardType; classNa
       {/* video-card-poster: HANDOFF-47-A hover 浮起作用元素（transform + --shadow-card-hover） */}
       <div className="relative rounded-lg group/poster video-card-poster">
         <VideoCardCover video={video} />
-
-        <PosterHoverDim />
 
         <TagLayer {...videoCardToTagProps(video)} />
       </div>
