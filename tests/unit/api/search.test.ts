@@ -220,6 +220,17 @@ describe('GET /v1/search', () => {
     const res = await app.inject({ method: 'GET', url: '/v1/search?q=x&sort=invalid' })
     expect(res.statusCode).toBe(422)
   })
+
+  it('order=asc：方向性排序主键翻为升序（rating asc）', async () => {
+    const res = await app.inject({ method: 'GET', url: '/v1/search?q=x&sort=rating&order=asc' })
+    expect(res.statusCode).toBe(200)
+    expect(JSON.stringify(mockEs.search.mock.calls[0][0])).toContain('"rating":{"order":"asc"')
+  })
+
+  it('非法 order → 422', async () => {
+    const res = await app.inject({ method: 'GET', url: '/v1/search?q=x&order=sideways' })
+    expect(res.statusCode).toBe(422)
+  })
 })
 
 // ═══════════════════════════════════════════════════════════════

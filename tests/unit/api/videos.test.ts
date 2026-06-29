@@ -123,6 +123,19 @@ describe('GET /v1/videos', () => {
     expect(callArgs.sort).toBe('rating')
   })
 
+  it('order=asc：透传方向给查询层（降序/升序切换）', async () => {
+    mockQ.listVideos.mockResolvedValue({ rows: [], total: 0 })
+    const res = await app.inject({ method: 'GET', url: '/v1/videos?sort=rating&order=asc' })
+    expect(res.statusCode).toBe(200)
+    const callArgs = mockQ.listVideos.mock.calls[0][1] as { order: string }
+    expect(callArgs.order).toBe('asc')
+  })
+
+  it('无效 order 参数 → 422（非 asc|desc）', async () => {
+    const res = await app.inject({ method: 'GET', url: '/v1/videos?order=sideways' })
+    expect(res.statusCode).toBe(422)
+  })
+
   it('page=2 时 pagination.page 为 2', async () => {
     mockQ.listVideos.mockResolvedValue({ rows: [], total: 50 })
     const res = await app.inject({ method: 'GET', url: '/v1/videos?page=2&limit=20' })

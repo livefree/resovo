@@ -12,7 +12,7 @@ import { z } from 'zod'
 import { db } from '@/api/lib/postgres'
 import { redis } from '@/api/lib/redis'
 import { VideoService } from '@/api/services/VideoService'
-import { VIDEO_GENRES, AUDIO_LANGUAGE_CANONICALS } from '@/types'
+import { VIDEO_GENRES, AUDIO_LANGUAGE_CANONICALS, SORT_DIRECTIONS } from '@/types'
 
 const VideoTypeEnum = z.enum([
   'movie', 'series', 'anime', 'variety',
@@ -22,6 +22,7 @@ const VideoTypeEnum = z.enum([
 const GenreEnum = z.enum(VIDEO_GENRES)
 const AudioLangEnum = z.enum(AUDIO_LANGUAGE_CANONICALS)
 const SortEnum = z.enum(['hot', 'rating', 'latest', 'updated'])
+const OrderEnum = z.enum(SORT_DIRECTIONS)
 const PeriodEnum = z.enum(['today', 'week', 'month'])
 
 export async function videoRoutes(fastify: FastifyInstance) {
@@ -58,6 +59,8 @@ export async function videoRoutes(fastify: FastifyInstance) {
       country: z.string().max(2).optional(),
       rating_min: z.coerce.number().min(0).max(10).optional(),
       sort: SortEnum.optional(),
+      // order=asc|desc：方向性排序（hot/rating/latest/updated）的降序/升序切换，省略 = 默认 desc。
+      order: OrderEnum.optional(),
       page: z.coerce.number().int().min(1).default(1),
       limit: z.coerce.number().int().min(1).max(100).default(20),
     })

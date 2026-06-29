@@ -15,6 +15,8 @@
   "filter": {
     "allOption": "All",
     "sortLabel": "Sort",
+    "sortDirDesc": "Descending",
+    "sortDirAsc": "Ascending",
     "dim": {
       "type": "Type",
       "genre": "Genre",

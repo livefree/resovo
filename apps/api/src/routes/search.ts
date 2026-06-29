@@ -13,7 +13,7 @@ import { es } from '@/api/lib/elasticsearch'
 import { SearchService } from '@/api/services/SearchService'
 // HANDOFF-41：统一从 @/types（live source）引——复刻 videos.ts:15 范式，避 @resovo/types
 // 陈旧 dist 产物缺 AUDIO_LANGUAGE_CANONICALS 导出风险（HANDOFF-38 已证）。
-import { VIDEO_TYPES, VIDEO_STATUSES, VIDEO_GENRES, AUDIO_LANGUAGE_CANONICALS } from '@/types'
+import { VIDEO_TYPES, VIDEO_STATUSES, VIDEO_GENRES, AUDIO_LANGUAGE_CANONICALS, SORT_DIRECTIONS } from '@/types'
 
 const VideoTypeEnum = z.enum(VIDEO_TYPES)
 const GenreEnum = z.enum(VIDEO_GENRES)
@@ -21,6 +21,8 @@ const GenreEnum = z.enum(VIDEO_GENRES)
 const AudioLangEnum = z.enum(AUDIO_LANGUAGE_CANONICALS)
 // HANDOFF-40A：加 'hot'（GridSortBar 统一排序 latest/hot/rating），保留 relevance 兼容
 const SortEnum = z.enum(['relevance', 'rating', 'latest', 'hot'])
+// order=asc|desc：方向性排序（rating/latest/hot）的降序/升序切换；relevance 非方向性、order 不生效。
+const OrderEnum = z.enum(SORT_DIRECTIONS)
 
 export async function searchRoutes(fastify: FastifyInstance) {
   const searchService = new SearchService(es)
@@ -66,6 +68,7 @@ export async function searchRoutes(fastify: FastifyInstance) {
       actor: z.string().optional(),
       writer: z.string().optional(),
       sort: SortEnum.optional(),
+      order: OrderEnum.optional(),
       page: z.coerce.number().int().min(1).default(1),
       limit: z.coerce.number().int().min(1).max(100).default(20),
     })

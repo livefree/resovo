@@ -67,6 +67,7 @@ export interface VideoListFilters {
   country?: string
   ratingMin?: number
   sort?: 'hot' | 'rating' | 'latest' | 'updated'
+  order?: 'asc' | 'desc'
   page: number
   limit: number
 }
@@ -111,11 +112,14 @@ export async function listVideos(
     params.push(filters.lang)
   }
 
+  // 方向受控枚举（asc → 'ASC'，否则 'DESC'），非用户拼接，无注入风险。
+  // NULLS LAST 在两个方向都保留：未知评分不抢占升序首屏（"评分低高" 仍以已知低分打头）。
+  const dir = filters.order === 'asc' ? 'ASC' : 'DESC'
   const orderBy: Record<string, string> = {
-    hot: `${SOURCE_COUNT_SUBQUERY} DESC`,
-    rating: 'mc.rating DESC NULLS LAST',
-    latest: 'v.created_at DESC',
-    updated: 'v.updated_at DESC',
+    hot: `${SOURCE_COUNT_SUBQUERY} ${dir}`,
+    rating: `mc.rating ${dir} NULLS LAST`,
+    latest: `v.created_at ${dir}`,
+    updated: `v.updated_at ${dir}`,
   }
   const order = orderBy[filters.sort ?? 'latest']
   const where = conditions.join(' AND ')

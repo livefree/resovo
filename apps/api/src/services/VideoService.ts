@@ -123,6 +123,7 @@ export class VideoService {
     country?: string
     ratingMin?: number
     sort?: 'hot' | 'rating' | 'latest' | 'updated'
+    order?: 'asc' | 'desc'
     page?: number
     limit?: number
   }): Promise<{ data: VideoCard[]; pagination: Pagination }> {

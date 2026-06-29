@@ -117,3 +117,19 @@ export const DEFAULT_SORT: SortOption = 'latest'
 export const SEARCH_SORT_OPTIONS = ['relevance', 'latest', 'hot', 'rating'] as const
 export type SearchSortOption = (typeof SEARCH_SORT_OPTIONS)[number]
 export const DEFAULT_SEARCH_SORT: SearchSortOption = 'relevance'
+
+/**
+ * 排序方向（降序/升序）。方向性排序（latest/hot/rating）支持 desc↔asc 切换；
+ * relevance 仅按搜索相关性、无方向语义。默认 desc（与 desc 省略 ?order= 约定一致）。
+ */
+export const SORT_DIRECTIONS = ['desc', 'asc'] as const
+export type SortDirection = (typeof SORT_DIRECTIONS)[number]
+export const DEFAULT_SORT_DIRECTION: SortDirection = 'desc'
+
+/**
+ * 该排序值是否支持方向切换。relevance 唯一非方向性；其余（= SORT_OPTIONS）均可 desc↔asc。
+ * 前端用于决定是否渲染方向箭头 + 点击是否切换；后端用于决定 order 参数是否生效。
+ */
+export function isDirectionalSort(sort: SearchSortOption): boolean {
+  return (SORT_OPTIONS as readonly string[]).includes(sort)
+}

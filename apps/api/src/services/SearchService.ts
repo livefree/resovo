@@ -33,6 +33,7 @@ export interface SearchFilters {
   actor?: string
   writer?: string
   sort?: 'relevance' | 'rating' | 'latest' | 'hot'
+  order?: 'asc' | 'desc'
   page: number
   limit: number
 }
@@ -78,13 +79,16 @@ export class SearchService {
     const query: EsFilter =
       must.length > 0 ? { bool: { must, filter } } : { bool: { filter } }
 
+    // 方向性排序（rating/latest/hot）主键按 order 切换，_score 兜底始终 desc；
+    // relevance 非方向性，order 不生效（恒按相关性 desc）。
+    const dir: 'asc' | 'desc' = filters.order === 'asc' ? 'asc' : 'desc'
     const sortMap: Record<string, unknown[]> = {
       relevance: [{ _score: { order: 'desc' } }, { updated_at: { order: 'desc' } }],
-      rating: [{ rating: { order: 'desc', missing: '_last' } }, { _score: { order: 'desc' } }],
-      latest: [{ created_at: { order: 'desc' } }],
+      rating: [{ rating: { order: dir, missing: '_last' } }, { _score: { order: 'desc' } }],
+      latest: [{ created_at: { order: dir } }],
       // HANDOFF-40A：人气排序——ES 无 source_count（/videos hot 字段），用 rating_votes
       // 评分人数作 popularity 代理（更标准的人气信号，无需 reindex）。
-      hot: [{ rating_votes: { order: 'desc', missing: '_last' } }, { _score: { order: 'desc' } }],
+      hot: [{ rating_votes: { order: dir, missing: '_last' } }, { _score: { order: 'desc' } }],
     }
     const sort = sortMap[filters.sort ?? 'relevance']
     const from = (filters.page - 1) * filters.limit

@@ -41,8 +41,8 @@ import { ALL_CATEGORIES } from '@/lib/categories'
 /** type 维选项值集合（派生自 ALL_CATEGORIES，ADR-048 前台 SSOT；注入共享 FilterArea） */
 const TYPE_OPTIONS: readonly VideoType[] = ALL_CATEGORIES.map((c) => c.videoType as VideoType)
 
-/** /search 转发的筛选维度（统一 FilterArea 写入 URL；GridSortBar 写 sort，40A 后端已支持） */
-const FORWARDED_FILTERS = ['type', 'genre', 'country', 'lang', 'year', 'sort'] as const
+/** /search 转发的筛选维度（统一 FilterArea 写入 URL；GridSortBar 写 sort+order，40A 后端已支持） */
+const FORWARDED_FILTERS = ['type', 'genre', 'country', 'lang', 'year', 'sort', 'order'] as const
 
 const PAGE_SIZE = 20
 
