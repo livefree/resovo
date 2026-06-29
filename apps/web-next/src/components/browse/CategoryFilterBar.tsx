@@ -29,11 +29,9 @@ export function CategoryFilterBar({ locale, videoType }: CategoryFilterBarProps)
   const router = useRouter()
 
   function handleTypeChange(next: VideoType | null) {
-    if (next === null) {
-      // 「全部」类型 → 回首页（分类页无 all 路由，home 为混合内容入口）
-      router.push(`/${locale}`)
-      return
-    }
+    // category 模式 type 维已无「全部」选项（FilterArea 不渲染），next 恒非 null。
+    // 防御：即便收到 null 也留在当前页，不再跳首页（SEQ-20260628 用户反馈）。
+    if (next === null) return
     const entry = ALL_CATEGORIES.find((c) => c.videoType === next)
     const typeParam = entry?.typeParam ?? next
     router.push(`/${locale}/${typeParam}`)

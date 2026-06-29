@@ -10,7 +10,8 @@
  * type 维数据流（arch-reviewer Opus 定稿，HANDOFF-39）：
  *   - 选项值集合由消费方经 typeOptions 注入（不 import lib/categories.ts，保 valueSource='category' 意图）。
  *   - category 模式：激活态读 activeType（pathname 段由包装器解析）；选择经 onTypeChange 回调（页面跳路由）。
- *   - search 模式：激活态/选择走 ?type= URL param，组件内部自管。
+ *     无「全部」选项——分类页本身即某一类型、无 all 路由（SEQ-20260628 用户反馈）。
+ *   - search 模式：激活态/选择走 ?type= URL param，组件内部自管；保留「全部」= 清除 ?type=。
  * 其余 4 维（genre/country/lang/year）恒走 URL param。
  *
  * Token 消费（spec §12.3）：面板 8px 20px / 行 10px 0 / 维度标签 48px / 标签-选项 gap 16px /
@@ -163,8 +164,13 @@ export function FilterArea({
   function buildOptions(cfg: FilterDimensionConfig): FilterOption[] {
     const all: FilterOption = { value: '', label: allLabel }
     switch (cfg.valueSource) {
-      case 'category':
-        return [all, ...typeOptions.map((v) => ({ value: v, label: t(`videoType.${v}`) }))]
+      case 'category': {
+        // type 维选项（不含 'all'）。category 模式无「全部」态——分类页本身即某一类型，
+        // 无 all 路由，点「全部」会跳走丢失浏览态（SEQ-20260628 用户反馈）；search 模式
+        // 「全部」= 清除 ?type= 维度，需保留。
+        const typeOpts = typeOptions.map((v) => ({ value: v, label: t(`videoType.${v}`) }))
+        return mode === 'category' ? typeOpts : [all, ...typeOpts]
+      }
       case 'enum-genre':
         return [all, ...VIDEO_GENRES.map((g) => ({ value: g, label: t(`filter.genre.${g}`) }))]
       case 'enum-lang':

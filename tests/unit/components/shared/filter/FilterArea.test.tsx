@@ -140,11 +140,11 @@ describe('FilterArea（统一筛选区，HANDOFF-39）', () => {
     expect(mockPush).not.toHaveBeenCalled()
   })
 
-  it('category 模式点「全部」触发 onTypeChange(null)', () => {
-    const onTypeChange = vi.fn()
-    renderCategory({ activeType: 'movie', onTypeChange })
-    fireEvent.click(screen.getByTestId('filter-type-all'))
-    expect(onTypeChange).toHaveBeenCalledWith(null)
+  it('category 模式 type 维不渲染「全部」（分类页无 all 路由，不跳首页，SEQ-20260628）', () => {
+    renderCategory({ activeType: 'movie' })
+    expect(screen.queryByTestId('filter-type-all')).toBeNull()
+    // 其它 4 维「全部」仍在（清除该维度筛选语义保留）
+    expect(screen.getByTestId('filter-genre-all')).toBeTruthy()
   })
 
   it('category 模式 type 激活态读 activeType（受控高亮）', () => {
