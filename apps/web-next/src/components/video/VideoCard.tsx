@@ -133,11 +133,12 @@ function VideoCardTakeover({ video, className }: { video: VideoCardType; classNa
   }
 
   return (
-    <article className={cn('group relative block', className)} data-testid="video-card" data-interaction="takeover">
+    <article className={cn('group relative block video-card-lift', className)} data-testid="video-card" data-interaction="takeover">
       {/* 图片区 — PosterAction: 点击触发 Fast Takeover 直达播放器 */}
       {/* no overflow-hidden: StackedPosterFrame box-shadow must be visible outside its bounds */}
       {/* group/poster scopes FloatingPlayButton & overlay hover to image area only */}
-      <div className="relative rounded-lg group/poster">
+      {/* video-card-poster: HANDOFF-47-A hover 浮起作用元素（transform + --shadow-card-hover） */}
+      <div className="relative rounded-lg group/poster video-card-poster">
         <VideoCardCover video={video} />
 
         <button
@@ -167,12 +168,13 @@ function VideoCardNavigate({ video, className }: { video: VideoCardType; classNa
   return (
     <Link
       href={detailHref}
-      className={cn('group relative block', className)}
+      className={cn('group relative block video-card-lift', className)}
       data-testid="video-card"
       data-interaction="navigate"
       style={{ textDecoration: 'none' }}
     >
-      <div className="relative rounded-lg group/poster">
+      {/* video-card-poster: HANDOFF-47-A hover 浮起作用元素（transform + --shadow-card-hover） */}
+      <div className="relative rounded-lg group/poster video-card-poster">
         <VideoCardCover video={video} />
 
         <PosterHoverDim />

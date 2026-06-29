@@ -3366,3 +3366,24 @@
 - **新增依赖**：无 ｜ **数据库变更**：无
 - **门禁**：typecheck=0 / lint=0 / test:changed exit0 / 真实 dev server Playwright getComputedStyle 实测 **10 duration + 5 easing 全解析为 tokens.css 值**（新增 fade=200/push=240/snap=260/shimmer=1400ms）、既有 token 无回归、PostCSS 编译干净。
 - **注意事项**：值仍逐字对齐真源、零消费端不变；motion 块现属 tokens.css 手动镜像，build-css.ts 重新生成 tokens.css 后须同步此块（与 primitive/semantic 镜像块同维护契约）。
+
+## [HANDOFF-47-A-20260629] 卡片 hover 浮起：token 镜像 + VideoCard 浮起机制 + `.scroll-row` 留白（Motion Spec 设计稿 / SEQ-20260629-02）
+- **完成时间**：2026-06-29
+- **记录时间**：2026-06-29
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（`--shadow-card-hover` 真源已存在 `primitives/shadow.ts` `cardHover` → `tokens.css` line 74，本卡为镜像现成 token + 纯加性 hover CSS、无 Props 变更，非新架构决策；同 HANDOFF-46 镜像先例）
+- **背景**：HANDOFF-46 motion token 基座落地后首个消费方。对齐设计交付包 `Motion Spec.html`「PC · 卡片 hover 浮起」demo（`translateY(-6px) scale(1.03)` + shadow 升级 + `--duration-base var(--easing-ease-out)`）。
+- **拆分缘由（原子化 >5 项）**：母 HANDOFF-47 含 token + VideoCard + 4 横滚容器留白（`.scroll-row`/Shelf/VideoGrid-scroll/TopTenRow）= 6-7 单元，超阈值 → 拆 -A（机制 + CSS 类容器）/ -B（内联样式容器 + 跨上下文 Playwright 全量回归）。
+- **源核实修正**：task-queue 早先登记「`--shadow-card-hover` 新增 + 按 `--shadow-drawer` 改 oklch」基于「真源没有此 token」假设；经源核实**真源 `tokens.css` line 74 已存在**且为 `rgb(0 0 0 / α)` → 与 HANDOFF-46 同理**逐字镜像 rgb**（不转 oklch；HANDOFF-46 AMEND 教训：先验源，镜像不改值）。shadow 值取 **Token Audit §3.2 canonical** `0 8px 24px -8px / 0 2px 6px`（≠ Motion Spec demo 示意值 `0 16px 40px`，Token Audit 明示「单独一档避免 xl 过重」）。
+- **内容**：
+  - **token 镜像**：`globals.css` 镜像区（motion 块之后、`[data-theme="light"]` 之前）追加 `--shadow-card-hover: 0 8px 24px -8px rgb(0 0 0 / 0.28), 0 2px 6px rgb(0 0 0 / 0.08)`（逐字镜像 tokens.css line 74，同 sm/md/lg/xl 同源同格式 + 「重新生成需同步」维护承诺）。
+  - **hover 浮起规则**：`globals.css` 新增 `.video-card-poster`（transition `transform/box-shadow` 用 `--duration-base`/`--easing-ease-out`）+ `.video-card-lift:hover .video-card-poster`（`transform: translateY(calc(-6px*var(--motion-scale,1))) scale(calc(1+0.03*var(--motion-scale,1)))` + `box-shadow: var(--shadow-card-hover)`）+ `.video-card-lift:hover { z-index:1 }`。**门控**：`@media (hover:hover) and (pointer:fine)`〔触屏不触发持留态〕；`@media (prefers-reduced-motion: reduce)` 禁 transform、保留 shadow 作静态深度 cue；浮起幅度接 `--motion-scale`（HANDOFF-26 减弱动效）。
+  - **VideoCard 加类**：takeover + navigate 两分支根加 `video-card-lift`、海报 wrapper 加 `video-card-poster`（**无 Props 变更、点击/导航/Fast Takeover 行为零改**）。
+  - **`.scroll-row` 留白**：补 `padding-top: var(--space-3)`〔12px〕——`overflow-x:auto` 强制 `overflow-y` 裁剪，给浮起（-6px translate + scale 扩张 ≈9.8px）留顶部头空间（详情/播放相关视频横滚）。
+- **范围取舍（→ 47-B）**：内联样式横滚容器（Shelf PosterTrack+skeleton / VideoGrid scroll layout / TopTenRow）留白 + 跨上下文 Playwright 全量回归归 47-B；本卡覆盖 grid 上下文（CardGrid/VideoGrid grid 安全无裁剪）+ 详情/播放 `.scroll-row`。
+- **修改文件**：`apps/web-next/src/app/globals.css`（token 镜像 + hover 规则 + `.scroll-row` padding-top）、`apps/web-next/src/components/video/VideoCard.tsx`（两分支加类）
+- **新增文件**：无
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：typecheck=0（全 7 workspace）/ lint=0（4 successful）/ test:changed 6 文件 54 测全过（含 VideoCard 19）。**真实 dev server Playwright getComputedStyle 实测**：① `--shadow-card-hover` 解析为 tokens.css 逐字值；② grid 上下文（首页 CardGrid，45 卡）hover→`transform: matrix(1.03, 0, 0, 1.03, 0, -6)` + `box-shadow` 解析为 `--shadow-card-hover`（`rgba(0,0,0,0.28) 0 8px 24px -8px, rgba(0,0,0,0.08) 0 2px 6px`）+ root `z-index:1`；③ `--motion-scale=0.25`→`matrix(1.0075, 0, 0, 1.0075, 0, -1.5)` 按比缩小；④ `.scroll-row`（详情页）paddingTop=12px、hover 浮起后海报顶在横滚框内（headroom 2px、**不裁顶**）；⑤ `prefers-reduced-motion: reduce`→`transform: none` + 保留 shadow + `transition: none`；⑥ `--ease-page`（ADR-044）等既有 token 无回归、HMR 干净重建无 PostCSS 报错（唯一 console error 为未登录 `users/me/preferences` 401，与改动无关）。**关键路径**：VideoCard ubiquitous，点击/导航/Fast Takeover 单测 19 全过 + 行为 DOM 零改。
+- **注意事项**：浮起作用于海报 wrapper（非整卡，meta 文字不缩放、避免 reflow 抖动）；海报 wrapper 无 overflow-hidden（StackedPosterFrame 阴影外露设计）故 hover shadow 可见。后续 HANDOFF-47-B：内联横滚容器留白 + 跨上下文 Playwright 全量回归（首页 Shelf/TopTenRow/Featured · 分类 · 搜索 · 详情/播放）。CSS 注释续守「勿写裸 `*/` 序列」（HANDOFF-46 踩坑）。
