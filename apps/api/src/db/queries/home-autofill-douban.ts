@@ -166,6 +166,7 @@ export async function listDoubanGapSourceRows(
             )
         AND NOT EXISTS (
               SELECT 1 FROM video_external_refs ver
+               JOIN videos v ON v.id = ver.video_id AND v.deleted_at IS NULL
                WHERE ver.provider = 'douban' AND ver.external_id = de.douban_id
                  AND ver.is_primary = true AND ver.match_status = 'manual_confirmed'
             )

@@ -34,5 +34,9 @@ describe('aggregateExternalRefMatch', () => {
     expect(stats.byMethod).toEqual([{ key: 'imdb_id', count: 6 }, { key: '(unknown)', count: 2 }])
     // 三查询均带 provider 参数
     for (const call of query.mock.calls) expect(call[1]).toEqual(['douban'])
+    // META-59 软删 gate：3 查询均含 JOIN videos … deleted_at IS NULL（软删视频 refs 不计入 277→241 统计）
+    for (const call of query.mock.calls) {
+      expect(String(call[0])).toContain('JOIN videos v ON v.id = ver.video_id AND v.deleted_at IS NULL')
+    }
   })
 })

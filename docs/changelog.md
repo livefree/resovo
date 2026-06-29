@@ -3284,3 +3284,20 @@
 - **数据库变更**：无（纯分析/文档）
 - **门禁**：docs-only，`verify:adr-contracts`=0
 - **注意事项**：类A/C 软删 read-time join 实施 = META-59。**video-ref-applied invariant**：新消费方必须在外层 gate `v.deleted_at IS NULL`（谓词 EXISTS 不自 gate）。
+
+## [META-59-20260628] refs 软删纯读期过滤——类C gate + derive 类A→类B 修正（ADR-216 D-216-4 / SEQ-20260627-01）
+- **完成时间**：2026-06-28
+- **记录时间**：2026-06-28 18:00
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8, ab76495e) — derive 类A→类B 改判 + 类C 确认 + META-59 范围收窄裁定
+- **内容**：按 DC-216-2 处置表 + arch-reviewer 第二轮裁定，**只 gate 类C 三路径**（软删视频的 refs 不计入跨 video 聚合/gap）：
+  - `external-resources-stats.ts:aggregateExternalRefMatch` 3 条 COUNT（total/byStatus/byMethod）加 `JOIN videos v ON v.id=ver.video_id AND v.deleted_at IS NULL`（277→241 统计转 live 口径）
+  - `home-autofill-douban.ts:168` gap NOT EXISTS 加 video join（软删视频 manual_confirmed ref 不致 douban 条目误退 gap）
+  - `home-autofill-bangumi.ts:166` gap 同构（防御性，现无污染）
+- **arch-reviewer 改判（DC-216-2 第二个分类错误）**：DC-216-2 把 derive 判类A 是误判。derive 全部消费方已 gate `deleted_at`（getMetadataProviderRefs←VideoService:258 list/:295 detail + listAdminVideos:365 + findAdminVideoById:586；METADATA_STATUS_JOIN_SQL correlated←listAdminVideos）→ **derive 类B 不动**（改它冗余 + 触 META-32-B JS↔SQL 守护红线 derive.ts:414-419 + catalog 级无 per-video 软删）。「277→241 假漂移」实为 stats 跨 video COUNT 污染，非 derive。DC-216-2 处置表同步修正 derive 类A→类B + 移假漂移标注。
+- **修改文件**：`external-resources-stats.ts` / `home-autofill-douban.ts` / `home-autofill-bangumi.ts`（+ 3 测试加 gate 断言）/ `docs/decisions.md`（derive 类A→类B 处置表修正，META-59 卡授权更新文档）
+- **新增依赖**：无
+- **数据库变更**：无（纯读期 join，零 schema，恢复软删 video 天然无损）
+- **基线变更**：external-resources 治理概览统计从含软删降到 live 口径（如 bangumi 277→241）
+- **门禁**：typecheck=0 / lint=0 / test:changed=12 文件 227 passed / verify:adr-contracts=0
+- **注意事项**：derive 类B 未改；其余类B（externalData/split-suggestions/video-merge-candidates/video-ref-applied）全不动；catalog_external_refs NOT EXISTS 不 gate（catalog 级无 per-video 软删概念）。下一卡 META-56（DROP-prep）。

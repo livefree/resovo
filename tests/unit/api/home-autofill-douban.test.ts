@@ -185,6 +185,8 @@ describe('listDoubanGapSourceRows（未映射扫描窗）', () => {
     await listDoubanGapSourceRows(pool, 99999)
     const [sql, params] = (pool.query as ReturnType<typeof vi.fn>).mock.calls[0]!
     expect((sql.match(/NOT EXISTS/g) ?? [])).toHaveLength(3)
+    // META-59 软删 gate：refs NOT EXISTS 加 JOIN videos deleted_at（软删视频 manual_confirmed ref 不致 douban 条目误退 gap）
+    expect(sql).toContain('JOIN videos v ON v.id = ver.video_id AND v.deleted_at IS NULL')
     expect(sql).toContain('ORDER BY de.douban_votes DESC NULLS LAST')
     expect(params).toEqual([2000]) // 窗口上限钳位
   })

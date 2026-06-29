@@ -147,6 +147,8 @@ describe('listBangumiGapSourceRows（缺口路径同样 nsfw 硬过滤）', () =
     const [sql, params] = (pool.query as ReturnType<typeof vi.fn>).mock.calls[0]!
     expect(sql).toContain('be.nsfw = false')
     expect((sql.match(/NOT EXISTS/g) ?? [])).toHaveLength(3)
+    // META-59 软删 gate：refs NOT EXISTS 加 JOIN videos deleted_at（防御性，bangumi 现无污染但结构对齐 douban）
+    expect(sql).toContain('JOIN videos v ON v.id = ver.video_id AND v.deleted_at IS NULL')
     expect(sql).toContain('ORDER BY be.rank ASC NULLS LAST')
     expect(params).toEqual([2000])
   })

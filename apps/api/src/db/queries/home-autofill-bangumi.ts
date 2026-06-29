@@ -164,6 +164,7 @@ export async function listBangumiGapSourceRows(
             )
         AND NOT EXISTS (
               SELECT 1 FROM video_external_refs ver
+               JOIN videos v ON v.id = ver.video_id AND v.deleted_at IS NULL
                WHERE ver.provider = 'bangumi' AND ver.external_id = be.bangumi_id::TEXT
                  AND ver.is_primary = true AND ver.match_status = 'manual_confirmed'
             )

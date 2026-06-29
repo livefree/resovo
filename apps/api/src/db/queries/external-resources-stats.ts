@@ -82,19 +82,25 @@ function mapMatchBuckets(rows: readonly DbMatchBucketRow[]): MatchBucket[] {
  */
 export async function aggregateExternalRefMatch(db: Pool, provider: string): Promise<ExternalRefMatchStats> {
   const totalRes = await db.query<{ count: string }>(
-    `SELECT COUNT(*)::TEXT AS count FROM video_external_refs WHERE provider = $1`,
+    `SELECT COUNT(*)::TEXT AS count FROM video_external_refs ver
+       JOIN videos v ON v.id = ver.video_id AND v.deleted_at IS NULL
+      WHERE ver.provider = $1`,
     [provider],
   )
   const byStatusRes = await db.query<DbMatchBucketRow>(
-    `SELECT match_status AS key, COUNT(*)::TEXT AS count
-       FROM video_external_refs WHERE provider = $1
-      GROUP BY match_status ORDER BY COUNT(*) DESC`,
+    `SELECT ver.match_status AS key, COUNT(*)::TEXT AS count
+       FROM video_external_refs ver
+       JOIN videos v ON v.id = ver.video_id AND v.deleted_at IS NULL
+      WHERE ver.provider = $1
+      GROUP BY ver.match_status ORDER BY COUNT(*) DESC`,
     [provider],
   )
   const byMethodRes = await db.query<DbMatchBucketRow>(
-    `SELECT match_method AS key, COUNT(*)::TEXT AS count
-       FROM video_external_refs WHERE provider = $1
-      GROUP BY match_method ORDER BY COUNT(*) DESC`,
+    `SELECT ver.match_method AS key, COUNT(*)::TEXT AS count
+       FROM video_external_refs ver
+       JOIN videos v ON v.id = ver.video_id AND v.deleted_at IS NULL
+      WHERE ver.provider = $1
+      GROUP BY ver.match_method ORDER BY COUNT(*) DESC`,
     [provider],
   )
   return {

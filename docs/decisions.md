@@ -24116,7 +24116,7 @@ A2-0 本 ADR（docs + Codex）→ A2-1 SCHEMA（migration 126 单行全局 + typ
 
 | 类 | 路径 | 该不该过滤软删 | 改法 |
 |---|---|---|---|
-| **A 必过滤** | `metadata-status.derive.ts` `getMetadataProviderRefs`（两 DISTINCT ON）+ `METADATA_STATUS_JOIN_SQL`（8 子查询） | 是（**bangumi 277→241 假漂移修复点**） | 加 `JOIN videos … deleted_at IS NULL` |
+| **B 不改（外层 gate·arch-reviewer 改判 ab76495e）** | `metadata-status.derive.ts` `getMetadataProviderRefs` + `METADATA_STATUS_JOIN_SQL`（correlated 子查询 / 显式 videoIds 列表） | 否（**全消费方已 gate**） | **原判类A 系误判**（arch-reviewer 改判类B）：getMetadataProviderRefs←VideoService:258(list)/:295(detail) + listAdminVideos:365 + findAdminVideoById:586 均 `deleted_at IS NULL`；METADATA_STATUS_JOIN_SQL correlated `ver.video_id=v.id`、外层 listAdminVideos gated；per-video 取数非聚合，碰不到软删 ref。**「277→241 假漂移」实为 stats 行(24128)跨 video COUNT 污染,非 derive**。改它冗余 + 触 META-32-B JS↔SQL 守护红线(derive.ts:414-419) + catalog 级(catalog_external_refs)无 per-video 软删可 gate。 |
 | **B 不改（外层 gate·DC-216-2 核实）** | moderation/staging/videos 列表消费方（经 `video-ref-applied.ts` 谓词 videoRefAppliedSql/doubanRefStateSql/doubanRefStateFilterSql） | 否（外层已 gate） | **修正原表「已含 live video join」误判**：谓词 EXISTS **不自 gate** `deleted_at`，安全性靠外层 videos 已 gate（实测全 gate：moderation:205 / videos:365,633 / videos.status:130 / staging:116,312）；**invariant：新消费方必须在外层 `v.deleted_at IS NULL`** |
 | **A 已正确** | `home-autofill-douban.ts:listDoubanCandidateSourceRows` | 是 | 已 `JOIN videos … deleted_at IS NULL`（:102），**无需改** |
 | **B 不改** | `externalData.ts:listVideoExternalRefs`(:565)/`findPrimaryVideoExternalRef`(:619)〔Codex r2 I-1 名校正〕 | 否（按单 `video_id` 直查，调用方已 gate 可见性） | 不改（加 join 无收益增成本） |
