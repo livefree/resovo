@@ -1,9 +1,18 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import type { CSSProperties } from 'react'
 import { useTranslations } from 'next-intl'
 import { useTheme } from '@/hooks/useTheme'
 import type { Theme } from '@/types/brand'
+import {
+  BG_PATTERNS,
+  DEFAULT_BG_PATTERN,
+  applyBgPattern,
+  readBgPattern,
+  setBgPattern,
+  type BgPattern,
+} from '@/lib/bg-pattern'
 
 /**
  * SettingsDrawer — HANDOFF-26 右侧划入设置抽屉。
@@ -12,6 +21,9 @@ import type { Theme } from '@/types/brand'
  * 主题选择：Light/Dark/System → useTheme().setTheme()（写 Cookie，更新 BrandProvider context）。
  * 动效强度：0/1/1.5 → document.documentElement.style.setProperty('--motion-scale', val)
  *   + localStorage 持久化（SSR 安全：所有 localStorage 访问加 typeof window !== 'undefined' 守卫）。
+ * 背景图案（HANDOFF-42）：none/dots/grid/noise → `<html data-bg-pattern>`（globals.css 把底纹画到
+ *   .app-shell）+ localStorage `resovo:bg-pattern` 持久化，逻辑沉淀在 lib/bg-pattern.ts，FOUC 由
+ *   theme-init-script 首绘前消除。
  * ESC / 遮罩点击关闭。
  */
 
@@ -35,6 +47,28 @@ function applyMotionScale(index: MotionIndex): void {
   localStorage.setItem(MOTION_STORAGE_KEY, String(val))
 }
 
+// HANDOFF-42 — 背景图案缩略图：用 CSS 变量代表性渲染（颜色零硬编码，镜像设计稿 .pat-thumb）。
+const BG_PATTERN_PREVIEW: Record<BgPattern, CSSProperties> = {
+  none: { background: 'var(--bg-surface-sunken)' },
+  dots: {
+    backgroundImage: 'radial-gradient(var(--fg-muted) 1px, transparent 1px)',
+    backgroundSize: '8px 8px',
+  },
+  grid: {
+    backgroundImage:
+      'linear-gradient(var(--fg-muted) 1px, transparent 1px), linear-gradient(90deg, var(--fg-muted) 1px, transparent 1px)',
+    backgroundSize: '10px 10px',
+  },
+  noise: { backgroundImage: 'var(--pattern-noise-bg)', filter: 'contrast(2)', opacity: 0.6 },
+}
+
+const BG_PATTERN_LABEL_KEY: Record<BgPattern, string> = {
+  none: 'bgPatternNone',
+  dots: 'bgPatternDots',
+  grid: 'bgPatternGrid',
+  noise: 'bgPatternNoise',
+}
+
 interface SettingsDrawerProps {
   open: boolean
   onClose: () => void
@@ -44,12 +78,21 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
   const t = useTranslations('settings')
   const { theme, setTheme } = useTheme()
   const [motionIndex, setMotionIndex] = useState<MotionIndex>(1)
+  const [bgPattern, setBgPatternState] = useState<BgPattern>(DEFAULT_BG_PATTERN)
 
   // 从 localStorage 读取 motionScale（客户端 mount 后）
   useEffect(() => {
     const idx = readMotionIndex()
     setMotionIndex(idx)
     applyMotionScale(idx)
+  }, [])
+
+  // 从 localStorage 读取背景图案并回放到 DOM（theme-init-script 首绘前已设属性，
+  // 此处同步 UI state + 兜底重设，防 init-script 未执行）
+  useEffect(() => {
+    const pattern = readBgPattern()
+    setBgPatternState(pattern)
+    applyBgPattern(pattern)
   }, [])
 
   // ESC 关闭
@@ -66,6 +109,11 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
     const idx = Number(e.target.value) as MotionIndex
     setMotionIndex(idx)
     applyMotionScale(idx)
+  }
+
+  function handleBgPatternChange(pattern: BgPattern) {
+    setBgPatternState(pattern)
+    setBgPattern(pattern)
   }
 
   const THEME_OPTIONS: { value: Theme; label: string }[] = [
@@ -212,6 +260,82 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                     }}
                   >
                     {label}
+                  </button>
+                )
+              })}
+            </div>
+          </section>
+
+          {/* 背景图案 */}
+          <section>
+            <h3
+              style={{
+                fontSize: '13px',
+                fontWeight: 600,
+                color: 'var(--fg-muted)',
+                marginBottom: '10px',
+                letterSpacing: '0.04em',
+              }}
+            >
+              {t('bgPattern')}
+            </h3>
+            <div
+              role="radiogroup"
+              aria-label={t('bgPattern')}
+              style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}
+            >
+              {BG_PATTERNS.map((value) => {
+                const active = bgPattern === value
+                const label = t(BG_PATTERN_LABEL_KEY[value])
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    aria-label={label}
+                    title={label}
+                    data-testid={`settings-bg-pattern-${value}`}
+                    onClick={() => handleBgPatternChange(value)}
+                    style={{
+                      position: 'relative',
+                      aspectRatio: '1',
+                      padding: 0,
+                      borderRadius: '8px',
+                      border: `1px solid ${active ? 'var(--accent-default)' : 'var(--border-default)'}`,
+                      boxShadow: active ? '0 0 0 2px var(--accent-muted)' : 'none',
+                      background: 'var(--bg-surface-sunken)',
+                      cursor: 'pointer',
+                      overflow: 'hidden',
+                      transition: 'border-color 160ms ease, box-shadow 160ms ease',
+                    }}
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        position: 'absolute',
+                        top: '4px',
+                        left: '4px',
+                        right: '4px',
+                        bottom: '16px',
+                        borderRadius: '4px',
+                        ...BG_PATTERN_PREVIEW[value],
+                      }}
+                    />
+                    <span
+                      style={{
+                        position: 'absolute',
+                        bottom: '3px',
+                        left: 0,
+                        right: 0,
+                        textAlign: 'center',
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        color: active ? 'var(--accent-default)' : 'var(--fg-subtle)',
+                      }}
+                    >
+                      {label}
+                    </span>
                   </button>
                 )
               })}

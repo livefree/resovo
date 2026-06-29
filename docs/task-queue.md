@@ -3312,3 +3312,28 @@
   - **P2b commit trailer**：d4681d5d（B-2 收尾）原缺 `Subagents` trailer，已 amend 补 `Subagents: none`（→ a5c640e0）。
 - **SEQ-20260627-01 deploy 收尾序列（编码工作已完成，剩余 deploy/soak/prerequisite-gated）**：可编码代码卡全交付（META-57 守卫 / DC-216-1·2 契约+处置表 / META-58-A·B-1·B-2 过滤迁移 / META-59 软删 gate / META-56 对齐脚本）。剩余收尾**硬依赖 deploy-time 运维 + 时序**，序列：① **deploy 实跑 META-56** `align-douban-status-to-refs`（`--dry-run` 对账 → real，消除存量漂移 + 对齐 cache）→ ② **软泡期 ≥1 完整 enrich 周期**观察 → ③ **META-60**（停写 + 投影迁移 + derive 清理 + 冻结守卫，届时 D-216-13:24214 安全前提满足）→ ④ **META-63-DROP-ADR**（Opus 起草 DROP ADR + 物理 DROP 列）。**META-61**（bangumi 退役）独立，前置补 `meta_quality.bangumi_match_status` 信号。**META-62**（覆盖索引）D-216-6 性能触发或 Phase complete 前。
 - schema 变更（若 ADR 选 DROP/deprecate 列）必须同步 `docs/architecture.md`。
+
+---
+
+## SEQ-20260629-01 · 前端交付包 Global Shell — 设置抽屉外观能力补齐
+
+> 创建时间：2026-06-29 ｜ 最后更新时间：2026-06-29
+> 来源：`docs/designs/client_handoff/`（HANDOFF 前端交付包，切入顺序阶段 3「全局外壳」）
+> 范围：把 Global Shell 设计稿「设置抽屉 · 外观」分组的能力逐项落地到现有 `SettingsDrawer`（已具主题/动效强度，缺背景图案）。
+
+| 任务 | 状态 | 摘要 | 范围 | 模型 | 依赖 | 门禁 |
+| --- | --- | --- | --- | --- | --- | --- |
+| **HANDOFF-42** | ✅ 完成（2026-06-29；详见 changelog [HANDOFF-42-20260629]） | **设置抽屉·外观·背景图案**：4 选项（纯色/圆点/网格/噪点，默认 dots，遵设计稿）。契约 `bgPattern` 枚举 SSOT 落 `lib/bg-pattern.ts`；存储 localStorage `resovo:bg-pattern`（镜像 motion-scale）；底纹作用 `.app-shell`（盖 body）经 `<html data-bg-pattern>`（镜像 data-theme，suppressHydrationWarning 已具）；FOUC-free 扩展 `theme-init-script` 首绘前设属性；Token 按 Token Audit §2.2 落 `--pattern-*`（globals.css，浅/深各一套）。抽屉仅追加「背景图案」区不重构。 | CSS token+规则 / FOUC lib+init / 抽屉 UI+state / i18n×2+测试（4 项前端单层） | **opus**（主循环；遵设计稿+Token Audit 既定值+既有范式，无子代理） | 无（SettingsDrawer/BrandProvider/theme-init 既存） | ✅ typecheck=0 / lint=0 / test:changed 26 / 真实 dev server Playwright 实测全链路通（替代 e2e:smoke） |
+
+### 关键约束与红线
+
+- **遵设计意图，勿改**（HANDOFF.md）：默认 dots、4 选项命名、`resovo.shell.prefs` 语义；本仓拆分为 `resovo:bg-pattern`（与既有 `resovo:motion-scale` 同前缀风格），不引入设计稿单一大 store。
+- **颜色零硬编码**：全经 `--pattern-*` / `--bg-canvas` CSS 变量（浅/深各一套，值取 Token Audit §2.2）。
+- **不改写主题机制**：data-theme 路径只读不动，data-bg-pattern 平行新增；hydration 走 `<html suppressHydrationWarning>` 既有保护。
+- **改动收敛**：抽屉仅在「主题」后追加「背景图案」区，不重构现有扁平 section 为设计稿「分组」结构（分组化如需另起卡）。
+
+### 后续卡登记（本序列，未立案）
+
+- **HANDOFF-43（候选）**：设置抽屉「动效」分组补齐——`减弱动效` 开关（强制 scale=0.25）+ `关键帧背景` Ken Burns 开关（设计稿 Global Shell「动效」组；现仅有动效强度滑块）。
+- **HANDOFF-44（候选）**：设置抽屉「浮窗播放器」分组——自动浮窗 / 默认大小（240/320/480）/ 显示开关，与 GlobalPlayerHost·playerStore 对接（需播放器 shell 协同，起卡前评估关键路径回归）。
+- **HANDOFF-45（候选）**：抽屉「分组化」重构——按设计稿 set-group（外观/动效/浮窗/其它）收编现有扁平 section（纯结构重构，前置上述能力卡落地）。

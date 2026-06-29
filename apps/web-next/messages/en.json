@@ -139,6 +139,11 @@
     "motionNone": "Off",
     "motionNormal": "Normal",
     "motionHigh": "Enhanced",
+    "bgPattern": "Background",
+    "bgPatternNone": "Solid",
+    "bgPatternDots": "Dots",
+    "bgPatternGrid": "Grid",
+    "bgPatternNoise": "Noise",
     "comingSoon": "Coming soon"
   }
 }

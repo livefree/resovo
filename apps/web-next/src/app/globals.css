@@ -953,3 +953,43 @@
 :root {
   --cinema-overlay-bg: color-mix(in srgb, black 55%, transparent);
 }
+
+/* HANDOFF-42 — 背景图案 token（值取 Token Audit §2.2；颜色零硬编码，随主题切换） */
+:root {
+  --pattern-dots-bg:   radial-gradient(oklch(86.9% 0.009 247) 1px, transparent 1px);
+  --pattern-dots-size: 20px 20px;
+  --pattern-grid-bg:
+    linear-gradient(oklch(92.9% 0.006 247) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(92.9% 0.006 247) 1px, transparent 1px);
+  --pattern-grid-size: 40px 40px;
+  --pattern-noise-bg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9'/%3E%3CfeColorMatrix values='0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0 0.5 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+[data-theme="dark"] {
+  --pattern-dots-bg: radial-gradient(oklch(23.0% 0.010 247) 1px, transparent 1px);
+  --pattern-grid-bg:
+    linear-gradient(oklch(16.5% 0.008 247) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(16.5% 0.008 247) 1px, transparent 1px);
+  --pattern-noise-bg: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.03 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* HANDOFF-42 — 底纹作用于 .app-shell（不透明 canvas 盖住 body），经 <html data-bg-pattern>
+   切换；默认 dots 与设计稿一致（无属性 / JS 禁用时即生效），各档显式定 size 防泄漏。 */
+.app-shell {
+  background-image: var(--pattern-dots-bg);
+  background-size: var(--pattern-dots-size);
+}
+html[data-bg-pattern="none"] .app-shell {
+  background-image: none;
+}
+html[data-bg-pattern="dots"] .app-shell {
+  background-image: var(--pattern-dots-bg);
+  background-size: var(--pattern-dots-size);
+}
+html[data-bg-pattern="grid"] .app-shell {
+  background-image: var(--pattern-grid-bg);
+  background-size: var(--pattern-grid-size);
+}
+html[data-bg-pattern="noise"] .app-shell {
+  background-image: var(--pattern-noise-bg);
+  background-size: auto;
+}

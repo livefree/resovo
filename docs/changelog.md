@@ -3315,3 +3315,23 @@
 - **数据库变更**：无 schema（运维期一次性数据对齐）
 - **门禁**：typecheck=0 / lint=0 / test:changed 6 passed / verify:adr-contracts=0
 - **注意事项**：**实跑属运维步**（部署期 `--dry-run` 对账 → real 写）。对齐后消除 B-1 遗留的过滤-投影不一致（至 META-60 投影迁移前窗口）。下一卡 META-60（完全停写 + 投影/derive 收尾）。
+
+## [HANDOFF-42-20260629] 设置抽屉·外观·背景图案（Global Shell 设计稿 / SEQ-20260629-01）
+- **完成时间**：2026-06-29
+- **记录时间**：2026-06-29
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（实现遵 Global Shell 设计稿 + Token Audit §2.2 既定 token 值 + 既有 data-theme/motion-scale 范式，非新架构决策）
+- **内容**：现有 `SettingsDrawer` 已有主题/动效强度，补齐设计稿「外观」分组缺失的**背景图案**——4 档（纯色 none / 圆点 dots / 网格 grid / 噪点 noise，默认 dots 遵设计稿），在「主题」后新增缩略图选区（镜像设计稿 `.pat-thumb`：preview fill + active 态 + 标签）。
+- **契约/机制**：
+  - 枚举 SSOT + read/apply/persist/set 沉淀新 lib `apps/web-next/src/lib/bg-pattern.ts`（可增量扩展，零硬编码）。
+  - 存储 localStorage `resovo:bg-pattern`（纯客户端视觉偏好，镜像既有 `resovo:motion-scale`；不入 cookie/middleware）。
+  - 底纹作用于 `.app-shell`（不透明 `--bg-canvas` 盖住 body，body 底纹不可见），经 `<html data-bg-pattern>` 切换（镜像 data-theme，`<html suppressHydrationWarning>` 既有保护，hydration 安全；主题 data-theme 路径只读不动）。
+  - **FOUC-free**：扩展 `theme-init-script.ts` 首绘前读 localStorage 设 `data-bg-pattern`（与 data-theme 同 blocking 范式，try/catch 防 localStorage 禁用）；CSS 默认（无属性/JS 禁用）= dots 与设计稿 `<body class="pattern-dots">` 一致。
+  - Token：按 Token Audit §2.2 落 `--pattern-{dots,grid,noise}-bg` + `-size` 到 globals.css（:root 浅色 + `[data-theme="dark"]` 深色，颜色全经 oklch CSS 变量，随主题切换）；各档显式定 background-size 防泄漏（noise→auto）。
+- **i18n**：`messages/{zh-CN,en}.json` settings 补 `bgPattern` + `bgPatternNone/Dots/Grid/Noise` 5 键。
+- **修改文件**：`apps/web-next/src/app/globals.css` / `apps/web-next/src/lib/theme-init-script.ts` / `apps/web-next/src/components/layout/SettingsDrawer.tsx` / `apps/web-next/messages/zh-CN.json` / `apps/web-next/messages/en.json`
+- **新增文件**：`apps/web-next/src/lib/bg-pattern.ts` / `tests/unit/web-next/SettingsDrawer.test.tsx`
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：typecheck=0（全 7 workspace）/ lint=0（4 successful，告警均既有文件）/ test:changed 26 passed（新 SettingsDrawer 12 + Header 14）/ 真实 dev server Playwright 实测：默认 dots、4 档 CSS 计算样式正确（none→无图 / dots→radial 20px / grid→双层 linear 40px / noise→SVG auto）、dark/light dots 随主题异色、抽屉 4 选项渲染+点击切换写 localStorage+设 html 属性+active 迁移全链路通。
+- **注意事项**：default=dots 遵设计稿（HANDOFF.md「设计意图，勿改」），非产品自定，如需改默认后续单独决策；抽屉仅追加「背景图案」区未重构扁平 section（分组化登记后续卡 HANDOFF-45）。后续卡（task-queue SEQ-20260629-01）：HANDOFF-43 动效组（减弱动效/Ken Burns）/ HANDOFF-44 浮窗播放器组 / HANDOFF-45 抽屉分组化重构。

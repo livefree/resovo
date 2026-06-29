@@ -139,6 +139,11 @@
     "motionNone": "关闭",
     "motionNormal": "正常",
     "motionHigh": "增强",
+    "bgPattern": "背景图案",
+    "bgPatternNone": "纯色",
+    "bgPatternDots": "圆点",
+    "bgPatternGrid": "网格",
+    "bgPatternNoise": "噪点",
     "comingSoon": "即将推出"
   }
 }
