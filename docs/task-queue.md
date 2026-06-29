@@ -3337,3 +3337,29 @@
 - **HANDOFF-43（候选）**：设置抽屉「动效」分组补齐——`减弱动效` 开关（强制 scale=0.25）+ `关键帧背景` Ken Burns 开关（设计稿 Global Shell「动效」组；现仅有动效强度滑块）。
 - **HANDOFF-44（候选）**：设置抽屉「浮窗播放器」分组——自动浮窗 / 默认大小（240/320/480）/ 显示开关，与 GlobalPlayerHost·playerStore 对接（需播放器 shell 协同，起卡前评估关键路径回归）。
 - **HANDOFF-45（候选）**：抽屉「分组化」重构——按设计稿 set-group（外观/动效/浮窗/其它）收编现有扁平 section（纯结构重构，前置上述能力卡落地）。
+
+---
+
+## SEQ-20260629-02 · 前端交付包 Motion Spec — 前端动效对齐设计稿
+
+> 创建时间：2026-06-29 ｜ 最后更新时间：2026-06-29
+> 来源：`docs/designs/client_handoff/`（HANDOFF 前端交付包，切入顺序阶段 4「动效层」；Motion Spec.html 14 demo + Token Audit §2.4 + primitives/motion.ts）
+> 范围：把设计稿动效语言对齐到 web-next。**现状审计**：web-next 已实装约 12/14 种 Motion Spec 动效（页面过渡 ADR-044 / takeover·tabbar·shared-element·route-stack ADR-048 / stagger / skeleton shimmer / KenBurns / tab 下划线 / dropdown fade / 边缘侧滑返回）；真缺口集中在 **(a) canonical motion token 词表（全缺）**、**(b) 卡片 hover 浮起（缺）**、**(c) 散落硬编码曲线/时长未收敛到统一词表**。
+> ID 说明：43/44/45 已被 SEQ-20260629-01 占用，本序列自 46 起。
+
+| 任务 | 状态 | 摘要 | 范围 | 模型 | 依赖 | 门禁 |
+| --- | --- | --- | --- | --- | --- | --- |
+| **HANDOFF-46** | ✅ 完成（2026-06-29；详见 changelog [HANDOFF-46-20260629]） | **动效 token 基座对齐**：`globals.css` 追加设计稿 canonical motion 词表——6 档 duration（`--duration-instant/fast/base/slow/slower/slowest` = 0/120/200/320/480/720ms）+ 5 种 easing（`--easing-linear/ease-in/ease-out/ease-in-out/spring`，spring=`cubic-bezier(0.34,1.56,0.64,1)`），值逐字对齐 `primitives/motion.ts`；theme-independent 仅 `:root`；纯加性、零消费端改动（对齐设计方 Integration Plan PR-1「补齐 tokens、不碰消费端」）。 | `globals.css` 仅追加 token 块（前端单层） | **opus**（主循环；motion.ts 值逐字转录、非新架构决策，无子代理） | 无 | ✅ typecheck=0 / lint=0 / test:changed（CSS 非 docs-only，无关联测试 exit 0）/ 真实 dev server Playwright getComputedStyle 实测 6+5 token 全解析为设计值、既有 token 无回归 |
+
+### 关键约束与红线
+
+- **值逐字对齐设计方**（`primitives/motion.ts`），不自造 duration/easing 数值。
+- **颜色/曲线零硬编码漂移**：易用 CSS 变量统一词表；后续消费端一律 `var(--duration-X)` / `var(--easing-X)`，禁散落字面值。
+- **既有 ADR token 不动**：ADR-044（`--ease-page`）/ ADR-048（`--shared-element-*` / `takeover-*` / `route-stack-*`）的自定义曲线**本卡不重指向**——重指向是行为变更，须 ADR 评审（HANDOFF-48）。canonical 词表与既有 ADR token 暂并存，过渡态显式登记。
+- **CSS 注释 `*/` 陷阱（本卡踩坑）**：注释正文含 `-*/`（glob+路径分隔）会提前闭合 CSS 注释 → PostCSS「Unexpected '/'」整段破坏 app CSS；**typecheck/lint 不走 PostCSS 不报**，须 dev 编译/Playwright 兜底。后续 CSS 注释勿写裸 `*/` 序列。
+
+### 后续卡登记（本序列，未立案）
+
+- **HANDOFF-47（候选）**：卡片 hover 浮起对齐（设计稿 Motion Spec「PC · 卡片 hover 浮起」）——`translateY(-6px) + scale(1.03) + 阴影升级`，消费 HANDOFF-46 token（`--easing-spring`/`--duration-base`）+ 新增 `--shadow-card-hover`（Token Audit §3.2：`0 8px 24px -8px / 0 2px 6px`，按 `--shadow-drawer` 先例改 `oklch(0% 0 0 / α)`）。**跨容器裁剪处理**：`.scroll-row`（overflow-x:auto）/ Shelf（overflowX hidden·auto）/ VideoGrid scroll 布局均裁剪垂直溢出 → 须给横滚容器补 top padding；纯 `grid` 布局安全。门控 `(hover:hover)` + `prefers-reduced-motion` 关闭 + `--motion-scale`；hover 抬 z-index 防缩放压邻卡。涉 VideoCard（ubiquitous，跨首页/分类/搜索/相关）须跨上下文 Playwright 实测防回归。
+- **HANDOFF-48（候选，需 ADR 评审）**：ADR-044/048 散落曲线收敛——把 `--ease-page`/`--shared-element-*`/`takeover-*`/`route-stack-*` 中与 canonical 等值的项重指向 `var(--easing-X)`/`var(--duration-X)`（如 `--shared-element-easing` ≡ `--easing-ease-in-out`、`--shared-element-fallback-duration` ≡ `--duration-fast`），非等值项（`--ease-page` iOS 曲线）保留并文档化偏离。**行为/视觉等价性须 arch-reviewer 背书 + ADR-044/048 AMENDMENT**。
+- **HANDOFF-49（候选）**：微交互审计——NavMoreMenu/MegaMenu 进出（设计 `opacity+translateY(-6px) 120ms ease-out`）/ 移动长按呼出环 / mobile tabbar swap / scrubber fill 逐项对照 Motion Spec，对齐到 canonical token；纯增量微调。

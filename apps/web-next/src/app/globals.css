@@ -516,6 +516,27 @@
   --ease-page: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
+/* HANDOFF-46 — 设计稿 canonical motion token 词表（SSOT）
+ * 值逐字对齐 packages/design-tokens/src/primitives/motion.ts（6 档 duration + 5 种 easing）。
+ * 用法约定：动画时长统一 calc(var(--duration-X) * var(--motion-scale, 1))（接 HANDOFF-26 减弱动效，
+ * 默认 scale=1、减弱档强制 0.25）；easing 直接引用。theme-independent，仅 :root，无 dark 覆盖。
+ * 纯加性词表；既有 ADR-044（ease-page）与 ADR-048（shared-element、takeover、route-stack）的自定义
+ * 曲线向本词表收敛为 ADR 评审项，见 task-queue HANDOFF-48。消费端落地见 HANDOFF-47+。 */
+:root {
+  --duration-instant: 0ms;
+  --duration-fast:    120ms;
+  --duration-base:    200ms;
+  --duration-slow:    320ms;
+  --duration-slower:  480ms;
+  --duration-slowest: 720ms;
+
+  --easing-linear:      linear;
+  --easing-ease-in:     cubic-bezier(0.4, 0, 1, 1);
+  --easing-ease-out:    cubic-bezier(0, 0, 0.2, 1);
+  --easing-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --easing-spring:      cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
 ::view-transition-old(root),
 ::view-transition-new(root) {
   animation-duration: var(--transition-page);

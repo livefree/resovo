@@ -6,7 +6,7 @@
 
 ## 当前任务（单任务工作台：同时仅 1 个 🔄 进行中；完成即删卡，历史见 docs/changelog.md）
 
-_（**SEQ-20260624-01 统一筛选区全交付 ✅ 2026-06-24**：37/38/39/40A/40B/41 六卡全 ✅。分类页与搜索页共用同一 5 维筛选区（类型/题材/地区/语言/年份）+ 网格左上排序条（添加时间/人气/评分），taxonomy SSOT 零硬编码、type↔nav 双向联动，前后端全维度对齐——`/videos`(PostgreSQL) genre/lang + `/search`(ES) genre/sort-hot/lang 音频对齐（新 `audio_langs` 字段，跨页 lang 语义等价 Opus 数学证明）。**剩合并 main 前 gate**：test:e2e（4 projects）+ `scripts/reindex-es-audio-langs.ts` 实跑（需 ES+Postgres+.env.local）+ 全量单测兜底——worktree 阻塞，同 CARD-SIZE-A1A2-GATE 先例。取卡前先查 🚨 BLOCKER。）_
+_（**SEQ-20260629-02 动效对齐 — HANDOFF-46 ✅ 2026-06-29**：动效 token 基座落地（`globals.css` 追加设计稿 canonical motion 词表：6 档 duration `--duration-instant/fast/base/slow/slower/slowest` + 5 种 easing `--easing-linear/ease-in/ease-out/ease-in-out/spring`，逐字对齐 `primitives/motion.ts`，纯加性零消费端）。后续 HANDOFF-47（卡片 hover 浮起）/ 48（ADR-044·048 曲线收敛，需评审）/ 49（微交互审计）见 task-queue SEQ-20260629-02。取卡前先查 🚨 BLOCKER。）_
 
 
 ### ⏸️ IMGH-P4-A — 方案C worker：确定性出口写 checked_at + fetchImageDimensions 判别式 + A-SCAN 门（ADR-213，SEQ-20260621-02）

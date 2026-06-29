@@ -3335,3 +3335,22 @@
 - **数据库变更**：无
 - **门禁**：typecheck=0（全 7 workspace）/ lint=0（4 successful，告警均既有文件）/ test:changed 26 passed（新 SettingsDrawer 12 + Header 14）/ 真实 dev server Playwright 实测：默认 dots、4 档 CSS 计算样式正确（none→无图 / dots→radial 20px / grid→双层 linear 40px / noise→SVG auto）、dark/light dots 随主题异色、抽屉 4 选项渲染+点击切换写 localStorage+设 html 属性+active 迁移全链路通。
 - **注意事项**：default=dots 遵设计稿（HANDOFF.md「设计意图，勿改」），非产品自定，如需改默认后续单独决策；抽屉仅追加「背景图案」区未重构扁平 section（分组化登记后续卡 HANDOFF-45）。后续卡（task-queue SEQ-20260629-01）：HANDOFF-43 动效组（减弱动效/Ken Burns）/ HANDOFF-44 浮窗播放器组 / HANDOFF-45 抽屉分组化重构。
+
+## [HANDOFF-46-20260629] 动效 token 基座对齐：落地设计稿 canonical motion 词表（Motion Spec 设计稿 / SEQ-20260629-02）
+- **完成时间**：2026-06-29
+- **记录时间**：2026-06-29
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（设计稿 `primitives/motion.ts` 值逐字转录为 CSS 变量，非新架构决策；同 HANDOFF-42 `--pattern-*` 先例）
+- **背景/审计**：读 `docs/designs/client_handoff`（Motion Spec.html 14 demo + Token Audit §2.4 + primitives/motion.ts + Integration Plan）。**现状审计**：web-next 已实装约 12/14 种 Motion Spec 动效（页面过渡 ADR-044 / takeover·tabbar·shared-element·route-stack ADR-048 / VideoGrid stagger / skeleton shimmer / KenBurns / tab 下划线 / dropdown fade / 边缘侧滑返回）；真缺口为 **(a) canonical motion token 词表全缺**、(b) 卡片 hover 浮起缺、(c) 散落硬编码曲线未收敛。本卡落地 (a)。
+- **内容**：`globals.css` 在 ADR-044 动画 token 块后追加设计稿 canonical motion 词表（`:root`，theme-independent 无 dark 覆盖）：
+  - 6 档 duration：`--duration-instant/fast/base/slow/slower/slowest` = `0/120/200/320/480/720ms`
+  - 5 种 easing：`--easing-linear`、`--easing-ease-in` `cubic-bezier(0.4,0,1,1)`、`--easing-ease-out` `cubic-bezier(0,0,0.2,1)`、`--easing-ease-in-out` `cubic-bezier(0.4,0,0.2,1)`、`--easing-spring` `cubic-bezier(0.34,1.56,0.64,1)`
+  - 值**逐字对齐** `packages/design-tokens/src/primitives/motion.ts`；注释写明用法约定（时长 `calc(var(--duration-X) * var(--motion-scale,1))` 接 HANDOFF-26 减弱动效）。
+- **范围取舍**：**纯加性、零消费端改动**（对齐设计方 Integration Plan PR-1「补齐 tokens、不碰任何消费端」）。既有 ADR-044（`--ease-page`）/ ADR-048（`--shared-element-*`/`takeover-*`/`route-stack-*`）自定义曲线**本卡不重指向**（重指向是行为变更须 ADR 评审，登记 HANDOFF-48）；canonical 词表与既有 ADR token 暂并存，过渡态显式登记。
+- **踩坑修复**：初版注释正文含 `--shared-element-*/takeover-*` 的 `-*/` 序列**提前闭合 CSS 注释** → PostCSS「Unexpected '/'」整段破坏 app CSS；**typecheck/lint 不走 PostCSS 未报**，Playwright dev 编译实测抓到。已改写注释去除裸 `*/` 序列。
+- **修改文件**：`apps/web-next/src/app/globals.css`（仅追加 token 块 + 注释）
+- **新增文件**：无
+- **新增依赖**：无
+- **数据库变更**：无
+- **门禁**：typecheck=0（全 7 workspace）/ lint=0（4 successful，告警均既有文件）/ test:changed（CSS 非 docs-only，无关联测试 exit 0）/ 真实 dev server Playwright getComputedStyle 实测 `:root` 6 duration + 5 easing 全解析为设计值、`--motion-scale`/`--bg-canvas` 等既有 token 无回归、dev 编译干净无 PostCSS 报错。纯加性无逻辑、无关键路径回归（CSS-only，e2e 不适用）。
+- **注意事项**：后续 CSS 注释勿写裸 `*/`（glob/路径 `-*/` 会闭合注释，本类错误 typecheck/lint 不报，须 dev 编译兜底）。后续卡（task-queue SEQ-20260629-02）：HANDOFF-47 卡片 hover 浮起（消费本词表 + 新增 `--shadow-card-hover`，跨容器裁剪处理）/ HANDOFF-48 ADR-044·048 曲线收敛（需 arch-reviewer + ADR AMENDMENT）/ HANDOFF-49 微交互审计（NavMoreMenu/长按/tabbar swap/scrubber）。
