@@ -701,22 +701,24 @@
  * 卡片 hover 浮起（HANDOFF-47-A，对齐设计稿 Motion Spec「PC · 卡片 hover 浮起」）
  *   消费 HANDOFF-46 motion token（--duration-base / --easing-ease-out）+ --shadow-card-hover。
  *   作用元素：.video-card-poster（海报 wrapper）；触发：.video-card-lift:hover（卡根，hover 卡任意处）。
+ *   浮起幅度固定 translateY(-6px) scale(1.03)（逐字对齐设计稿）；动效强度由 --motion-scale 缩放 transition
+ *     时长（HANDOFF-26「动效强度」滑块 0/1/1.5 = 关闭/正常/增强；沿用既有惯例 globals.css:522/532
+ *     的 calc(<duration> * var(--motion-scale, 1)) 范式）：0→0ms 即时无动画、1→200ms、1.5→300ms 更慢更显著。
+ *     强度越高时长越长、动效越足（非位移缩放，避免与既有 duration 惯例语义相悖）。
  *   门控：仅 (hover:hover)+(pointer:fine)〔触屏不触发，避免移动端误触持留态〕；
- *         prefers-reduced-motion 禁 transform、保留 shadow 作静态深度 cue；
- *         浮起幅度接 --motion-scale（HANDOFF-26 减弱动效，0.25 时按比缩小）。
+ *         prefers-reduced-motion 禁 transform、保留 shadow 作静态深度 cue。
  *   hover 抬 z-index:1 防 scale 压邻卡。海报 wrapper 无 overflow-hidden（StackedPosterFrame 阴影外露），shadow 可见。
  * ─────────────────────────────────────────────────────────────────────────── */
 @media (hover: hover) and (pointer: fine) {
   .video-card-poster {
-    transition: transform var(--duration-base) var(--easing-ease-out),
-                box-shadow var(--duration-base) var(--easing-ease-out);
+    transition: transform calc(var(--duration-base) * var(--motion-scale, 1)) var(--easing-ease-out),
+                box-shadow calc(var(--duration-base) * var(--motion-scale, 1)) var(--easing-ease-out);
   }
   .video-card-lift:hover {
     z-index: 1;
   }
   .video-card-lift:hover .video-card-poster {
-    transform: translateY(calc(-6px * var(--motion-scale, 1)))
-               scale(calc(1 + 0.03 * var(--motion-scale, 1)));
+    transform: translateY(-6px) scale(1.03);
     box-shadow: var(--shadow-card-hover);
   }
 }
