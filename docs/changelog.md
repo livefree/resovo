@@ -3427,3 +3427,20 @@
 - **新增文件**：无 ｜ **新增依赖**：无 ｜ **数据库变更**：无
 - **门禁**：typecheck=0（全 7 workspace）/ lint=0（4 successful）/ test:changed 6 文件 54 测全过（VideoCard 19 测通过，证实无测试依赖 PosterHoverDim）。**真实 dev server Playwright getComputedStyle 实测**：hover takeover 卡海报 wrapper 后台无任何黑色叠加（`blackDimOnHover=[]`、`bg-black` DOM 不存在）；播放按钮仍淡入（opacity 0→1）；HANDOFF-47 浮起仍正常（`matrix(1.03,0,0,1.03,0,-6)`）。**关键路径**：VideoCard ubiquitous，点击/导航/Fast Takeover 不受影响（移除的是 pointer-events-none 叠加层，仅可提升点击可靠性；47-B 已实测 navigate→详情 / takeover→/watch 正常）。
 - **注意事项**：移除后 hover 态保留 FloatingPlayButton 淡入 + 卡片浮起 + 标题变强调色三项视觉反馈，无海报暗化。
+
+## [HANDOFF-49-D-A-20260630] 微交互动效补全：新建 `<DropdownMenu>` 共享 primitive（Motion Spec 设计稿 / SEQ-20260629-02）
+
+- **完成时间**：2026-06-30
+- **记录时间**：2026-06-30
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer（claude-opus-4-8）——HANDOFF-49 微交互审计后产出 `<DropdownMenu>` + `<SlidingUnderline>` 双共享组件 API 契约设计蓝图 + 12 条硬约束；本卡按蓝图实施 DropdownMenu 本体。
+- **背景**：HANDOFF-49 微交互审计原计划「Tier-1 快速 token 微调」，经 arch-review 揭露为 throwaway——① MegaMenu 是僵尸代码（web-next 内零调用方）；② 进场动画须内联 transition、不复用 `menuFadeIn`；③ 时长须 `calc(var(--duration-X) * var(--motion-scale,1))`（既有惯例 globals.css:522/532 + 47-A-FIX）；④ NavMoreMenu/MegaMenu 两套下拉应收敛为单一 primitive。interim 补丁已回退回干净基线，转按蓝图建正式 primitive（用户 2026-06-30 拍板「按蓝图实装全部」+「同意删除 MegaMenu」）。
+- **内容**：新建 `apps/web-next/src/components/primitives/dropdown-menu/`——
+  - `types.ts`：`DropdownMenuProps`（trigger render-prop + 数据驱动 items + onOpenChange + hoverIntent 双延时可配 + align 逻辑属性 + minWidthPx + testIdPrefix）/ `DropdownMenuItem` / `DropdownHoverIntent` / `DropdownTriggerState`（回传 `{open, toggle}`）。
+  - `DropdownMenu.tsx`：合并 NavMoreMenu（hover-intent 双延时 default 120/240 + 触屏 toggle + 几何桥接区 `paddingTop:8px` + panel onMouseEnter cancelTimers 防死区 + 仅 `(hover:hover)` 启用 hover）与 MegaMenu（键盘 ArrowDown 开并聚焦首项 / Esc 关回焦 trigger + a11y aria-haspopup/expanded/controls + useId）能力。进场对齐 Motion Spec：opacity + translateY(-6px)，`calc(var(--duration-fast) * var(--motion-scale,1)) var(--easing-ease-out)`，rAF data-state；颜色/阴影零硬编码（`var(--bg-surface)`/`var(--border-default)`/`color-mix(... var(--color-gray-1000) ...)`）；逻辑属性 `inset-inline-start/end`（RTL 安全）；禁 any。职责边界：不碰 i18n（label 调用方传入）/ 不碰路由（item.active 调用方算）/ 不碰 trigger 外观（chevron·下划线留 trigger，回传 open）。
+  - `index.ts`：re-export 组件 + 类型。
+- **globals.css**：新增 `.dropdown-panel` 的 `prefers-reduced-motion: reduce` 降级块（`transition: none`，面板即时定位，零首帧闪）；`@keyframes menuFadeIn` 留历史不改不删。
+- **修改文件**：`apps/web-next/src/app/globals.css`
+- **新增文件**：`apps/web-next/src/components/primitives/dropdown-menu/{types.ts,DropdownMenu.tsx,index.ts}` + `tests/unit/web-next/DropdownMenu.test.tsx` ｜ **新增依赖**：无 ｜ **数据库变更**：无
+- **门禁**：typecheck=0（全 7 workspace）/ lint=0（4 successful）/ test:changed exit0（DropdownMenu 6 测全过：默认收起+toggle 渲染数据驱动 items / hover-intent 延时展开 / 几何桥接区移入面板取消关闭 / ArrowDown 聚焦首项 / Esc 关闭回焦 trigger / onOpenChange 回调）。primitive 暂无消费方（NavMoreMenu 迁移 + 删 MegaMenu 在 49-D-B），无集成回归，Playwright 留待 49-D-B 有 live 挂载点时跑。
+- **注意事项**：本卡仅交付 primitive 本体；49-D-B 迁移 NavMoreMenu 消费 + 删除零调用 MegaMenu；49-E-A/B/C 为 `<SlidingUnderline>` 滑动下划线（独立子卡）。共享组件 API 契约 commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
