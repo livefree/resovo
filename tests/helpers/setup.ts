@@ -5,6 +5,17 @@
 
 import { beforeAll, afterAll, beforeEach } from 'vitest'
 
+// jsdom 无 ResizeObserver：共享 primitive SlidingUnderline（HANDOFF-49-E）在 useLayoutEffect 中使用，
+// 任何渲染其消费方（Nav / MobileTabBar 等）的组件测试都需要。统一在此 polyfill（node 环境无害、仅 define）。
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver
+}
+
 // 加载测试环境变量
 process.env.NODE_ENV = 'test'
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL ?? ''

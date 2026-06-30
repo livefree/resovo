@@ -3478,3 +3478,18 @@
 - **新增文件**：`apps/web-next/src/components/primitives/sliding-underline/{types.ts,useUnderlineRegistry.ts,SlidingUnderline.tsx,index.ts}` + `tests/unit/web-next/SlidingUnderline.test.tsx` ｜ **新增依赖**：无 ｜ **数据库变更**：无
 - **门禁**：typecheck=0 / lint=0 / test:changed exit0（SlidingUnderline 6 测：渲染 class+aria / null 隐藏 / 命中可见 / 未命中不崩 / register 稳定 per-key / 注册+移除）。**jsdom 不做 layout（offsetWidth=0）→ 几何/滑动断言留 Playwright（49-E-B/C 实测）**；primitive 暂无消费方，无集成回归。
 - **注意事项**：49-E-B Nav 桌面迁移（insetPx=14，MoreMenu 下划线保持独立不入 registry）；49-E-C MobileTabBar 迁移（insetPercent=25）+ 并入图标 scale spring。
+
+## [HANDOFF-49-E-B-20260630] 微交互动效补全：Nav 桌面主导航迁移消费 `<SlidingUnderline>`（SEQ-20260629-02）
+
+- **完成时间**：2026-06-30
+- **记录时间**：2026-06-30
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer（claude-opus-4-8）——SlidingUnderline ref-registry 迁移蓝图。
+- **内容**：
+  - `Nav.tsx`：`useUnderlineRegistry()` + 计算 `activeNavKey`（home → 'home'；MAIN 分类 → `cat-${typeParam}`；否则 null）；`<nav>` 加 `relative`（下划线定位上下文）；末尾挂单条 `<SlidingUnderline activeKey registry insetPx=14 offset="calc(-1 * var(--header-underline-offset))" testId="nav-underline">`。`NavLinkItem` 移除每项静态 `{active && <span>}`，改 `ref={registerRef}` 上报 `<a>` 几何（registerRef 即 `register(key)` 稳定回调）；保留 active 颜色 + 全部 testid。**MoreMenu 下划线保持独立**（下拉 trigger 非导航 Link，不入 registry；MORE 分类页主导航 underline 隐藏、MoreMenu 自显）。
+  - `tests/helpers/setup.ts`：jsdom 全局 polyfill `ResizeObserver`（SlidingUnderline 在 useLayoutEffect 使用；任何渲染其消费方〔Nav/MobileTabBar〕的组件测试都需要；guard 仅 define、node 环境无害）——**ADR-180 helpers 改动 → 跑全量**。
+  - `tests/unit/web-next/SlidingUnderline.test.tsx`：移除本地 ResizeObserver stub（改用 setup.ts 全局 polyfill）。
+- **修改文件**：`apps/web-next/src/components/layout/Nav.tsx` / `tests/helpers/setup.ts` / `tests/unit/web-next/SlidingUnderline.test.tsx`
+- **新增文件**：无 ｜ **新增依赖**：无 ｜ **数据库变更**：无
+- **门禁**：typecheck=0 / lint=0 / **全量单测 612 文件 8337 测全过 exit0**（helpers 改动升全量，零回归含 MegaMenu 删除 + Nav 重构）。**真实 dev server Playwright getComputedStyle 实测**：① `/en`（home active）→ nav-underline `opacity=1` + `transform=matrix(1,0,0,1,14,0)`（translateX=offsetLeft 0+inset 14）+ `width=41px`（69−28）+ `transition="transform 0.3s cubic-bezier(0.4,0,0.2,1), width 0.3s ..."`（base×motion-scale 1.5=300ms + ease-in-out 惯例生效）；② `/en/movie`（MAIN active）→ `transform=matrix(1,0,0,1,87,0)`（offsetLeft 73+14）+ `width=49px`（77−28）→ 下划线精确滑到 active 项；③ `/en/short`（MORE 分类）→ nav-underline `opacity=0`（隐藏，short∉MAIN）+ MoreMenu trigger 自带 active 下划线 + accent 色。
+- **注意事项**：仅剩 49-E-C（MobileTabBar 迁移 + 图标 spring）收尾。滑动下划线数学：translateX=offsetLeft+insetPx、width=offsetWidth−2×insetPx，实测吻合。

@@ -12,6 +12,7 @@ import { SearchOverlay } from '@/components/search/SearchOverlay'
 import { SettingsDrawer } from '@/components/layout/SettingsDrawer'
 import { ALL_CATEGORIES, MAIN_TYPE_PARAMS } from '@/lib/categories'
 import { MoreMenu } from '@/components/layout/NavMoreMenu'
+import { SlidingUnderline, useUnderlineRegistry } from '@/components/primitives/sliding-underline'
 
 /**
  * Nav — HANDOFF-21 对齐 docs/frontend_design_spec_20260423.md §8
@@ -72,14 +73,18 @@ interface NavLinkItemProps {
   readonly active: boolean
   readonly label: string
   readonly testId?: string
+  /** SlidingUnderline registry 的稳定 per-key ref 回调（绑到 <a> 测量几何） */
+  readonly registerRef: (el: HTMLElement | null) => void
 }
 
-function NavLinkItem({ href, active, label, testId }: NavLinkItemProps) {
+// active 下划线已由父级单条 <SlidingUnderline> 统一渲染（HANDOFF-49-E-B）；本组件仅负责链接外观 + 上报 ref。
+function NavLinkItem({ href, active, label, testId, registerRef }: NavLinkItemProps) {
   return (
     <Link
+      ref={registerRef}
       href={href}
       data-testid={testId}
-      className="relative transition-colors shrink-0 whitespace-nowrap"
+      className="transition-colors shrink-0 whitespace-nowrap"
       style={{
         padding: 'var(--header-nav-padding)',
         fontSize: '14px',
@@ -102,20 +107,6 @@ function NavLinkItem({ href, active, label, testId }: NavLinkItemProps) {
       }}
     >
       {label}
-      {active && (
-        <span
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            left: '14px',
-            right: '14px',
-            bottom: 'calc(-1 * var(--header-underline-offset))',
-            height: '2px',
-            background: 'var(--accent-default)',
-            borderRadius: '1px',
-          }}
-        />
-      )}
     </Link>
   )
 }
@@ -137,6 +128,14 @@ export function Nav() {
   const currentLocale = pathname.split('/')[1] ?? 'en'
   const currentType = pathname.split('/')[2] ?? null
   const isHomePage = !currentType
+
+  // 主导航单条滑动下划线（HANDOFF-49-E-B）。MoreMenu 下划线独立、不入 registry（下拉 trigger 非导航 Link）。
+  const { registry, register } = useUnderlineRegistry()
+  const activeNavKey = isHomePage
+    ? 'home'
+    : MAIN_CATS.some((c) => c.typeParam === currentType)
+      ? `cat-${currentType}`
+      : null
 
   // OS 检测（SSR 安全：只在 client mount 后读取 navigator）（I-1/I-3）
   useEffect(() => {
@@ -218,7 +217,7 @@ export function Nav() {
 
         {/* 2. 主导航 + "更多" 下拉（单源 lib/categories.ts，I-6）*/}
         <nav
-          className="flex items-center gap-1 shrink-0"
+          className="relative flex items-center gap-1 shrink-0"
           aria-label="主导航"
         >
           <NavLinkItem
@@ -226,6 +225,7 @@ export function Nav() {
             active={isHomePage}
             label={t('home')}
             testId="nav-home"
+            registerRef={register('home')}
           />
           {MAIN_CATS.map((cat) => (
             <NavLinkItem
@@ -234,12 +234,21 @@ export function Nav() {
               active={currentType === cat.typeParam}
               label={t(cat.labelKey)}
               testId={`nav-cat-${cat.typeParam}`}
+              registerRef={register(`cat-${cat.typeParam}`)}
             />
           ))}
           <MoreMenu
             locale={currentLocale}
             currentType={currentType}
             label={t('more')}
+          />
+          {/* 主导航 active 单条滑动下划线（贴 header 底 border，内缩 14px 对齐旧静态 span） */}
+          <SlidingUnderline
+            activeKey={activeNavKey}
+            registry={registry}
+            insetPx={14}
+            offset="calc(-1 * var(--header-underline-offset))"
+            testId="nav-underline"
           />
         </nav>
 

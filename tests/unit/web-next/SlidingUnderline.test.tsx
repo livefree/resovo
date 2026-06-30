@@ -1,20 +1,9 @@
-import { describe, it, expect, vi, beforeAll } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { render, screen, renderHook, act } from '@testing-library/react'
 import { SlidingUnderline, useUnderlineRegistry } from '@/components/primitives/sliding-underline'
 
-// jsdom 无 ResizeObserver（SlidingUnderline 测量 effect 会 new 它）→ stub
-beforeAll(() => {
-  vi.stubGlobal(
-    'ResizeObserver',
-    class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    },
-  )
-})
-
-// 注：jsdom 不做 layout（offsetWidth/offsetLeft 恒为 0），几何/滑动断言留 Playwright（49-E-B/C 实测）。
+// 注：ResizeObserver 由 tests/helpers/setup.ts 全局 polyfill；jsdom 不做 layout（offsetWidth/offsetLeft
+// 恒为 0），几何/滑动断言留 Playwright（49-E-B/C 实测）。
 
 describe('SlidingUnderline', () => {
   it('渲染带 .sliding-underline 类 + testId 的 span', () => {
