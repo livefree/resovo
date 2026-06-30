@@ -3444,3 +3444,19 @@
 - **新增文件**：`apps/web-next/src/components/primitives/dropdown-menu/{types.ts,DropdownMenu.tsx,index.ts}` + `tests/unit/web-next/DropdownMenu.test.tsx` ｜ **新增依赖**：无 ｜ **数据库变更**：无
 - **门禁**：typecheck=0（全 7 workspace）/ lint=0（4 successful）/ test:changed exit0（DropdownMenu 6 测全过：默认收起+toggle 渲染数据驱动 items / hover-intent 延时展开 / 几何桥接区移入面板取消关闭 / ArrowDown 聚焦首项 / Esc 关闭回焦 trigger / onOpenChange 回调）。primitive 暂无消费方（NavMoreMenu 迁移 + 删 MegaMenu 在 49-D-B），无集成回归，Playwright 留待 49-D-B 有 live 挂载点时跑。
 - **注意事项**：本卡仅交付 primitive 本体；49-D-B 迁移 NavMoreMenu 消费 + 删除零调用 MegaMenu；49-E-A/B/C 为 `<SlidingUnderline>` 滑动下划线（独立子卡）。共享组件 API 契约 commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
+
+## [HANDOFF-49-D-B-20260630] 微交互动效补全：NavMoreMenu 迁移消费 `<DropdownMenu>` + 删除僵尸 MegaMenu（SEQ-20260629-02）
+
+- **完成时间**：2026-06-30
+- **记录时间**：2026-06-30
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer（claude-opus-4-8）——49-D 收敛蓝图（建 primitive + 迁 NavMoreMenu + 删 MegaMenu）。
+- **内容**：
+  - `NavMoreMenu.tsx`：`MoreMenu` 内部 hover-intent / 定时器 / 键盘 / a11y / 点击外部 / 进场逻辑全部下沉到 `<DropdownMenu>`，本组件瘦身为「业务数据（MORE_CATS → items，label 本地 t() 算好传入）+ trigger 外观（'更多'按钮 + chevron〔消费 open 旋转，token transition `calc(var(--duration-fast)*var(--motion-scale,1)) var(--easing-ease-out)`〕+ active 下划线）」。**公开 Props（locale/currentType/label）零变更**；保留全部 testid（`nav-more-trigger`/`nav-more-menu`/`nav-more-${typeParam}`）+ 按钮 `aria-haspopup/expanded`（不回归）。close 延时由旧 200ms 改 primitive 默认 240ms（arch-reviewer「更稳」）。
+  - **删除 `apps/web-next/src/components/layout/MegaMenu.tsx`**（web-next 内零 src 消费方，arch-reviewer 确认 + 用户同意）。
+  - `Header.test.tsx`：移除 `describe('MegaMenu')` 9 测块（行为已迁 `DropdownMenu.test.tsx`）+ 清理 `fireEvent` 未用 import；保留 Nav/Footer 测块。
+- **删除文件**：`apps/web-next/src/components/layout/MegaMenu.tsx`
+- **修改文件**：`apps/web-next/src/components/layout/NavMoreMenu.tsx` / `tests/unit/web-next/Header.test.tsx`
+- **新增文件**：无 ｜ **新增依赖**：无 ｜ **数据库变更**：无
+- **门禁**：typecheck=0 / lint=0 / test:changed exit0（Header 6 测过：Nav 固定高度 2 + Nav.Skeleton 2 + Footer.Skeleton 2）。**真实 dev server Playwright getComputedStyle 实测**（localhost:3000 /en）：点击 nav-more-trigger → 菜单展开 `opacity=1` + `transform=matrix(1,0,0,1,0,0)`（translateY 归零、进场完成）+ `transition="opacity 0.18s cubic-bezier(0,0,0.2,1), transform 0.18s ..."`（fast×motion-scale 1.5 = 180ms + ease-out，惯例生效）；`.dropdown-panel` reduce 类在位；6 items（short/sports/music/news/kids/other）href + role=menuitem 正确；`aria-expanded` false→true；chevron `matrix(-1,0,0,-1,0,0)` rotate(180) + token transition。console 仅 favicon 404（预存无关）。
+- **注意事项**：DropdownMenu 现为唯一桌面下拉范式；后续新下拉一律消费 primitive，不再起第二套实现。49-E（滑动下划线）独立推进。

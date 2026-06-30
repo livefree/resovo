@@ -1,19 +1,21 @@
 'use client'
 
 /**
- * NavMoreMenu.tsx — "更多 ▼" 下拉菜单（从 Nav.tsx 提取，CHG-SN-7-MISC-WEB-NEXT-SIZE）
+ * NavMoreMenu.tsx — "更多 ▼" 导航下拉（HANDOFF-49-D-B：迁移到共享 `<DropdownMenu>` primitive）
  *
- * I-5：hover 展开（桌面 pointer:fine）/ click 展开（触屏）
+ * 收敛前自带 hover-intent / 键盘 / a11y / 进场逻辑，现全部下沉到 `<DropdownMenu>`（arch-reviewer 契约）。
+ * 本组件只负责：① 业务数据（MORE_CATS → items）② trigger 外观（"更多"按钮 + chevron + active 下划线）。
+ * 进场动画对齐 Motion Spec（opacity + translateY(-6px) · fast ease-out · 受 --motion-scale）由 primitive 提供。
  */
 
-import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
+import { DropdownMenu } from '@/components/primitives/dropdown-menu'
+import type { DropdownMenuItem } from '@/components/primitives/dropdown-menu'
 import { ALL_CATEGORIES, MORE_TYPE_PARAMS } from '@/lib/categories'
 
 // 扩展分类（6 种，"更多 ▼" 下拉内），单源 lib/categories.ts（I-6）
 const MORE_CATS = ALL_CATEGORIES.filter((c) =>
-  (MORE_TYPE_PARAMS as readonly string[]).includes(c.typeParam)
+  (MORE_TYPE_PARAMS as readonly string[]).includes(c.typeParam),
 )
 
 const MORE_KEYS = new Set<string>(MORE_TYPE_PARAMS)
@@ -26,189 +28,88 @@ export interface MoreMenuProps {
 
 export function MoreMenu({ locale, currentType, label }: MoreMenuProps) {
   const t = useTranslations('nav')
-  const [open, setOpen] = useState(false)
-  const wrapperRef = useRef<HTMLDivElement | null>(null)
-  // 延时关闭定时器（hover-intent）：离开 wrapper 不立即关，给指针穿越「按钮↔菜单」间隙的时间，
-  // 抵达菜单（wrapper 后代）触发 mouseenter → 取消关闭。彻底兜底几何死区——Nav header `items-center`
-  // 致按钮垂直居中、其下方约 8px 为非 wrapper 后代的 header 空隙，鼠标下移穿越即触发 onMouseLeave。
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
   const active = currentType !== null && MORE_KEYS.has(currentType)
 
-  // 卸载清理延时关闭定时器（防泄漏 / setState on unmounted）
-  useEffect(
-    () => () => {
-      if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current)
-    },
-    [],
-  )
-
-  // 点击外部 + ESC 关闭（touch 模式下需要）
-  useEffect(() => {
-    if (!open) return
-    function handleClickOutside(e: MouseEvent) {
-      if (wrapperRef.current?.contains(e.target as Node)) return
-      setOpen(false)
-    }
-    function handleEsc(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    document.addEventListener('keydown', handleEsc)
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-      document.removeEventListener('keydown', handleEsc)
-    }
-  }, [open])
-
-  function cancelScheduledClose() {
-    if (closeTimerRef.current !== null) {
-      clearTimeout(closeTimerRef.current)
-      closeTimerRef.current = null
-    }
-  }
-
-  function handleMouseEnter() {
-    // hover 展开仅用于 pointer: fine（桌面鼠标）设备（I-5）
-    if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
-      cancelScheduledClose()
-      setOpen(true)
-    }
-  }
-
-  function handleMouseLeave() {
-    if (typeof window !== 'undefined' && window.matchMedia('(hover: hover)').matches) {
-      // 延时关闭：留出指针穿越间隙抵达菜单的时间，期间 re-enter（wrapper 后代）取消关闭。
-      cancelScheduledClose()
-      closeTimerRef.current = setTimeout(() => {
-        setOpen(false)
-        closeTimerRef.current = null
-      }, 200)
-    }
-  }
+  // 业务数据 → 数据驱动 items（label 在此 t() 算好传入，primitive 不碰 i18n）
+  const items: DropdownMenuItem[] = MORE_CATS.map((cat) => ({
+    key: cat.typeParam,
+    label: t(cat.labelKey),
+    href: `/${locale}/${cat.typeParam}`,
+    active: currentType === cat.typeParam,
+    testId: `nav-more-${cat.typeParam}`,
+  }))
 
   return (
-    <div
-      ref={wrapperRef}
-      className="relative"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      <button
-        type="button"
-        data-testid="nav-more-trigger"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((p) => !p)}
-        className="relative flex items-center gap-1 transition-colors shrink-0 whitespace-nowrap"
-        style={{
-          padding: 'var(--header-nav-padding)',
-          fontSize: '14px',
-          fontWeight: 600,
-          borderRadius: '8px',
-          background: 'transparent',
-          border: 'none',
-          textDecoration: 'none',
-          cursor: 'pointer',
-          color: active ? 'var(--accent-default)' : 'var(--fg-muted)',
-        }}
-        onMouseEnter={(e) => {
-          if (!active) {
-            e.currentTarget.style.color = 'var(--fg-default)'
-            e.currentTarget.style.background = 'var(--bg-surface-sunken)'
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!active) {
-            e.currentTarget.style.color = 'var(--fg-muted)'
-            e.currentTarget.style.background = 'transparent'
-          }
-        }}
-      >
-        {label}
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
+    <DropdownMenu
+      testIdPrefix="nav-more"
+      items={items}
+      trigger={({ open, toggle }) => (
+        <button
+          type="button"
+          data-testid="nav-more-trigger"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={toggle}
+          className="relative flex items-center gap-1 transition-colors shrink-0 whitespace-nowrap"
           style={{
-            transition: 'transform 160ms ease-out',
-            transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
-            opacity: 0.7,
+            padding: 'var(--header-nav-padding)',
+            fontSize: '14px',
+            fontWeight: 600,
+            borderRadius: '8px',
+            background: 'transparent',
+            border: 'none',
+            textDecoration: 'none',
+            cursor: 'pointer',
+            color: active ? 'var(--accent-default)' : 'var(--fg-muted)',
+          }}
+          onMouseEnter={(e) => {
+            if (!active) {
+              e.currentTarget.style.color = 'var(--fg-default)'
+              e.currentTarget.style.background = 'var(--bg-surface-sunken)'
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!active) {
+              e.currentTarget.style.color = 'var(--fg-muted)'
+              e.currentTarget.style.background = 'transparent'
+            }
           }}
         >
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-        {active && (
-          <span
+          {label}
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
             aria-hidden="true"
             style={{
-              position: 'absolute',
-              left: '14px',
-              right: '14px',
-              bottom: 'calc(-1 * var(--header-underline-offset))',
-              height: '2px',
-              background: 'var(--accent-default)',
-              borderRadius: '1px',
-            }}
-          />
-        )}
-      </button>
-
-      {open && (
-        // 外层=定位+透明桥接容器：紧贴按钮底部（top-full，无 margin），
-        // paddingTop 充当 8px hover 桥接区，避免鼠标穿越间隙离开 wrapper 触发收起。
-        <div className="absolute z-50 top-full" style={{ left: 0, paddingTop: '8px' }}>
-          <div
-            role="menu"
-            data-testid="nav-more-menu"
-            style={{
-              minWidth: '180px',
-              borderRadius: '10px',
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-default)',
-              boxShadow: '0 8px 24px color-mix(in oklch, var(--color-gray-1000) 12%, transparent)',
-              padding: '6px',
+              transition: 'transform calc(var(--duration-fast) * var(--motion-scale, 1)) var(--easing-ease-out)',
+              transform: open ? 'rotate(180deg)' : 'rotate(0deg)',
+              opacity: 0.7,
             }}
           >
-            {MORE_CATS.map((cat) => {
-              const isActive = currentType === cat.typeParam
-              return (
-                <Link
-                  key={cat.typeParam}
-                  href={`/${locale}/${cat.typeParam}`}
-                  role="menuitem"
-                  data-testid={`nav-more-${cat.typeParam}`}
-                  onClick={() => setOpen(false)}
-                  className="block transition-colors"
-                  style={{
-                    padding: '8px 12px',
-                    fontSize: '14px',
-                    fontWeight: 500,
-                    borderRadius: '6px',
-                    textDecoration: 'none',
-                    color: isActive ? 'var(--accent-default)' : 'var(--fg-default)',
-                    background: isActive ? 'var(--accent-muted)' : 'transparent',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) e.currentTarget.style.background = 'var(--bg-surface-sunken)'
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) e.currentTarget.style.background = 'transparent'
-                  }}
-                >
-                  {t(cat.labelKey)}
-                </Link>
-              )
-            })}
-          </div>
-        </div>
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+          {active && (
+            <span
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                left: '14px',
+                right: '14px',
+                bottom: 'calc(-1 * var(--header-underline-offset))',
+                height: '2px',
+                background: 'var(--accent-default)',
+                borderRadius: '1px',
+              }}
+            />
+          )}
+        </button>
       )}
-    </div>
+    />
   )
 }
