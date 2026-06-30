@@ -904,6 +904,19 @@
   .sliding-underline { transition: none !important; }
 }
 
+/* HANDOFF-49-E-C — MobileTabBar 图标 active scale spring（对齐 Motion Spec tabbar 图标 scale spring）。
+   reduce 降级：关闭过渡（保留 active 静态 scale 作指示）。 */
+.tabbar-icon {
+  display: inline-flex;
+  transition: transform calc(var(--duration-base) * var(--motion-scale, 1)) var(--easing-spring);
+}
+.tabbar-icon[data-active="true"] {
+  transform: scale(1.12);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tabbar-icon { transition: none; }
+}
+
 /* ── Banner 轮播主色调色板 ─────────────────────────────────────────── */
 :root {
   --banner-accent-0: oklch(64.5% 0.165 230); /* 品牌蓝 */

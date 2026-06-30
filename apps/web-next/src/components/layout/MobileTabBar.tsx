@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
+import { SlidingUnderline, useUnderlineRegistry } from '@/components/primitives/sliding-underline'
 
 // ── Icons ────────────────────────────────────────────────────────────────────
 
@@ -121,6 +122,10 @@ export function MobileTabBar() {
   const pathname = usePathname()
   const t = useTranslations()
 
+  // 单条滑动下划线（HANDOFF-49-E-C）+ 图标 active scale spring（.tabbar-icon）。
+  const { registry, register } = useUnderlineRegistry()
+  const activeTabKey = TABS.find((tab) => tab.match(pathname))?.key ?? null
+
   return (
     <nav
       data-tabbar
@@ -140,37 +145,35 @@ export function MobileTabBar() {
         borderTop: '1px solid var(--border-default)',
       }}
     >
-      <div style={{ display: 'flex', height: 'var(--tabbar-height)', alignItems: 'stretch' }}>
+      <div style={{ position: 'relative', display: 'flex', height: 'var(--tabbar-height)', alignItems: 'stretch' }}>
         {TABS.map(({ key, labelKey, href, testId, Icon, match }) => {
           const active = match(pathname)
           return (
             <Link
               key={key}
+              ref={register(key)}
               href={href}
               data-testid={testId}
               aria-current={active ? 'page' : undefined}
               className="relative flex flex-col items-center justify-center flex-1 gap-1 text-[0.625rem] leading-none"
               style={{ color: active ? 'var(--accent-default)' : 'var(--fg-subtle)' }}
             >
-              <Icon active={active} />
+              {/* 图标 active scale spring（.tabbar-icon，受 --motion-scale + reduce 降级，对齐 Motion Spec） */}
+              <span className="tabbar-icon" data-active={active}>
+                <Icon active={active} />
+              </span>
               <span>{t(labelKey)}</span>
-              {/* 180ms underline indicator */}
-              <span
-                style={{
-                  position: 'absolute',
-                  bottom: 0,
-                  left: '25%',
-                  right: '25%',
-                  height: 2,
-                  borderRadius: 1,
-                  background: 'var(--accent-default)',
-                  opacity: active ? 1 : 0,
-                  transition: 'opacity 180ms ease',
-                }}
-              />
             </Link>
           )
         })}
+        {/* 单条滑动下划线替换每项 opacity 显隐 span；内缩 25% 对齐旧 left/right:25% */}
+        <SlidingUnderline
+          activeKey={activeTabKey}
+          registry={registry}
+          insetPercent={25}
+          offset="0"
+          testId="tabbar-underline"
+        />
       </div>
     </nav>
   )

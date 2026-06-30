@@ -3366,4 +3366,10 @@
   - **HANDOFF-47-C（✅ 完成，2026-06-29；详见 changelog [HANDOFF-47-C-20260629]）**：用户反馈「卡片悬浮整体变暗」→ 删除 VideoCard 既有 `PosterHoverDim`（`group-hover/poster:bg-black/40` 暗化遮罩，两分支共用 + docstring + 两处调用）。FloatingPlayButton 自带 blur+白底不依赖暗化、移除后仍可见。门禁 typecheck=0/lint=0/test:changed 54 测过；Playwright 实测 hover 无黑色叠加 + 播放按钮仍淡入 + 浮起不回归。
   - **SEQ-20260629-02 卡片 hover 浮起（47-A + 47-B + 47-C）全交付** ✅ 2026-06-29：全站 VideoCard（首页/分类/搜索/相关）hover 浮起对齐设计稿 Motion Spec，grid + 全部横滚容器不裁顶。剩余 HANDOFF-48（曲线收敛，需 ADR 评审）/ HANDOFF-49（微交互审计）。
 - **HANDOFF-48（候选，需 ADR 评审）**：ADR-044/048 散落曲线收敛——把 `--ease-page`/`--shared-element-*`/`takeover-*`/`route-stack-*` 中与 canonical 等值的项重指向 `var(--easing-X)`/`var(--duration-X)`（如 `--shared-element-easing` ≡ `--easing-ease-in-out`、`--shared-element-fallback-duration` ≡ `--duration-fast`），非等值项（`--ease-page` iOS 曲线）保留并文档化偏离。**行为/视觉等价性须 arch-reviewer 背书 + ADR-044/048 AMENDMENT**。
-- **HANDOFF-49（候选）**：微交互审计——NavMoreMenu/MegaMenu 进出（设计 `opacity+translateY(-6px) 120ms ease-out`）/ 移动长按呼出环 / mobile tabbar swap / scrubber fill 逐项对照 Motion Spec，对齐到 canonical token；纯增量微调。
+- **HANDOFF-49 微交互动效补全 ✅ 全交付**（2026-06-30；详见 changelog [HANDOFF-49-D-A/D-B/E-A/E-B/E-C-20260630]）：审计揭露原「Tier-1 快速微调」为 throwaway（MegaMenu 僵尸代码 / 进场须内联 transition 不复用 menuFadeIn / 时长须 `calc(--duration-X * --motion-scale)` / A·B⊂49-D、C-下划线⊂49-E）→ 经 arch-reviewer（claude-opus-4-8）双契约蓝图重构为 5 子卡：
+  - **49-D-A**：新建 `<DropdownMenu>` 共享 primitive（hover-intent 双延时 + 触屏 toggle + 几何桥接区 + 键盘/a11y + 内联进场 opacity+translateY(-6px) fast ease-out）+ 6 单测。
+  - **49-D-B**：NavMoreMenu 迁移消费 + **删除零调用僵尸 MegaMenu**（+ Header.test 移除其 9 测块）。Playwright 实测进场/items/aria/chevron 全绿。
+  - **49-E-A**：新建 `<SlidingUnderline>` 共享 primitive（ref-registry + offsetLeft 测量 + useLayoutEffect/ResizeObserver + 首次无 transition 防闪 + base ease-in-out 滑动）+ 6 单测 + setup.ts polyfill ResizeObserver。
+  - **49-E-B**：Nav 桌面主导航迁移（insetPx=14，MoreMenu 下划线独立）。全量 8337 测过；Playwright home/movie/short 三态实测吻合。
+  - **49-E-C**：MobileTabBar 迁移（insetPercent=25）+ 图标 `.tabbar-icon` scale spring。mobile e2e 4 passed；真移动上下文 Playwright 实测下划线 + 图标 spring 全绿。
+  - **剩余暂缓**（非本序列阻塞）：49-F scrubber（player-core 跨包 token 需 Opus arch-reviewer + 可能 ADR，且现状基本符合）/ 49-G 移动长按呼出环（新功能、产品未定义目标动作）。

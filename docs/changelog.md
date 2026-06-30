@@ -3493,3 +3493,17 @@
 - **新增文件**：无 ｜ **新增依赖**：无 ｜ **数据库变更**：无
 - **门禁**：typecheck=0 / lint=0 / **全量单测 612 文件 8337 测全过 exit0**（helpers 改动升全量，零回归含 MegaMenu 删除 + Nav 重构）。**真实 dev server Playwright getComputedStyle 实测**：① `/en`（home active）→ nav-underline `opacity=1` + `transform=matrix(1,0,0,1,14,0)`（translateX=offsetLeft 0+inset 14）+ `width=41px`（69−28）+ `transition="transform 0.3s cubic-bezier(0.4,0,0.2,1), width 0.3s ..."`（base×motion-scale 1.5=300ms + ease-in-out 惯例生效）；② `/en/movie`（MAIN active）→ `transform=matrix(1,0,0,1,87,0)`（offsetLeft 73+14）+ `width=49px`（77−28）→ 下划线精确滑到 active 项；③ `/en/short`（MORE 分类）→ nav-underline `opacity=0`（隐藏，short∉MAIN）+ MoreMenu trigger 自带 active 下划线 + accent 色。
 - **注意事项**：仅剩 49-E-C（MobileTabBar 迁移 + 图标 spring）收尾。滑动下划线数学：translateX=offsetLeft+insetPx、width=offsetWidth−2×insetPx，实测吻合。
+
+## [HANDOFF-49-E-C-20260630] 微交互动效补全：MobileTabBar 迁移 `<SlidingUnderline>` + 图标 scale spring（HANDOFF-49 收尾，SEQ-20260629-02）
+
+- **完成时间**：2026-06-30
+- **记录时间**：2026-06-30
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer（claude-opus-4-8）——SlidingUnderline 迁移蓝图 + 图标 spring 并入建议。
+- **内容**：
+  - `MobileTabBar.tsx`：`useUnderlineRegistry()` + `activeTabKey = TABS.find(match)?.key`；tab 容器 `<div>` 加 `position:relative`；每个 tab `<Link>` 加 `ref={register(key)}`、**移除每项 `opacity 180ms ease` 显隐 span**；容器末尾挂单条 `<SlidingUnderline activeKey registry insetPercent=25 offset="0" testId="tabbar-underline">`（内缩 25% 对齐旧 left/right:25%）。图标包 `<span className="tabbar-icon" data-active={active}>`（active scale spring）。保留全部 testid + aria-current。
+  - `globals.css`：新增 `.tabbar-icon` 规则——`transition: transform calc(var(--duration-base) * var(--motion-scale,1)) var(--easing-spring)` + `[data-active="true"]{transform:scale(1.12)}` + `prefers-reduced-motion` 降级（transition:none，保留静态 scale）。对齐 Motion Spec「tabbar 图标 scale spring」。
+- **修改文件**：`apps/web-next/src/components/layout/MobileTabBar.tsx` / `apps/web-next/src/app/globals.css`
+- **新增文件**：无 ｜ **新增依赖**：无 ｜ **数据库变更**：无
+- **门禁**：typecheck=0 / lint=0 / test:changed exit0（MobileTabBar 12 测过）/ **mobile 域 e2e 4 passed 0 failed**（aria-current 无回归）。**真实移动上下文 Playwright（isMobile+hasTouch → `(hover:none)` → tabbar 首屏 display:flex）实测** `/en`：tabbar-underline `opacity=1` + `transform=matrix(1,0,0,1,7,0)`（offsetLeft 0 + inset 28×25%=7）+ `width=14px`（28×50%）+ `transition="transform 0.2s cubic-bezier(0.4,0,0.2,1), width 0.2s ..."`（base×motion-scale ease-in-out）；图标 `data-active=true` → `transform=matrix(1.12,...)` scale(1.12) + spring transition（cubic-bezier(0.34,1.56,0.64,1)），inactive scale 1。
+- **注意事项**：**HANDOFF-49 全交付**（49-D 下拉收敛 + 49-E 滑动下划线 5 子卡）。demo「tabbar view 淡入淡出」属页面过渡域（ADR-044）N/A；49-F scrubber（player-core 跨包需 Opus）/ 49-G 长按环（新功能待产品）暂缓未做。
