@@ -3507,3 +3507,26 @@
 - **新增文件**：无 ｜ **新增依赖**：无 ｜ **数据库变更**：无
 - **门禁**：typecheck=0 / lint=0 / test:changed exit0（MobileTabBar 12 测过）/ **mobile 域 e2e 4 passed 0 failed**（aria-current 无回归）。**真实移动上下文 Playwright（isMobile+hasTouch → `(hover:none)` → tabbar 首屏 display:flex）实测** `/en`：tabbar-underline `opacity=1` + `transform=matrix(1,0,0,1,7,0)`（offsetLeft 0 + inset 28×25%=7）+ `width=14px`（28×50%）+ `transition="transform 0.2s cubic-bezier(0.4,0,0.2,1), width 0.2s ..."`（base×motion-scale ease-in-out）；图标 `data-active=true` → `transform=matrix(1.12,...)` scale(1.12) + spring transition（cubic-bezier(0.34,1.56,0.64,1)），inactive scale 1。
 - **注意事项**：**HANDOFF-49 全交付**（49-D 下拉收敛 + 49-E 滑动下划线 5 子卡）。demo「tabbar view 淡入淡出」属页面过渡域（ADR-044）N/A；49-F scrubber（player-core 跨包需 Opus）/ 49-G 长按环（新功能待产品）暂缓未做。
+
+## [HANDOFF-48-20260630] ADR-044/048 散落 motion token 收敛核验：删 2 死 CSS var + 文档化偏离 + ADR AMENDMENT（SEQ-20260629-02）
+
+- **完成时间**：2026-06-30
+- **记录时间**：2026-06-30
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer（claude-opus-4-8，等价性裁定 + 复核修正前提 + ADR-044/048 AMENDMENT 起草）；Codex 对抗审 2 轮（纠正前提性事实 + 验证修正）。
+- **背景**：HANDOFF-48 候选「把散落 ADR-044/048 motion token 收敛到 HANDOFF-46 canonical 词表」。**ADR-gated**（重指向 ADR token 是行为变更）。
+- **核验链（arch-reviewer + Codex 双审）**：
+  - 全仓消费方实测：13 个待收敛 token 中仅 ADR-044 的 `--transition-page`(3)/`--transition-page-reduced`(1)/`--ease-page`(9) live；其余 10 个（takeover×4 / shared-element×3 / route-stack-back / tabbar-underline / transition-shared）**全仓零 var()/JS/字符串消费**。
+  - **Codex 纠正前提性事实**：这批 orphaned token **非「M5 noop placeholder 待实装」**——SharedElement（`SharedElement.tsx:112`→`useFLIP.ts:55` 硬编码 320ms/cubic-bezier(0.2,0,0,1)）/ RouteStack 边缘返回手势（`RouteStack.tsx:19`→`useEdgeSwipeBack.ts:24` 硬编码 240）**已实装但内联硬编码旁路 token**，且实装值与 token 定义值不一致；globals.css CSS var 与 design-tokens 包级 semantic token 是两套并行死定义、`build-css.ts` 不 emit、实装均不消费。
+  - **核心原则**：数值相等 ≠ 语义等价（240ms 家族 transition-page/takeover-fast-desktop/route-stack-back 碰巧同 `--duration-push` 值但语义各异：页面过渡/快接管/返回手势，repoint 会跨语义错耦）。
+- **处置（仅 globals.css token 定义层 + decisions.md AMENDMENT；颜色/几何不动；零运行时行为变更）**：
+  - **delete 2 globals.css 死 CSS var**：`--transition-shared`(320，REG-M2-03 块) + `--tabbar-underline-transition-duration`(180，M5-CLEANUP tabbar 块；**仅删 globals.css 手写 var**——包级 `tabbar.underlineTransitionDuration` + alias-coverage 单测不在本卡范围，见 FU-B）。
+  - **preserve**：`--transition-page`/`--transition-page-reduced`/`--ease-page`（live、语义独立/无 canonical 等价）+ takeover×4 / shared-element×3 / route-stack-back（孤儿定义，避免收敛卡混入跨层决策）。
+  - **repoint 0**（撤回 `--shared-element-easing` 可选——实装 useFLIP 用 cubic-bezier(0.2,0,0,1)，与该 token 值及 canonical ease-in-out 均不同，repoint 孤儿 token 零收益且误导）。
+  - **修正 globals.css 4 处注释**：SharedElement/RouteStack 块旧注释「(ADR-048 §4)/(ADR-048 §6)」错配（§4 卡片内容协议、§6 组件边界）→ 改指 M5 设计补丁/design-tokens 包；「noop/推迟实装」→「已实装但硬编码旁路」。
+  - **ADR-044 + ADR-048 各一条 AMENDMENT**（decisions.md，背书 arch-reviewer claude-opus-4-8）：现状勘误 + 逐 token 处置 + repoint 0 论证 + FU 登记。
+- **修改文件**：`apps/web-next/src/app/globals.css`（删 2 var + 4 注释）/ `docs/decisions.md`（2 AMENDMENT）/ `docs/task-queue.md`（标完成 + FU-A/FU-B 登记）
+- **新增文件**：无 ｜ **新增依赖**：无 ｜ **数据库变更**：无
+- **门禁**：typecheck=0 / lint=0。**真实 dev server Playwright getComputedStyle 实测**：live `--transition-page`=240ms / `--transition-page-reduced`=80ms / `--ease-page`=cubic-bezier(0.32,0.72,0,1) **解析不变**；2 死 token 解析为空（已删）；preserved orphaned token（shared-element-easing/takeover-fast-desktop/route-stack-back）仍在；canonical 镜像（`--duration-push`/`--easing-ease-in-out`）未动；nav 渲染（PostCSS 编译干净）。**零视觉回归**。Codex 两轮对抗审确认 runtime-safe、无 BLOCKER。
+- **follow-up 登记**（task-queue SEQ-20260629-02，不属本卡）：**FU-A**（需前置设计决策 / Opus·ADR-gated）SharedElement/RouteStack 实装接入 token〔行为变更〕vs 确认弃用；**FU-B** 清包级孤儿 semantic token + 单测（tabbar 独立可清；shared/route/takeover 依赖 FU-A 选弃用；触发 ADR-180 全量）。
+- **注意事项**：HANDOFF-48 真实价值＝**文档化偏离 + 净化 2 个 globals.css 死 CSS var**，而非「为收敛而 repoint」。SEQ-20260629-02 动效对齐序列至此 46/47/48/49 全交付。

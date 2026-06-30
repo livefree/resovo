@@ -1172,6 +1172,23 @@ _新增 ADR 时，在此文件末尾追加，不修改已有条目。_
 - REG-M2-03 不实现边缘滑动手势；RouteStack stub 注释"TODO: M5 Tab Bar 上线时实装手势"。
 - SharedElement FLIP bridge 注释"TODO: REG-M3-01 填充 FLIP 实现"。
 
+### ADR-044 AMENDMENT 2026-06-30（HANDOFF-48 / motion token 现状核验 + 收敛）
+
+**背书**：arch-reviewer (claude-opus-4-8)；Codex 对抗审纠正前提性事实。**触发**：HANDOFF-48（SEQ-20260629-02）把 globals.css 散落 motion token 与 HANDOFF-46 canonical 词表（真源 `packages/design-tokens/src/primitives/motion.ts`）逐项核验收敛。
+
+**现状勘误（推翻本 ADR 原决策.2/.3「noop / 推迟实装」叙述）**：
+
+- SharedElement 已实装：`SharedElement.tsx:112` 调 `useFLIP`；`useFLIP.ts:55` 内联 `{ duration: 320ms, easing: cubic-bezier(0.2,0,0,1) }`，**不消费** `--shared-element-*` / `--transition-shared`（实装值与 token 定义值 360/cubic-bezier(0.4,0,0.2,1) 还不一致）。
+- RouteStack 边缘返回手势已实装：`RouteStack.tsx:19` 调 `useEdgeSwipeBack`；`useEdgeSwipeBack.ts:24` 默认 `animationDuration=240`（硬编码 number），不消费 `--route-stack-back-animation-duration`（注：push/pop/reset API 仍 NoopAPI）。
+- 即决策.2/.3「noop、FLIP/手势推迟 REG-M3-01/M5」已不符现状——实装存在但内联硬编码，从未接入对应 token。
+
+**本卡处置（曲线/时长；颜色/几何不动；核心原则「数值相等 ≠ 语义等价」）**：
+
+- **delete**：`--transition-shared`(320ms，globals.css var)——零消费，SharedElement 走 useFLIP 内联值永不读此 var。
+- **preserve**：`--transition-page`(240，3 处 live) / `--transition-page-reduced`(80，1 处 live) / `--ease-page`(iOS 曲线，9 处 live)。与 canonical 同值不同义（240≠push 语义）或无等价档（80）；`--ease-page` canonical 五档 easing 无等价，属允许偏离。不收敛、不耦合。
+- **repoint**：0。
+- **零运行时行为变更**（仅删 globals.css 死 var + 注释勘误，live 消费方 var() 解析值不变）。
+
 ## ADR-045: 图像基础 Primitive 契约（SafeImage / FallbackCover / image-loader）
 
 - **状态**: Accepted
@@ -1633,6 +1650,20 @@ safe-area-inset 的吸收遵循"单一责任"原则，避免重复叠加：
 | 跨包 / packages/admin-ui 内 | `getVideoTypeOptions(t?)` | enums helpers SSOT |
 
 **禁止**：在 `apps/web-next` 路由 / nav 上下文中改用 admin-ui helpers（会丢失 URL slug 映射特殊性）。
+
+### ADR-048 AMENDMENT 2026-06-30（HANDOFF-48 / motion token 现状核验 + 收敛）
+
+**背书**：arch-reviewer (claude-opus-4-8)；Codex 对抗审纠正前提性事实。**触发**：HANDOFF-48 motion token 核验（曲线/时长；颜色 `--takeover-mask-color-*`/`--tabbar-underline-color` 与几何 `--route-stack-edge-trigger-width`/`-threshold-ratio`/`-velocity-threshold` 不在范围）。
+
+**§3 动效 token 现状勘误**：takeover / shared-element / route-stack / tabbar 的 globals.css CSS var 与 design-tokens 包级 semantic token（`src/semantic/{takeover,shared-element,route-stack,tabbar}.ts`）是**两套并行定义**，`build-css.ts` 不 emit 这些 semantic group，且实装 hook（`useFLIP` 硬编码 320ms / `useEdgeSwipeBack` 硬编码 240）内联硬编码、两套定义均不消费。值来源为 M5 设计补丁 / design-tokens 包，非本 ADR §3 正文派生（globals.css 旧注释 "(ADR-048 §4)/(ADR-048 §6)" 系错配——§4 为卡片内容协议、§6 为组件边界，已随本卡修正注释指向 M5 补丁 / design-tokens 包）。**故这批 token 非「M5 待消费契约」，而是与实装脱节的孤儿定义。**
+
+**本卡处置**：
+
+- **delete**：`--tabbar-underline-transition-duration`(180ms)——**仅删 globals.css 手写 CSS var**。HANDOFF-49-E-C 已用 `<SlidingUnderline>`(`var(--duration-base)`) 替换 tabbar 下划线，此 var 无现/未来消费方。**范围限定**：包级 `tabbar.underlineTransitionDuration`(`semantic/tabbar.ts`) + `alias-coverage.test.ts` 断言**不在本卡删除范围**（见 follow-up）。
+- **preserve**：takeover×4（200/240/360/120）/ `--shared-element-duration`(360) / `--shared-element-fallback-duration`(120) / `--shared-element-easing` / `--route-stack-back`(240)。孤儿定义（实装硬编码旁路），维持现状不删——避免在「曲线/时长收敛」卡内混入跨层（CSS var + 包 token + hook + 单测）决策（原子化）。240ms 家族与 `--duration-push` 同值但语义各异（接管/返回 ≠ 推入），即便接线也不应耦合 push。
+- **repoint**：0。`--shared-element-easing` 不 repoint——实装 useFLIP 用 cubic-bezier(0.2,0,0,1)，与该 token 值（cubic-bezier(0.4,0,0.2,1)）及 canonical `--easing-ease-in-out` **均不同**，repoint 孤儿 token 零收益且误导。
+- **follow-up 登记**（task-queue SEQ-20260629-02，不属本卡）：FU-A 决定 SharedElement/RouteStack 实装与 token 归属（接入 token〔行为变更、ADR-gated〕vs 确认弃用清理）；FU-B 清理包级孤儿 semantic token + `alias-coverage` 断言（**tabbar 部分独立**——随 49-E-C SlidingUnderline 替换已彻底死、可独立清；shared-element/route-stack/takeover 部分**依赖 FU-A 选弃用**；触发 ADR-180 全量）。
+- **零运行时行为变更**（仅删 globals.css 死 var，全 orphaned）。
 
 ## ADR-049 — Admin 有序列表组件选型（@dnd-kit）
 

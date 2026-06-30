@@ -542,11 +542,14 @@
   }
 }
 
-/* REG-M2-03 — 动画 token（ADR-044） */
+/* REG-M2-03 — 动画 token（ADR-044）。
+   保留项语义独立、不收敛 canonical（HANDOFF-48 + ADR-044 AMENDMENT）：
+   --transition-page(240) 语义≠--duration-push；--transition-page-reduced(80) 无 canonical 档；
+   --ease-page 为 ADR-044 专属 iOS 曲线、canonical easing 五档均无等价。
+   --transition-shared(320) 已删（globals.css 层零消费；SharedElement 已实装〔useFLIP〕但内联硬编码、不读此 var）。 */
 :root {
   --transition-page: 240ms;
   --transition-page-reduced: 80ms;
-  --transition-shared: 320ms;
   --ease-page: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
@@ -955,7 +958,9 @@
   --tabbar-bg:                        color-mix(in oklch, oklch(100% 0 0) 85%, transparent);
   --tabbar-blur:                      12px;
   --tabbar-underline-color:           oklch(64.5% 0.165 230);
-  --tabbar-underline-transition-duration: 180ms;
+  /* --tabbar-underline-transition-duration 已删（仅此 globals.css 手写 var；HANDOFF-49-E-C 改用
+     SlidingUnderline〔var(--duration-base)〕，无现/未来消费方。包级 tabbar.underlineTransitionDuration
+     另属 design-tokens SSOT、不在本卡范围，见 HANDOFF-48 follow-up）。 */
 }
 [data-theme="dark"], .dark {
   --tabbar-bg: color-mix(in oklch, oklch(11.2% 0.006 247) 85%, transparent);
@@ -966,14 +971,16 @@
   }
 }
 
-/* M5-CLEANUP-01 — SharedElement tokens (ADR-048 §4) */
+/* M5-CLEANUP-01 — SharedElement tokens（值源自 M5 设计补丁 / design-tokens 包；旧注释误标 ADR-048 §4＝卡片内容协议，HANDOFF-48 勘误）。
+   现状：SharedElement 已实装（useFLIP）但内联硬编码 320ms/cubic-bezier(0.2,0,0,1)、不消费这些 var——孤儿定义，见 HANDOFF-48 follow-up。 */
 :root {
   --shared-element-duration:         360ms;
   --shared-element-easing:           cubic-bezier(0.4, 0, 0.2, 1);
   --shared-element-fallback-duration: 120ms;
 }
 
-/* M5-CLEANUP-01 — RouteStack tokens (ADR-048 §6) */
+/* M5-CLEANUP-01 — RouteStack tokens（值源自 M5 设计补丁 / design-tokens 包；旧注释误标 ADR-048 §6＝组件边界，HANDOFF-48 勘误）。
+   现状：RouteStack 已实装（useEdgeSwipeBack）但硬编码默认 240、不消费此 var；--route-stack-back 语义「返回手势」≠--duration-push（推入），不收敛。 */
 :root {
   --route-stack-edge-trigger-width:  20px;
   --route-stack-threshold-ratio:     0.3;
