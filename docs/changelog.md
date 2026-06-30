@@ -3460,3 +3460,21 @@
 - **新增文件**：无 ｜ **新增依赖**：无 ｜ **数据库变更**：无
 - **门禁**：typecheck=0 / lint=0 / test:changed exit0（Header 6 测过：Nav 固定高度 2 + Nav.Skeleton 2 + Footer.Skeleton 2）。**真实 dev server Playwright getComputedStyle 实测**（localhost:3000 /en）：点击 nav-more-trigger → 菜单展开 `opacity=1` + `transform=matrix(1,0,0,1,0,0)`（translateY 归零、进场完成）+ `transition="opacity 0.18s cubic-bezier(0,0,0.2,1), transform 0.18s ..."`（fast×motion-scale 1.5 = 180ms + ease-out，惯例生效）；`.dropdown-panel` reduce 类在位；6 items（short/sports/music/news/kids/other）href + role=menuitem 正确；`aria-expanded` false→true；chevron `matrix(-1,0,0,-1,0,0)` rotate(180) + token transition。console 仅 favicon 404（预存无关）。
 - **注意事项**：DropdownMenu 现为唯一桌面下拉范式；后续新下拉一律消费 primitive，不再起第二套实现。49-E（滑动下划线）独立推进。
+
+## [HANDOFF-49-E-A-20260630] 微交互动效补全：新建 `<SlidingUnderline>` 共享 primitive（Motion Spec 设计稿 / SEQ-20260629-02）
+
+- **完成时间**：2026-06-30
+- **记录时间**：2026-06-30
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer（claude-opus-4-8）——`<SlidingUnderline>` ref-registry 契约设计蓝图。
+- **目标**：把「每项独立静态 span 显隐」替换为「单条下划线随 activeKey 在子项间 left+width 滑动」（对齐 Motion Spec：base 200ms ease-in-out），供 Nav 桌面主导航（49-E-B）+ MobileTabBar（49-E-C）消费。
+- **内容**：新建 `apps/web-next/src/components/primitives/sliding-underline/`——
+  - `types.ts`：`SlidingUnderlineProps`（activeKey + registry〔`ReadonlyMap<string,HTMLElement|null>`，禁 any〕 + thicknessPx/color/offset/insetPx/insetPercent/testId）/ `UnderlineRegistryApi`。
+  - `useUnderlineRegistry.ts`：管理 (key→element) 注册表，`register(key)` 返回**稳定 per-key ref 回调**（缓存 callbacksRef，同 key 跨渲染同实例，杜绝 ref 抖动重注册 / 循环）；仅元素真变化才以新 Map identity setState（React 18 批处理多项为一次重渲染）。
+  - `SlidingUnderline.tsx`：「指示器层」（不渲染项，项渲染权留调用方）。测量用 `offsetLeft/offsetWidth`（相对 offsetParent，不受容器横滚影响，优于 getBoundingClientRect）；`useLayoutEffect` 注入几何 + `ResizeObserver`（字体加载/resize/兄弟项变宽重测）；首次定位 `transition:none`（直接出现在正确位、不从 0 滑入）、之后 activeKey 变化才滑动（base × motion-scale ease-in-out，`transform: translateX` + width，不用 left）；SSR 安全（span SSR `opacity:0`+无 transform、几何 client useLayoutEffect 注入、水合一致）。
+  - `index.ts`：re-export 组件 + hook + 类型。
+- **globals.css**：新增 `.sliding-underline` 的 `prefers-reduced-motion: reduce` 降级块（`transition:none`，即时跳位）。
+- **修改文件**：`apps/web-next/src/app/globals.css`
+- **新增文件**：`apps/web-next/src/components/primitives/sliding-underline/{types.ts,useUnderlineRegistry.ts,SlidingUnderline.tsx,index.ts}` + `tests/unit/web-next/SlidingUnderline.test.tsx` ｜ **新增依赖**：无 ｜ **数据库变更**：无
+- **门禁**：typecheck=0 / lint=0 / test:changed exit0（SlidingUnderline 6 测：渲染 class+aria / null 隐藏 / 命中可见 / 未命中不崩 / register 稳定 per-key / 注册+移除）。**jsdom 不做 layout（offsetWidth=0）→ 几何/滑动断言留 Playwright（49-E-B/C 实测）**；primitive 暂无消费方，无集成回归。
+- **注意事项**：49-E-B Nav 桌面迁移（insetPx=14，MoreMenu 下划线保持独立不入 registry）；49-E-C MobileTabBar 迁移（insetPercent=25）+ 并入图标 scale spring。

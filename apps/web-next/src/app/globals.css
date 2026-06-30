@@ -898,6 +898,12 @@
   .dropdown-panel { transition: none !important; }
 }
 
+/* HANDOFF-49-E — SlidingUnderline 滑动（transform + width，组件内联 transition 受 --motion-scale）。
+   此处仅 prefers-reduced-motion 降级：关闭过渡，下划线即时跳位。 */
+@media (prefers-reduced-motion: reduce) {
+  .sliding-underline { transition: none !important; }
+}
+
 /* ── Banner 轮播主色调色板 ─────────────────────────────────────────── */
 :root {
   --banner-accent-0: oklch(64.5% 0.165 230); /* 品牌蓝 */
