@@ -11,7 +11,7 @@
  *    避免"首集 dead 但其余健康"被整条线路误判 dead；多音轨语言后缀在 per-line 代表集合上判定。
  */
 
-import type { VideoSource } from '@resovo/types'
+import type { VideoSource, VideoLineEntry } from '@resovo/types'
 import {
   buildLineKey,
   buildThemedSources,
@@ -108,6 +108,28 @@ export function buildThemedLines(
     type: l.representative.type,
     sourceName: l.sourceName,
     siteDisplayName: l.siteDisplayName,
+    quality: l.representative.quality,
+    effectiveScore: l.representative.effectiveScore,
+    audioLanguage: l.representative.audioLanguage ?? null,
+  }))
+  return buildThemedSources(raw, theme)
+}
+
+/**
+ * 从「线路优先矩阵」（VideoLineMatrix.lines）派生 SourceBar 用 ThemedSource[]（PLAYER-12-B）。
+ *
+ * 与 buildThemedLines 同产出，但输入源为 server 聚合的 `VideoLineEntry.representative`
+ * （LineRepresentative 纯 label/health 投影，无 sourceUrl/type）——label 层只用
+ * name/quality/effectiveScore/audioLanguage，故省略 src/type（RawSourceForTheme 已降可选）。
+ * 与 lines[] 同序同长；实际播放源由 -C PlayerShell 按 focusEpisodeSource 取。
+ */
+export function buildThemedLinesFromMatrix(
+  lines: readonly VideoLineEntry[],
+  theme: RouteTheme,
+): ThemedSource[] {
+  const raw: RawSourceForTheme[] = lines.map((l) => ({
+    sourceName: l.representative.sourceName,
+    siteDisplayName: l.representative.siteDisplayName,
     quality: l.representative.quality,
     effectiveScore: l.representative.effectiveScore,
     audioLanguage: l.representative.audioLanguage ?? null,

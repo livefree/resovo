@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import type { Metadata } from 'next'
 import { VideoDetailClient, VideoDetailClientSkeleton } from '@/components/video/VideoDetailClient'
-import { fetchVideoMeta, fetchVideoDetail, fetchVideoSources } from '@/lib/video-detail'
+import { fetchVideoMeta, fetchVideoDetail, fetchVideoSources, fetchLineMatrix } from '@/lib/video-detail'
 import { DEFAULT_BRAND_NAME } from '@/lib/brand-detection'
 
 interface PageProps {
@@ -33,7 +33,12 @@ export function createDetailPage(showEpisodes: boolean) {
     // - preview 模式下两个 fetch 都走 admin preview 派发链路（middleware header → Bearer → cache:no-store）
     const initialVideo = await fetchVideoDetail(slug)
     // BUGFIX-WATCH-EP-URL ③：拉**全集源**（省略 episode），与播放页线路矩阵同源 → 线路名逐字一致
-    const initialSources = await fetchVideoSources(slug)
+    // PLAYER-12-B 双供给（MEDIUM-2）：新增精简 initialMatrix（DetailHero 消费派生线路名）**不删** initialSources
+    // （保留全集源作 DetailHero 回退兜底 + 独立回滚；-C 收口时删）。线路名 episode 无关 → 取 ep=1。
+    const [initialSources, initialMatrix] = await Promise.all([
+      fetchVideoSources(slug),
+      fetchLineMatrix(slug, 1),
+    ])
     return (
       <Suspense fallback={<VideoDetailClientSkeleton />}>
         <VideoDetailClient
@@ -41,6 +46,7 @@ export function createDetailPage(showEpisodes: boolean) {
           showEpisodes={showEpisodes}
           initialVideo={initialVideo}
           initialSources={initialSources}
+          initialMatrix={initialMatrix ?? undefined}
         />
       </Suspense>
     )

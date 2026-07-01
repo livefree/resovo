@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useLocale } from 'next-intl'
 import { MetaChip } from '@/components/search/MetaChip'
-import { buildLineMatrix, buildThemedLines } from '@/lib/line-matrix'
+import { buildLineMatrix, buildThemedLines, buildThemedLinesFromMatrix } from '@/lib/line-matrix'
 import { useRouteTheme } from '@/lib/route-theme-storage'
 import { carryAdminPreview } from '@/lib/admin-preview-query'
 import { SafeImage } from '@/components/media'
@@ -15,7 +15,7 @@ import { usePlayerStore } from '@/stores/playerStore'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import { Breadcrumb } from '@/components/primitives/breadcrumb/Breadcrumb'
 import { ALL_CATEGORIES } from '@/lib/categories'
-import { formatCountryName, type Video, type VideoSource } from '@resovo/types'
+import { formatCountryName, type Video, type VideoSource, type VideoLineMatrix } from '@resovo/types'
 
 const SharedElement = SharedElementBase as SharedElementComponent
 
@@ -106,11 +106,17 @@ interface DetailHeroProps {
   /**
    * 视频**全集源**（episode 无关）。DetailHero 内 buildLineMatrix + buildThemedLines 派生
    * 主题化线路名，与播放页 PlayerShell 同一流水线 → 线路名逐字一致（BUGFIX-WATCH-EP-URL ③）。
+   * PLAYER-12-B：有 matrix 时不消费此项（走矩阵路径），仅作 matrix 缺失时的回退兜底。
    */
   sources?: VideoSource[]
+  /**
+   * PLAYER-12-B 双供给：server 聚合的精简线路矩阵。有值时优先消费 representative 派生线路名
+   * （载荷远小于全集 sources）；无值回退 sources 的 buildLineMatrix 路径（韧性 + 独立回滚）。
+   */
+  matrix?: VideoLineMatrix
 }
 
-export function DetailHero({ video, episode = 1, sources = [] }: DetailHeroProps) {
+export function DetailHero({ video, episode = 1, sources = [], matrix }: DetailHeroProps) {
   const enter = usePlayerStore((s) => s.enter)
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -118,8 +124,22 @@ export function DetailHero({ video, episode = 1, sources = [] }: DetailHeroProps
   // 线路名与播放页一致：同源全集 → 线路矩阵 → 用户主题派生（theme 已解析含自定义主题）
   const locale = useLocale()
   const { theme: routeTheme } = useRouteTheme(locale)
-  const lineMatrix = useMemo(() => buildLineMatrix(sources), [sources])
-  const themedLines = useMemo(() => buildThemedLines(lineMatrix, routeTheme), [lineMatrix, routeTheme])
+  // PLAYER-12-B：优先消费精简矩阵（representative 派生线路名）；无矩阵回退全集 buildLineMatrix（双供给韧性）。
+  // 两路同产出 themedLines（线路名/画质/dead/pending 逐字一致——矩阵 representative 与全集 buildLineMatrix
+  // 同 effectiveScore 口径）。lineKeys 供 React key。
+  const { themedLines, lineKeys } = useMemo(() => {
+    if (matrix) {
+      return {
+        themedLines: buildThemedLinesFromMatrix(matrix.lines, routeTheme),
+        lineKeys: matrix.lines.map((l) => l.key),
+      }
+    }
+    const lm = buildLineMatrix(sources)
+    return {
+      themedLines: buildThemedLines(lm, routeTheme),
+      lineKeys: lm.map((l) => l.key),
+    }
+  }, [matrix, sources, routeTheme])
   // 详情线路选择器为装饰性（不深链播放）；默认高亮最优线路（matrix[0]，与播放页默认一致）
   const [activeLineIndex, setActiveLineIndex] = useState(0)
 
@@ -353,7 +373,7 @@ export function DetailHero({ video, episode = 1, sources = [] }: DetailHeroProps
                   const label = !single && line.quality ? `${base} · ${line.quality}` : base
                   return (
                     <button
-                      key={lineMatrix[i]?.key ?? i}
+                      key={lineKeys[i] ?? i}
                       type="button"
                       onClick={() => setActiveLineIndex(i)}
                       data-testid={`detail-line-btn-${i}`}

@@ -25,7 +25,7 @@ vi.mock('../../../../apps/web-next/src/lib/admin-access-token', async (importOri
   }
 })
 
-import { fetchVideoSources } from '../../../../apps/web-next/src/lib/video-detail'
+import { fetchVideoSources, fetchLineMatrix } from '../../../../apps/web-next/src/lib/video-detail'
 import { headers, cookies } from 'next/headers'
 import { getAdminAccessToken } from '../../../../apps/web-next/src/lib/admin-access-token'
 
@@ -171,5 +171,67 @@ describe('fetchVideoSources — D-160-AMD2-2 派发', () => {
 
     const sources = await fetchVideoSources('foo-aB3kR9x1', 1)
     expect(sources).toHaveLength(0)
+  })
+})
+
+describe('fetchLineMatrix — PLAYER-12-B 派发', () => {
+  const fetchMock = vi.fn()
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockReset()
+    mockHeaders.mockReset()
+    mockCookies.mockReset()
+    mockGetAdminAccessToken.mockReset()
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  const MATRIX = { focusEpisode: 1, episodeNumbers: [1], lines: [] }
+
+  it('public path → ?view=matrix&episode=N + 可缓存 revalidate:60（小载荷，非 no-store）', async () => {
+    setupHeaders(false)
+    setupCookies(null)
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: MATRIX }), { status: 200, headers: { 'content-type': 'application/json' } }),
+    )
+
+    const matrix = await fetchLineMatrix('test-slug-aB3kR9x1', 1)
+
+    expect(matrix).toEqual(MATRIX)
+    const [url, init] = fetchMock.mock.calls[0]!
+    expect(url).toMatch(/\/videos\/aB3kR9x1\/sources\?view=matrix&episode=1$/)
+    expect(url).not.toContain('preview')
+    expect(init).toMatchObject({ next: { revalidate: 60 } })
+  })
+
+  it('preview path → &preview=admin + Bearer + no-store', async () => {
+    setupHeaders(true)
+    setupCookies('rt-abc')
+    mockGetAdminAccessToken.mockResolvedValueOnce('access-token-xyz')
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: MATRIX }), { status: 200, headers: { 'content-type': 'application/json' } }),
+    )
+
+    await fetchLineMatrix('foo-aB3kR9x1', 3)
+
+    const [url, init] = fetchMock.mock.calls[0]!
+    expect(url).toMatch(/\/videos\/aB3kR9x1\/sources\?view=matrix&episode=3&preview=admin$/)
+    expect(init).toMatchObject({ cache: 'no-store', headers: { authorization: 'Bearer access-token-xyz' } })
+  })
+
+  it('fetch 404 → 返回 null（消费方回退 sources 路径）', async () => {
+    setupHeaders(false)
+    setupCookies(null)
+    fetchMock.mockResolvedValueOnce(new Response('not-found', { status: 404 }))
+
+    expect(await fetchLineMatrix('foo-aB3kR9x1', 1)).toBeNull()
+  })
+
+  it('fetch 抛错 → 返回 null', async () => {
+    setupHeaders(false)
+    setupCookies(null)
+    fetchMock.mockRejectedValueOnce(new Error('econnreset'))
+
+    expect(await fetchLineMatrix('foo-aB3kR9x1', 1)).toBeNull()
   })
 })

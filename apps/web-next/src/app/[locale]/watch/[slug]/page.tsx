@@ -23,6 +23,8 @@ export default async function WatchPage({ params }: Props) {
 
   // server-side hydration (D-160-AMD2-1)
   // PLAYER-LINE-BOUND-EP：拉取全集源（省略 episode），供 PlayerShell 一次性构建线路矩阵
+  // 注：initialMatrix 的注入 + PlayerShell 消费一并放 -C（-B 若在此注入则 PlayerShell 不消费 →
+  // 播放器路径凭空多一次全量源加载〔listLineMatrix 内 listSources 全集〕却无用，Codex 对抗审已纠正）。
   const initialVideo = await fetchVideoDetail(slug)
   const initialSources = await fetchVideoSources(slug)
 

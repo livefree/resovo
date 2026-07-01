@@ -22,7 +22,7 @@ import { DetailHero } from '@/components/detail/DetailHero'
 import { EpisodePicker } from '@/components/detail/EpisodePicker'
 import { RelatedVideos } from '@/components/detail/RelatedVideos'
 import { SafeImage } from '@/components/media'
-import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@resovo/types'
+import type { Video, VideoSource, VideoLineMatrix, ApiResponse, ApiListResponse } from '@resovo/types'
 
 // ── DescriptionBlock ─────────────────────────────────────────────────────────
 
@@ -222,6 +222,11 @@ interface Props {
   initialVideo?: Video
   /** server-side 预取的第 1 集 sources（episode 切换仍走 client fetch / Y-AMD2-2 限制声明） */
   initialSources?: VideoSource[]
+  /**
+   * PLAYER-12-B 双供给：server 预取的精简线路矩阵（DetailHero 消费派生线路名，episode 无关）。
+   * 有值时 DetailHero 走矩阵路径；无值回退 initialSources 的 buildLineMatrix 路径（韧性 + 独立回滚）。
+   */
+  initialMatrix?: VideoLineMatrix
 }
 
 export function VideoDetailClientSkeleton() {
@@ -234,7 +239,7 @@ export function VideoDetailClientSkeleton() {
   )
 }
 
-export function VideoDetailClient({ slug, showEpisodes, initialVideo, initialSources }: Props) {
+export function VideoDetailClient({ slug, showEpisodes, initialVideo, initialSources, initialMatrix }: Props) {
   const searchParams = useSearchParams()
   const [video, setVideo] = useState<Video | null>(initialVideo ?? null)
   const [notFound, setNotFound] = useState(false)
@@ -286,6 +291,7 @@ export function VideoDetailClient({ slug, showEpisodes, initialVideo, initialSou
           video={video}
           episode={activeEpisode}
           sources={sources}
+          matrix={initialMatrix}
         />
       </div>
 

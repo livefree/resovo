@@ -3582,3 +3582,24 @@
 - **Follow-up 登记**：task-queue `PLAYER-13 线路权威身份收敛：source_site_key 全栈化`（Finding 1 UPHOLD 强制项，跨 3+ 消费方，卡内 Opus 子代理）。
 - **范围声明**：packages/types + apps/api + ADR + web-next line-display-name re-export（HIGH-1 真源迁移必要面，arch-reviewer 方案 A 正式纳入）；**不改** PlayerShell/SSR wiring（-B/-C 范围）。默认 `GET sources` list 形态零回归（view 省略即原行为）。
 - **门禁**：typecheck=0 / lint=0 / test:changed 613 文件 8354 测全过 / verify:adr-contracts=0 / verify:endpoint-adr=0（137 ADR 端点，含 ADR-217）。
+
+## [PLAYER-12-B-20260701] fetchLineMatrix + SSR 双供给 + DetailHero 切消费矩阵骨架（SEQ-20260630-01 根治层）
+- **完成时间**：2026-07-01
+- **记录时间**：2026-07-01 00:30
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（-B 消费已冻结 PLAYER-12-A 契约 + 执行 arch-reviewer 已背书的双供给蓝图，非新契约设计）
+- **修改文件**：
+  - `apps/web-next/src/lib/video-detail.ts`（`fetchLineMatrix`：`?view=matrix&episode=N`，ISR revalidate:60 可缓存，失败返 null）
+  - `apps/web-next/src/lib/line-display-name.ts`（`RawSourceForTheme.sourceUrl/type` 降可选 + `buildThemedSources` coalesce `''`；ThemedSource.src/type 保 required 不级联 SourceItem）
+  - `apps/web-next/src/lib/line-matrix.ts`（`buildThemedLinesFromMatrix`：从 matrix representative 派生 themedLines）
+  - `apps/web-next/src/app/[locale]/_lib/detail-page-factory.tsx`（**仅详情页** SSR 双供给：Promise.all 并行 fetch initialSources + initialMatrix）
+  - `apps/web-next/src/components/video/VideoDetailClient.tsx` + `detail/DetailHero.tsx`（+ initialMatrix/matrix prop，DetailHero 优先消费矩阵派生线路名、回退 buildLineMatrix(sources)）
+  - 单测：`video-detail-fetch-sources.test.ts`（+4 fetchLineMatrix 派发）、`line-matrix.test.ts`（+2 buildThemedLinesFromMatrix parity/src空串）
+  - **watch 页 + PlayerShell initialMatrix 注入推迟到 -C**（Codex 对抗审纠正，见下范围声明）
+- **问题**：PLAYER-12-A 交付契约后，DetailHero 仍消费全集 sources（仅为派生线路名）。-B 引入精简矩阵消费 + 详情页双供给基建，为 -C 收口铺路。
+- **方案**：`fetchLineMatrix` 拉精简矩阵（小载荷可 ISR）；**详情页**双供给（加 initialMatrix 不删 initialSources，MEDIUM-2 独立回滚）；DetailHero 优先消费 matrix.representative 派生线路名（无矩阵回退 sources 路径，韧性）。
+- **Finding-2 遗留落地**（arch-reviewer PLAYER-12-A 裁决）：representative 无 sourceUrl/type → `RawSourceForTheme.sourceUrl/type` 降可选 + buildThemedSources coalesce `''`（矩阵路径 src 空串非可播放）。已核验 SourceBar/PlayerShell 不读 src/type，不破关键路径。
+- **关键路径验证**：parity 单测证矩阵路径与全集 sources 路径派生的线路名/画质/dead/pending **逐字一致**（representative 与 buildLineMatrix 同 effectiveScore 口径）；web detail e2e 10 passed（4 flaky 均为既有导航计时 flake、重试通过、非 -B 触及逻辑）。
+- **范围修正（Codex 对抗审）**：**-B 不接线 watch 页 initialMatrix、不加 PlayerShell 预留 prop**——原按卡面「两入口双供给」接线 watch 页，但 PlayerShell -B 不消费 initialMatrix，而 `fetchLineMatrix` 服务端会触发 `listLineMatrix→listSources(全集)` 全量加载 → **播放器关键路径凭空多一次全量源加载却无用**。修正：watch 页保持原样，initialMatrix 注入 + PlayerShell 消费一并放 -C（-C 消费它 + 删 initialSources，届时不重复加载）。-B 仅详情页接线（DetailHero 真消费）。
+- **范围声明**：-B **不改** PlayerShell / watch 页（-C 范围）；GET sources list 形态零回归。RSC 载荷实际瘦身待 -C 删 initialSources fetch。
+- **门禁**：typecheck=0 / lint=0 / test:changed 14 文件 188 测全过 / test:e2e:video（web）10 passed / 0 hard failure。（admin-next videos.spec 部分与 -B 前台改动无关、需 :3003，未跑。）

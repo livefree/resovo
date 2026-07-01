@@ -262,6 +262,11 @@ export function applyThemeLabels(
 
 /** ThemedSource — 渲染层 source 形态（PlayerShell sources state element） */
 export interface ThemedSource {
+  /**
+   * 代表集 URL / type——**label 层不消费**（SourceBar/PlayerShell 均只读 label/quality/isDead/isPending，
+   * 实际播放源另取自 lineMatrix.episodes）。PLAYER-12-B：矩阵路径 representative 已无 sourceUrl/type
+   * （Codex Finding 2）→ buildThemedSources coalesce 为 `''`（非可播放空串，不级联 SourceItem 类型）。
+   */
   readonly src: string
   readonly type: string
   readonly label?: string
@@ -274,8 +279,9 @@ export interface ThemedSource {
 
 /** RawSourceForTheme — buildThemedSources 输入需要的 VideoSource 字段子集 */
 export interface RawSourceForTheme {
-  readonly sourceUrl: string
-  readonly type: string
+  /** PLAYER-12-B：矩阵 representative 无 sourceUrl/type（label 层不消费）→ 降可选；全集路径仍填充 */
+  readonly sourceUrl?: string
+  readonly type?: string
   readonly sourceName: string
   readonly siteDisplayName: string | null
   readonly quality: string | null
@@ -375,8 +381,9 @@ export function buildThemedSources(
             quality: s.quality,
           })
       return {
-        src: s.sourceUrl,
-        type: s.type,
+        // PLAYER-12-B：矩阵 representative 无 sourceUrl/type → coalesce '' （label 层不消费 src/type）
+        src: s.sourceUrl ?? '',
+        type: s.type ?? '',
         label: showLanguage && s.audioLanguage ? `${baseLabel} · ${s.audioLanguage}` : baseLabel,
         quality: s.quality,
         isDead: themed[index].isDead,

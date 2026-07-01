@@ -7,8 +7,9 @@
 
 import { describe, it, expect } from 'vitest'
 import type { VideoSource } from '@resovo/types'
+import { groupSourcesIntoLineMatrix } from '@resovo/types'
 import { buildLineKey, classifyRouteHealth } from '../../../apps/web-next/src/lib/line-display-name'
-import { buildLineMatrix, buildThemedLines } from '../../../apps/web-next/src/lib/line-matrix'
+import { buildLineMatrix, buildThemedLines, buildThemedLinesFromMatrix } from '../../../apps/web-next/src/lib/line-matrix'
 import { THEME_NUMBERS } from '../../../apps/web-next/src/lib/line-display-name'
 
 function src(partial: Partial<VideoSource>): VideoSource {
@@ -137,5 +138,34 @@ describe('buildThemedLines', () => {
     const themed = buildThemedLines(matrix, THEME_NUMBERS)
     expect(themed).toHaveLength(2)
     expect(themed[0]!.label).toBeTruthy()
+  })
+})
+
+describe('buildThemedLinesFromMatrix（PLAYER-12-B 矩阵路径）', () => {
+  // 关键路径：矩阵路径与全集 sources 路径派生的线路名/画质/dead/pending **逐字一致**
+  // （矩阵 representative 与 buildLineMatrix representative 同 effectiveScore 最高集口径）。
+  const sources = [
+    src({ siteDisplayName: 'A', sourceName: 'a', episodeNumber: 1, sourceUrl: 'a1', effectiveScore: 0.1 }),
+    src({ siteDisplayName: 'A', sourceName: 'a', episodeNumber: 2, sourceUrl: 'a2', effectiveScore: 0.9 }),
+    src({ siteDisplayName: 'B', sourceName: 'b', episodeNumber: 1, sourceUrl: 'b1', effectiveScore: 0.05 }),
+    src({ siteDisplayName: 'C', sourceName: 'c', episodeNumber: 1, sourceUrl: 'c1', effectiveScore: 0.35, audioLanguage: '粤语' }),
+    src({ siteDisplayName: 'D', sourceName: 'd', episodeNumber: 1, sourceUrl: 'd1', effectiveScore: 0.8, audioLanguage: '国语' }),
+  ]
+
+  it('与全集 sources 路径逐字一致（label/quality/isDead/isPending）', () => {
+    const fromSources = buildThemedLines(buildLineMatrix(sources), THEME_NUMBERS)
+    const fromMatrix = buildThemedLinesFromMatrix(groupSourcesIntoLineMatrix(sources, 1).lines, THEME_NUMBERS)
+    expect(fromMatrix).toHaveLength(fromSources.length)
+    fromMatrix.forEach((line, i) => {
+      expect(line.label).toBe(fromSources[i]!.label)
+      expect(line.quality).toBe(fromSources[i]!.quality)
+      expect(line.isDead).toBe(fromSources[i]!.isDead)
+      expect(line.isPending).toBe(fromSources[i]!.isPending)
+    })
+  })
+
+  it('矩阵路径 src 为空串（representative 不可播放）', () => {
+    const themed = buildThemedLinesFromMatrix(groupSourcesIntoLineMatrix(sources, 1).lines, THEME_NUMBERS)
+    expect(themed.every((l) => l.src === '')).toBe(true)
   })
 })

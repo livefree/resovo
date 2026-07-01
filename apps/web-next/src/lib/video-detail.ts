@@ -11,7 +11,7 @@
 
 import { cookies, headers } from 'next/headers'
 import { notFound } from 'next/navigation'
-import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@resovo/types'
+import type { Video, VideoSource, VideoLineMatrix, ApiResponse, ApiListResponse } from '@resovo/types'
 import {
   COOKIE_REFRESH_TOKEN,
   HEADER_ADMIN_PREVIEW,
@@ -141,4 +141,32 @@ export async function fetchVideoSources(slug: string, episode?: number): Promise
   if (!res || !res.ok) return []
   const body = (await res.json()) as ApiListResponse<VideoSource>
   return body.data ?? []
+}
+
+/**
+ * 服务端获取「线路优先矩阵」（PLAYER-12-B / SEQ-20260630-01）
+ *
+ * `?view=matrix&episode=N` 返回精简 `VideoLineMatrix`（每线 representative 投影 + focusEpisodeSource
+ * + 集号数组，~几十源 vs 全集 ~17385 源）。**小载荷可缓存**：走 `next:{revalidate:60}` ISR（不同于
+ * fetchVideoSources 全集分支的 no-store——那是 >2MB 超上限的止血）。preview 派发同 fetchVideoSources。
+ * 失败（404/网络/refresh 失败）→ 返回 null（消费方回退全集 sources 路径 / 双供给韧性）。
+ */
+export async function fetchLineMatrix(slug: string, episode: number): Promise<VideoLineMatrix | null> {
+  const shortId = extractShortId(slug)
+  const baseUrl = `${API_BASE}/videos/${shortId}/sources?view=matrix&episode=${episode}`
+
+  let url = baseUrl
+  let init: RequestInit = { next: { revalidate: 60 } }
+  if (await shouldUsePreview()) {
+    const previewInit = await buildPreviewFetchInit()
+    if (previewInit) {
+      url = `${baseUrl}&${PREVIEW_QUERY_KEY}=${PREVIEW_QUERY_VALUE}`
+      init = previewInit
+    }
+  }
+
+  const res = await fetch(url, init).catch(() => null)
+  if (!res || !res.ok) return null
+  const body = (await res.json()) as ApiResponse<VideoLineMatrix>
+  return body.data ?? null
 }
