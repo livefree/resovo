@@ -3375,3 +3375,28 @@
   - **49-E-B**：Nav 桌面主导航迁移（insetPx=14，MoreMenu 下划线独立）。全量 8337 测过；Playwright home/movie/short 三态实测吻合。
   - **49-E-C**：MobileTabBar 迁移（insetPercent=25）+ 图标 `.tabbar-icon` scale spring。mobile e2e 4 passed；真移动上下文 Playwright 实测下划线 + 图标 spring 全绿。
   - **剩余暂缓**（非本序列阻塞）：49-F scrubber（player-core 跨包 token 需 Opus arch-reviewer + 可能 ADR，且现状基本符合）/ 49-G 移动长按呼出环（新功能、产品未定义目标动作）。
+
+---
+
+## SEQ-20260630-01 — line-matrix 载荷收敛（消 >2MB 缓存报错 + RSC 瘦身）
+
+> 创建时间：2026-06-30 ｜ 最后更新时间：2026-06-30
+> 起因：运行时错误 `Failed to set Next.js data cache ... items over 2MB can not be cached (9235594 bytes)`（`/videos/MHATVI8n/sources`）。根因（已实测）：SSR 不带 episode 拉「全集源」，超长连载（`MHATVI8n`=1265 集×11 线=17385 条≈7-9MB）超 Next data cache 2MB 上限 → 缓存写入被拒 + ISR 静默失效 + RSC 载荷把 ~9MB 源数据送客户端。
+> arch-reviewer（claude-opus-4-8）CONDITIONAL PASS：契约已折入 BLOCKER-1（内联 focusEpisode + 每线 focusEpisodeSource）+ BLOCKER-2（Service 层 JS reduce 聚合、禁 SQL GROUP BY）。
+
+| 任务 | 状态 | 摘要 | 范围 | 模型 | 依赖 | 门禁 |
+| --- | --- | --- | --- | --- | --- | --- |
+| **CHG-366**（止血·hotfix） | ✅ 完成（2026-06-30；详见 changelog [CHG-366-20260630]） | 全集 fetch 去 ISR tag：`video-detail.ts` `fetchVideoSources` 省略 episode 分支 `next:{revalidate:60}`→`cache:'no-store'`（带 episode 单集分支保留 ISR）。消除 >2MB 缓存写入被拒的错误日志（该分支本就从未成功缓存、无 ISR 收益损失）。门禁 typecheck=0/lint=0/test:changed 7/7。**仅止血、不解决 RSC 载荷**（根治见 PLAYER-12-A/-B/-C）。 | `apps/web-next/src/lib/video-detail.ts` + 同名单测（web-next SSR 单层） | **opus**（主循环）；子代理 arch-reviewer claude-opus-4-8（MEDIUM-3 止血背书） | 无 | ✅ typecheck=0/lint=0/test:changed 7/7 |
+| **PLAYER-12-A**（types+API+ADR） | ⬜ 待开始 | `VideoLineMatrix` DTO（含 focusEpisode + 每线 focusEpisodeSource，BLOCKER-1）+ `GET /videos/:id/sources?view=matrix`（zod 收敛 view/episode/preview 组合，HIGH-2）+ Service 层 JS reduce 聚合（复用 listSources，禁 SQL GROUP BY，BLOCKER-2）+ 分组纯逻辑跨端沉淀（HIGH-1）+ 独立 ADR + 单测。 | packages/types + apps/api（sources 路由/SourceService/queries）+ ADR | **opus**（契约已 arch-reviewer 背书；ADR 定稿前 Codex 对抗审） | 无 | typecheck/lint/test:changed/verify:adr-contracts/verify:endpoint-adr |
+| **PLAYER-12-B**（web-next SSR·双供给） | ⬜ 待开始 | `fetchLineMatrix`（可缓存小载荷）+ SSR wiring（detail-page-factory/watch page）**新增** initialMatrix **不删** initialSources（双供给，MEDIUM-2 独立回滚）+ DetailHero/VideoDetailClient 切消费矩阵骨架（只需线路名、风险最低）。 | apps/web-next（video-detail.ts + 2 SSR 入口 + VideoDetailClient/DetailHero） | opus/sonnet | PLAYER-12-A | typecheck/lint/test:changed/test:e2e:video |
+| **PLAYER-12-C**（PlayerShell 重构+回归） | ⬜ 待开始 | PlayerShell 内存模型「全集常驻」→「骨架 + 当前集全线路切片」（切集重取 `?view=matrix&episode=N` 刷全线路切片，MEDIUM-1）；activeSrc/切线覆盖/兜底环扫/看门狗改按 focusEpisodeSource 取；删旧 initialSources prop（双供给收口）。**回归全部播放器关键路径**（断点续播/线路切换/影院模式/字幕/兜底切线/看门狗）。 | apps/web-next（PlayerShell + line-matrix.ts + useMiniPlayerVideo 视需要） | **opus**（播放器 shell 接口重构，CLAUDE.md 强制） | PLAYER-12-A（契约冻结） | typecheck/lint/test:changed/test:e2e:player（关键路径回归） |
+
+### 关键约束与红线（arch-reviewer claude-opus-4-8 裁决）
+
+- **BLOCKER-1**：矩阵契约必须内联 `focusEpisode` + 每线 `focusEpisodeSource`（当前集源），非仅 `representative`（=最高分集源，用作 SourceBar 主题标签保留）。否则首屏黑屏抖动 + 断点续播回归 + 兜底/看门狗误判。
+- **BLOCKER-2**：聚合走 Service 层 JS reduce（复用 `SourceService.listSources` 排好序 + effectiveScore/hostTripped 的 VideoSource[]），**禁 SQL GROUP BY**——SQL 无法复现 effectiveScore 公式 + 熔断分桶，会另立评分真源、打破 BUGFIX-WATCH-EP-URL ③「线路名逐字一致」。
+- **HIGH-1**：分组纯逻辑（排序 VideoSource[]→line 骨架）沉淀跨端共享函数；若短期不沉淀须备注理由 + golden fixture 双端对拍。
+- **HIGH-2**：`?view=matrix` 复用既有端点（不新增 route）；zod 显式 `view: z.literal('matrix').optional()`，`view`+`episode` 必需组合、与 `preview` 正交；响应形态分歧登记 verify:adr-contracts。
+- **MEDIUM-1**：切集须重取全线路当前集切片（非只活跃线路），否则兜底环扫拿旧 focusEpisode 集源误判。
+- **MEDIUM-2**：-B 双供给（加 initialMatrix 不删 initialSources），-C 切消费+删旧，保证每卡独立部署/回滚。
+- **契约 Opus 背书**：`VideoLineMatrix` 新共享 DTO，commit 须带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer；-A ADR 定稿前过 Codex 对抗审。

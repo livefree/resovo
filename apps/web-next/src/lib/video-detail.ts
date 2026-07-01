@@ -121,7 +121,13 @@ export async function fetchVideoSources(slug: string, episode?: number): Promise
   const baseUrl = `${API_BASE}/videos/${shortId}/sources${query.size > 0 ? `?${query}` : ''}`
 
   let url = baseUrl
-  let init: RequestInit = { next: { revalidate: 60 } }
+  // CHG-366 止血（arch-reviewer claude-opus-4-8 MEDIUM-3）：省略 episode 的「全集源」响应对
+  // 超长连载（如 1265 集×11 线≈9MB）> Next.js data cache 单条 2MB 上限，`revalidate` 缓存写入
+  // 恒被拒并刷错误日志、且从无 ISR 收益。故全集分支改 `no-store`（不写缓存＝不触发被拒报错）；
+  // 带 episode 的单集小载荷保留 `revalidate:60` ISR。根治（精简 line-matrix 契约 + 按集懒加载）
+  // 见 PLAYER-12-A/-B/-C。preview 分支下方另以 `cache:'no-store'` 覆盖 init，不受影响。
+  let init: RequestInit =
+    episode === undefined ? { cache: 'no-store' } : { next: { revalidate: 60 } }
   if (await shouldUsePreview()) {
     const previewInit = await buildPreviewFetchInit()
     if (previewInit) {

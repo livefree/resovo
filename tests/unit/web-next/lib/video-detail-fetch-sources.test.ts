@@ -103,7 +103,7 @@ describe('fetchVideoSources — D-160-AMD2-2 派发', () => {
     })
   })
 
-  it('省略 episode（全集源）→ public path URL 无 ?episode（PLAYER-LINE-BOUND-EP）', async () => {
+  it('省略 episode（全集源）→ public path URL 无 ?episode + cache no-store（CHG-366 止血）', async () => {
     setupHeaders(false)
     setupCookies(null)
     fetchMock.mockResolvedValueOnce(
@@ -115,9 +115,13 @@ describe('fetchVideoSources — D-160-AMD2-2 派发', () => {
 
     await fetchVideoSources('test-slug-aB3kR9x1')
 
-    const [url] = fetchMock.mock.calls[0]!
+    const [url, init] = fetchMock.mock.calls[0]!
     expect(url).toMatch(/\/videos\/aB3kR9x1\/sources$/)
     expect(url).not.toContain('episode=')
+    // CHG-366：全集源可 >2MB 超 Next data cache 上限，改 no-store 避免缓存写入被拒报错
+    // （该分支本就从未成功缓存、无 ISR 收益损失）；单集分支仍保留 revalidate:60（见首个用例）
+    expect(init).toMatchObject({ cache: 'no-store' })
+    expect(init).not.toHaveProperty('next')
   })
 
   it('省略 episode + preview → preview query 以 ? 起始（无 episode 前缀，PLAYER-LINE-BOUND-EP）', async () => {

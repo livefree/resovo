@@ -3530,3 +3530,18 @@
 - **门禁**：typecheck=0 / lint=0。**真实 dev server Playwright getComputedStyle 实测**：live `--transition-page`=240ms / `--transition-page-reduced`=80ms / `--ease-page`=cubic-bezier(0.32,0.72,0,1) **解析不变**；2 死 token 解析为空（已删）；preserved orphaned token（shared-element-easing/takeover-fast-desktop/route-stack-back）仍在；canonical 镜像（`--duration-push`/`--easing-ease-in-out`）未动；nav 渲染（PostCSS 编译干净）。**零视觉回归**。Codex 两轮对抗审确认 runtime-safe、无 BLOCKER。
 - **follow-up 登记**（task-queue SEQ-20260629-02，不属本卡）：**FU-A**（需前置设计决策 / Opus·ADR-gated）SharedElement/RouteStack 实装接入 token〔行为变更〕vs 确认弃用；**FU-B** 清包级孤儿 semantic token + 单测（tabbar 独立可清；shared/route/takeover 依赖 FU-A 选弃用；触发 ADR-180 全量）。
 - **注意事项**：HANDOFF-48 真实价值＝**文档化偏离 + 净化 2 个 globals.css 死 CSS var**，而非「为收敛而 repoint」。SEQ-20260629-02 动效对齐序列至此 46/47/48/49 全交付。
+
+## [CHG-366-20260630] 全集源 fetch 去 ISR tag 止血：消 >2MB Next data cache 写入被拒报错（SEQ-20260630-01）
+
+- **完成时间**：2026-06-30
+- **记录时间**：2026-06-30
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer（claude-opus-4-8，方案 A 契约背书 + MEDIUM-3 止血采纳裁决）
+- **问题**：运行时错误 `Failed to set Next.js data cache for http://localhost:4000/v1/videos/MHATVI8n/sources, items over 2MB can not be cached (9235594 bytes)`。
+- **根因（实测）**：SSR 入口（`detail-page-factory.tsx:36` / `watch/[slug]/page.tsx:27`）不带 episode 调 `fetchVideoSources(slug)` 拉「全集源」。`MHATVI8n`=1265 集×11 线=**17385 条 VideoSource≈6.9MB（Next 侧计 9.2MB）**（无重复，真实超长连载），超 Next.js data cache 单条 2MB 上限 → `next:{revalidate:60}` 缓存写入恒被拒并刷错误日志；该分支因超限**从未成功缓存**、无实际 ISR 收益损失。
+- **处置（止血，单文件）**：`fetchVideoSources` 按 `episode === undefined` 分派 `RequestInit`——省略 episode 的全集分支用 `{ cache: 'no-store' }`（不写缓存＝不触发被拒报错）；带 episode 的单集小载荷保留 `{ next: { revalidate: 60 } }` ISR。admin preview 分支既有 `cache:'no-store'` 覆盖不受影响。
+- **修改文件**：`apps/web-next/src/lib/video-detail.ts`（`fetchVideoSources` init 分派 + 注释）/ `tests/unit/web-next/lib/video-detail-fetch-sources.test.ts`（全集用例补 `cache:'no-store'` + 无 `next` 断言）/ `docs/tasks.md`（删卡）/ `docs/task-queue.md`（CHG-366 标完成）
+- **新增文件**：无 ｜ **新增依赖**：无 ｜ **数据库变更**：无
+- **门禁**：typecheck=0 / lint=0 / test:changed 7/7 passed（video-detail-fetch-sources：单集分支仍断言 revalidate:60、全集分支新断言 no-store）。
+- **范围声明**：本卡**仅止血**——消除错误日志噪音 + 消无谓重拉，**不解决 RSC 载荷 ~9MB 序列化送客户端**（`initialSources` 全集数组）。根治见 **PLAYER-12-A/-B/-C**（精简 `VideoLineMatrix` 契约 + 按集懒加载；契约已 arch-reviewer claude-opus-4-8 CONDITIONAL PASS 背书，含 BLOCKER-1 内联 focusEpisode+focusEpisodeSource / BLOCKER-2 Service 层聚合禁 SQL GROUP BY；task-queue SEQ-20260630-01）。
+- **注意事项**：止血只对省略 episode 分支改；带 episode 的单集 fetch（小载荷）**必须保留** ISR，勿一刀切全去缓存。
