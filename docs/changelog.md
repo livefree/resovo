@@ -3545,3 +3545,15 @@
 - **门禁**：typecheck=0 / lint=0 / test:changed 7/7 passed（video-detail-fetch-sources：单集分支仍断言 revalidate:60、全集分支新断言 no-store）。
 - **范围声明**：本卡**仅止血**——消除错误日志噪音 + 消无谓重拉，**不解决 RSC 载荷 ~9MB 序列化送客户端**（`initialSources` 全集数组）。根治见 **PLAYER-12-A/-B/-C**（精简 `VideoLineMatrix` 契约 + 按集懒加载；契约已 arch-reviewer claude-opus-4-8 CONDITIONAL PASS 背书，含 BLOCKER-1 内联 focusEpisode+focusEpisodeSource / BLOCKER-2 Service 层聚合禁 SQL GROUP BY；task-queue SEQ-20260630-01）。
 - **注意事项**：止血只对省略 episode 分支改；带 episode 的单集 fetch（小载荷）**必须保留** ISR，勿一刀切全去缓存。
+
+## [FIX-TIMEBOMB-HOME-PREVIEW-20260701] admin-home-preview banner pending 测试去时间炸弹（用户授权独立微任务）
+- **完成时间**：2026-07-01
+- **记录时间**：2026-07-01 01:15
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无
+- **修改文件**：`tests/unit/api/admin-home-sections.test.ts`（1 处，仅测试层）
+- **问题**：全量单测出现 1 失败——`admin-home-sections.test.ts` banner「D-181-3 DTO 映射」用例断言 `card.flags).toContain('pending')`，依赖默认真 `now < activeFrom(2026-07-01T00:00:00Z)`。2026-07-01 UTC 后真 now > activeFrom → pending 不再命中 → 恒失败（今日起阻塞整仓绿色套件门禁）。
+- **根因**：测试硬编码近未来 activeFrom 却用真时钟做比较（时间炸弹）；`home-curation.preview-cards.ts:26` `pending` 依赖 `at`（默认真 now）。
+- **处置**：URL 显式传 `?at=2026-06-30T00:00:00Z`（< activeFrom）替代默认真 now，比较确定化、保留原「pending」测试意图。照该文件下方 `?at=2026-07-02` 用例既有显式时钟约定。
+- **范围声明**：仅测试层 1 处；零生产代码改动；与 PLAYER-12-A 无关（用户拍板授权作独立微任务 + 独立 commit，先绿化套件再提交 PLAYER-12-A）。
+- **门禁**：该文件 60/60 通过；全库扫描确认仅此一处活跃时间炸弹。

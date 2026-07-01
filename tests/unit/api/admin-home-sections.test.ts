@@ -893,9 +893,11 @@ describe('GET /admin/home/preview', () => {
       rows: [bannerRow({ activeFrom: '2026-07-01T00:00:00Z', isActive: true })],
       total: 1,
     })
+    // 去时间炸弹：显式传 at=2026-06-30（< activeFrom 2026-07-01）替代默认真 now——
+    // 原用真 now 断言 pending，2026-07-01 UTC 后 now>activeFrom 恒失败（同文件下方 at=2026-07-02 用例已用此显式约定）
     const res = await app.inject({
       method: 'GET',
-      url: '/v1/admin/home/preview',
+      url: '/v1/admin/home/preview?at=2026-06-30T00:00:00Z',
       headers: { authorization: await adminToken() },
     })
     const banner = res.json().data.sections.find((s: { key: string }) => s.key === 'banner')
@@ -903,7 +905,7 @@ describe('GET /admin/home/preview', () => {
     expect(card.source).toBe('pinned')
     expect(card.startAt).toBe('2026-07-01T00:00:00Z')
     expect(card.enabled).toBe(true)
-    expect(card.flags).toContain('pending') // at=now < activeFrom
+    expect(card.flags).toContain('pending') // at (2026-06-30) < activeFrom (2026-07-01) → pending
   })
 
   it('pinned video 引用失效 → ref_broken flag；无图 → missing_image', async () => {
