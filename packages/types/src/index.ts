@@ -104,3 +104,9 @@ export { formatCountryName } from './format-country-name'
 
 // ── country 归一真源（META-40，与 format-country-name 构成双向真源）─
 export { countryToIso, COUNTRY_NAME_TO_ISO } from './country-to-iso'
+
+// ── PLAYER-12-A / SEQ-20260630-01：线路优先矩阵契约 + 分组纯逻辑（跨端唯一真源）─
+// DTO（VideoLineMatrix / VideoLineEntry / LineRepresentative）+ runtime helper
+// （buildLineKey 分组键真源 / groupSourcesIntoLineMatrix 聚合，`export type *` 不透出 runtime）
+export type * from './line-matrix'
+export { buildLineKey, groupSourcesIntoLineMatrix } from './line-matrix'

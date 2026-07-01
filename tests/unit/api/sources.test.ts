@@ -369,3 +369,79 @@ describe('POST /v1/sources/submit（已下线）', () => {
     expect(res.statusCode).toBe(410)
   })
 })
+
+// ═══════════════════════════════════════════════════════════════
+// GET /v1/videos/:id/sources?view=matrix (PLAYER-12-A / SEQ-20260630-01)
+// ═══════════════════════════════════════════════════════════════
+
+describe('GET /v1/videos/:id/sources?view=matrix', () => {
+  let app: Awaited<ReturnType<typeof buildApp>>
+
+  function rawRow(over: Record<string, unknown>) {
+    return { ...MOCK_RAW_ROW, ...over }
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    mockVQ.findVideoByShortId.mockResolvedValue(MOCK_VIDEO)
+    app = await buildApp()
+  })
+  afterEach(() => app.close())
+
+  it('view=matrix + episode → 精简矩阵（focusEpisode / episodeNumbers / lines）+ focusEpisodeSource 完整 / representative 投影', async () => {
+    mockSQ.findActiveSourcesWithSignalsByVideoId.mockResolvedValue([
+      rawRow({ id: 's-a1', source_name: 'a', site_display_name: '线路A', episode_number: 1, source_url: 'a1' }),
+      rawRow({ id: 's-a2', source_name: 'a', site_display_name: '线路A', episode_number: 2, source_url: 'a2' }),
+      rawRow({ id: 's-b2', source_name: 'b', site_display_name: '线路B', episode_number: 2, source_url: 'b2' }),
+    ])
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/videos/abCD1234/sources?view=matrix&episode=2',
+    })
+    expect(res.statusCode).toBe(200)
+    const m = res.json().data
+    expect(m.focusEpisode).toBe(2)
+    expect(m.episodeNumbers).toEqual([1, 2])
+    expect(m.lines).toHaveLength(2)
+    const lineA = m.lines.find((l: { siteDisplayName: string }) => l.siteDisplayName === '线路A')
+    expect(lineA.focusEpisodeSource.id).toBe('s-a2') // 完整可播放源（含 id）
+    expect(lineA.focusEpisodeSource.sourceUrl).toBe('a2')
+    // Codex MEDIUM / arch-reviewer REVISE：representative 纯投影，结构不可播放（无 sourceUrl/type/id）
+    expect(lineA.representative).not.toHaveProperty('sourceUrl')
+    expect(lineA.representative).not.toHaveProperty('type')
+    expect(lineA.representative).not.toHaveProperty('id')
+    expect(lineA.episodeNumbers).toEqual([1, 2])
+  })
+
+  it('view=matrix + 缺集 episode → focusEpisodeSource=null，骨架仍在（D3 非 404）', async () => {
+    mockSQ.findActiveSourcesWithSignalsByVideoId.mockResolvedValue([
+      rawRow({ id: 's-a1', source_name: 'a', site_display_name: '线路A', episode_number: 1 }),
+    ])
+    const res = await app.inject({
+      method: 'GET',
+      url: '/v1/videos/abCD1234/sources?view=matrix&episode=99',
+    })
+    expect(res.statusCode).toBe(200)
+    const m = res.json().data
+    expect(m.episodeNumbers).toEqual([1])
+    expect(m.lines[0].focusEpisodeSource).toBeNull()
+  })
+
+  it('view=matrix 缺 episode → 422（.refine 落死 view/episode 组合）', async () => {
+    const res = await app.inject({ method: 'GET', url: '/v1/videos/abCD1234/sources?view=matrix' })
+    expect(res.statusCode).toBe(422)
+  })
+
+  it('view 省略 → 维持 list 形态零回归（data 为数组）', async () => {
+    mockSQ.findActiveSourcesWithSignalsByVideoId.mockResolvedValue([MOCK_RAW_ROW])
+    const res = await app.inject({ method: 'GET', url: '/v1/videos/abCD1234/sources' })
+    expect(res.statusCode).toBe(200)
+    expect(Array.isArray(res.json().data)).toBe(true)
+  })
+
+  it('视频不存在 + view=matrix → 404（沿用 NotFoundError）', async () => {
+    mockVQ.findVideoByShortId.mockResolvedValue(null)
+    const res = await app.inject({ method: 'GET', url: '/v1/videos/nope/sources?view=matrix&episode=1' })
+    expect(res.statusCode).toBe(404)
+  })
+})

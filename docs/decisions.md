@@ -24243,3 +24243,59 @@ META-58-B-1 实现完成（门禁：typecheck=0 / lint=0 / test:changed 1202 全
 **遗留中间态（已知，META-56 消除）**：过滤侧已迁 refs 真源、投影侧暂留旧列，存量漂移行（refs applied 但列 unmatched）存在「过滤 matched 命中但投影显示旧态」瞬时不一致。缓解：META-57 enrich 守卫已止新漂移（禁 applied 列覆写 unmatched）；META-56 DROP-prep 回填对齐消除存量；derive overall（catalog-first）不依赖该投影值，运营工作队列不受影响。
 
 **derive 列兜底清理延后（并入 META-60）**：`metadata-status.derive.ts:471-473` douban 列兜底不在 B-1 删——当下非死代码，删除会使「`douban_status='unmatched'` 但 `mc.douban_id` 非空(stale cache)」行经 cache-only 兜底（derive.ts:476-477 `cache present → applied`）误升 applied（missing→applied 回归）。须列完全停写（META-60）+ DROP-prep（META-56）对齐 cache 后才安全，届时同步删 `statusColumnState` douban 分支 + `PROVIDER_SQL_SPECS` douban statusCol（保留 bangumi）。依据：价值排序 1（正确性）> 改动清单一致性；D-216-2（derive overall 独立语义域）。**META-60 卡片须纳入：douban 列兜底清理 + 全部投影迁移（moderation:344 / VIDEO_FULL_SELECT / videos.status:207）。**
+
+---
+
+## ADR-217：线路优先矩阵契约 — `VideoLineMatrix` 精简 DTO + `?view=matrix` 端点 + 服务端 JS reduce 聚合（消 >2MB Next data cache 报错 + RSC 载荷瘦身）（SEQ-20260630-01 / PLAYER-12-A）
+
+**状态**：**Accepted**（2026-07-01；契约经 arch-reviewer claude-opus-4-8 **三轮**背书〔母契约 CONDITIONAL PASS + concrete 落地 CONDITIONAL PASS + Codex findings 裁决〕+ Codex 对抗审 needs-attention 已吸收）。**关系**：根治 CHG-366 止血未覆盖的 RSC 载荷；PLAYER-LINE-BOUND-EP「线路优先」模型的服务端契约化。**设计背书**：arch-reviewer claude-opus-4-8（BLOCKER-1/-2 + HIGH-1/-2 + D1-b 投影红线 + Codex Finding 2 REVISE / Finding 1 UPHOLD 裁决）。
+
+**背景/问题**：SSR 详情/播放页不带 episode 拉「全集源」（`GET /videos/:id/sources`），超长连载（如 `MHATVI8n`=1265 集×11 线=17385 条≈7–9MB）触发三重问题：① 超 Next.js data cache 单条 2MB 上限 → 缓存写入被拒刷错误日志（CHG-366 已止血：全集分支去 ISR 改 `no-store`）；② ISR 静默失效；③ **RSC 载荷把 ~9MB 源数据序列化送客户端**（止血未解）。根因：契约缺「线路优先」精简 DTO——「线路优先」模型只需每线主题标签 + 当前集可播放源，全集源全量下发是载荷根因。
+
+**事实核验**：① `SourceService.listSources(shortId, episode?, options?)` 返回按 `(hostTripped 后置, effectiveScore DESC, created_at ASC)` 排序的 `VideoSource[]`（`route-scoring.ts` 权威公式 + 熔断分桶），episode 省略即全集；② web-next `line-matrix.ts buildLineMatrix` 已有纯分组逻辑（O(n) 单遍，`buildLineKey` 分组，首现序，representative=最高分集源），但居 web-next、apps/api 无法反向 import；③ `packages/types` 已含纯运行时 helper（`getVideoDetailHref`/`countryToIso`/`MOUNTAIN_CODENAMES`），apps/api 已运行时消费 `@resovo/types` 导出（`deriveAggregateState` 等）——合法跨端纯逻辑宿主；④ `GET /videos/:id/sources` 在 `routes/sources.ts`（**非** admin route，`verify-endpoint-adr` 只扫 `routes/admin/*.ts`，不触该门禁）。
+
+### 决策
+
+- **D-217-1（DTO 形态·`VideoLineMatrix`）**：精简矩阵 `{ focusEpisode: number, episodeNumbers: number[]（全线路并集升序去重）, lines: VideoLineEntry[]（首现序）}`。`VideoLineEntry = { key, sourceName, siteDisplayName, episodeNumbers（per-line 升序去重）, representative, focusEpisodeSource }`。JSON 可序列化——**不含 `Map`**（web-next 内存 `VideoLine.episodes: Map` 是 -C 消费方形态，非线上 DTO）。删除 `totalEpisodes` 冗余字段（可从 `episodeNumbers` 派生；「声明总集数」属 video 实体非矩阵）。
+
+- **D-217-2（BLOCKER-1 + D1-b 投影红线·representative 与 focusEpisodeSource 类型级区分）**：
+  - `focusEpisodeSource: VideoSource | null`——focusEpisode 该线路的**完整可播放源**（PlayerShell activeSrc/看门狗/兜底环扫需 id/sourceUrl/type 全字段）；线路缺该集 → `null`（BLOCKER-1 内联当前集源，非仅 representative）。
+  - `representative: LineRepresentative`——该线路 effectiveScore **最高集源的纯 label/health 投影**（`{ sourceName, siteDisplayName, quality, effectiveScore?, audioLanguage?, episodeNumber }`），**结构上不可播放**，仅喂 SourceBar 主题标签 / dead / pending / 语言后缀 / 画质。**刻意剔除 `sourceUrl` + `type`**（可播放定位的最小充分集，Codex Finding 2 REVISE / arch-reviewer 裁决）：TS 结构化，携带则下游「只需 URL+type」代码可误播 representative（错集）；移除后类型即文档地保证不可播放，堵死 -B/-C 误用面（防重蹈 line-display-name.ts:241「用最高分集误判当前集健康」覆辙）。**-B/-C 消费方约束**：既有 `buildThemedLines` 从 representative 建 `RawSourceForTheme` 需 sourceUrl/type，但 label 层实际不消费（line-matrix.ts:99）——迁移时应把 `RawSourceForTheme.sourceUrl/type` 降为可选，而非给 representative 加回字段（-B/-C 卡范围）。
+
+- **D-217-3（HIGH-2·`?view=matrix` 复用端点 + zod 正交）**：`view=matrix` 复用 `GET /videos/:id/sources`（**不新增 route**）。zod 扩 `view: z.literal('matrix').optional()` + `.refine(q => q.view!=='matrix' || q.episode!==undefined)`（**view=matrix 时 episode 必需**）；`view` 与 `preview` 两独立 optional 天然正交。response 形态按 `view` 分歧：`view=matrix` → `{ data: VideoLineMatrix }`，省略 → `{ data: VideoSource[] }`（**默认路径零回归**，显式 opt-in）。
+
+- **D-217-4（BLOCKER-2·服务端 JS reduce 禁 SQL GROUP BY）**：`SourceService.listLineMatrix(shortId, focusEpisode, options?)` 调 `listSources(shortId, undefined, options)` 取全集排序源 → `groupSourcesIntoLineMatrix` JS reduce 聚合。**禁 SQL GROUP BY**——SQL 无法复现 `effectiveScore` 公式（双时钟新鲜度衰减 + priority 通道）+ 熔断分桶，用 GROUP BY 会**另立评分真源**、打破「线路名逐字一致」。Route→Service→Queries 分层不破（Route 仅 view 分支 + 调 Service，Queries 不动）。
+
+- **D-217-5（HIGH-1·分组纯逻辑跨端沉淀·方案 A 移动真源）**：`buildLineKey`（分组键，U+0000 分隔 / siteDisplayName 降级）+ `groupSourcesIntoLineMatrix`（聚合）+ DTO 均落 `packages/types/src/line-matrix.ts`，apps/api（Service）与 apps/web-next（原 line-matrix / MiniPlayer）**双端共用唯一真源**。`buildLineKey` 从 web-next `line-display-name.ts` 迁出 → 原处改 `export { buildLineKey } from '@resovo/types'` re-export（既有两消费方 import 路径零改）。**不搬**主题系统（`THEME_*`/`buildThemedSources`/`applyThemeLabels`，web-next 渲染层专属、跨端无消费方，搬即过度沉淀）。选方案 A 非「复制 + golden fixture」：价值排序②边界与复用 > ⑤改动收敛，双实现是「同一分组键算法双真源」靶心违规，且迁移成本仅 1 文件改定义 + re-export（不构成 HIGH-1 逃生口的「短期不沉淀正当理由」）。
+
+- **D-217-6（错误码语义·越界与空矩阵）**：`view=matrix` 缺 episode → **422 VALIDATION_ERROR**（不默认首集掩盖前端 bug）。**越界 focusEpisode**（无任何线路提供该集）→ **矩阵骨架 + 各线 focusEpisodeSource=null**（`episodeNumbers` 全并集仍返回，前端据此渲染剧集选择器提示「本集无源，请选其他集」；**非 404**——404 语义保留给「视频不存在」，listSources 抛 NotFoundError 沿用）。空输入（视频零源）→ `{ focusEpisode, episodeNumbers: [], lines: [] }`（-B/-C 消费方须防御空矩阵，非 error）。
+
+- **D-217-7（范围·-A 契约后端层，-B/-C 消费迁移延后）**：-A 仅落契约（types）+ 端点（api）+ ADR，**correct-first 不预置优化**——`listLineMatrix` 每次全量 load 全集算 representative 全局最高分（负载与今日单次 SSR load 等价），埋 `PLAYER-12-C 优化点`注释锚点（切集重取放大 = MEDIUM-1，representative 缓存/切片分离待 -C 评估，不在 -A 写优化码）。-B 双供给（新增 initialMatrix 不删 initialSources，MEDIUM-2 独立回滚）；-C PlayerShell「全集常驻」→「骨架 + 当前集全线路切片」重构 + 删旧 initialSources（MEDIUM-1）。
+
+### 端点契约（response 形态按 view 分歧登记）
+
+| # | 方法 | 路径 | 鉴权 | 入参 | 成功 | 错误 |
+|---|---|---|---|---|---|---|
+| 1 | GET | `/videos/:id/sources` | 无（公开）/ `?preview=admin` 时 adminOnly | `episode?` + `preview?` + `view?='matrix'`（zod refine：view=matrix→episode 必需，view/preview 正交） | 200 `{data: VideoSource[]}`（默认）｜ 200 `{data: VideoLineMatrix}`（view=matrix，含越界骨架全 null） | 422 VALIDATION_ERROR（view=matrix 缺 episode）／ 404 NOT_FOUND（视频不存在）／ 500 |
+
+**非 admin route**（`routes/sources.ts`）→ 不触 `verify:endpoint-adr` 红线（仅扫 `routes/admin/*.ts`）；本表为契约可追溯性登记（HIGH-2「响应形态分歧登记」）。
+
+### 关联 ADR
+
+复用 **ADR-001**（source_url 直链，矩阵源仍直链不代理）/ **CHG-352 route-labeling**（effectiveScore 权威评分，listSources 排序真源，聚合复用不另立）/ **SRCHEALTH-P3-3-B2**（hostTripped 熔断分桶，聚合沿用排序）/ **ADR-199**（audioLanguage 语音后缀，representative 投影保留字段）/ **ADR-160 AMENDMENT 2**（preview 派发，view 与 preview 正交共存）。止血前置 **CHG-366**（全集分支去 ISR）。
+
+### 已知限制（LineKey 站点维度 · Codex Finding 1 UPHOLD）
+
+**LineKey 以 `siteDisplayName`（非权威 `source_site_key`）为站点维度。** 原因：`VideoSource` DTO 当前不透出 `source_site_key`，前台粘性匹配（`playerStore.activeLineKey` / `useMiniPlayerVideo.ts:134` / `matchActiveSourceIndex`）物理上只能消费 display-name。**已知限制**：两 crawler 站对同视频共享 `display_name` + `source_name` 时，矩阵会合并为一条线路（union 集号、按分选 focusEpisodeSource）——此口径**继承自现网 web-next `buildLineMatrix`，非本次引入**，-A 只是忠实平移到 server 契约、风险面不变。
+
+**为何不在 -A 按 Codex 建议改用 `source_site_key`**（arch-reviewer 裁决 UPHOLD）：server 矩阵 `key` 若改用 site_key 空间，而 client 侧因 DTO 无 site_key 只能继续 `buildLineKey`（display 空间）重算 → `matrix.key` 与 `activeLineKey` **永不相等 → 跨 mini↔full 线路粘性 100% 断裂**（从「低概率静默合并」换成「高概率必现粘性丢失」，净负）。权威化必须全栈一致（扩 `VideoSource.sourceSiteKey` + 迁 4 处消费链），远超 -A「契约后端层」边界。**follow-up**：见 task-queue `PLAYER-13 线路权威身份收敛：source_site_key 全栈化`（跨 3+ 消费方，卡内 Opus 子代理设计 DTO 契约）。
+
+### Codex 对抗审核摘要 2026-07-01（codex adversarial-review · working tree diff · verdict: needs-attention）
+
+**2 findings，经 arch-reviewer claude-opus-4-8 裁决：Finding 2 REVISE（已落地）+ Finding 1 UPHOLD（已固化为上「已知限制」+ follow-up）。**
+- **Finding 1 [HIGH]（line keys 可合并异站）→ UPHOLD**：Codex 技术正确但挑战的是**先于 -A 存在的架构现状**；其 server-authoritative 修法会当场引爆更高危的**粘性断裂**（Codex 未看 client 消费链）。维持 siteDisplayName + 登记 follow-up 全栈卡。
+- **Finding 2 [MEDIUM]（representative 结构上仍可播放）→ REVISE（已吸收）**：`LineRepresentative` 曾暴露 `sourceUrl` + `type`（可播放定位字段），与自身「不可播放」声明矛盾。**已移除**这两字段，representative 收敛为纯 label/health 投影（推翻上轮 D1-b「零改造对齐 RawSourceForTheme」理由——那是拿少改 5 行去换契约自相矛盾 + 误播面，违反「最小改动不得绕过架构约束」）。-B/-C 迁移改 `RawSourceForTheme.sourceUrl/type` 降可选。
+
+### BLOCKER / 前置
+
+**前置**：无（-A 契约后端层，无 schema/migration）。**门禁**：typecheck=0 / lint pass / 单测（groupSourcesIntoLineMatrix 聚合口径 12 + view=matrix 路由 5 + web-next line-matrix re-export parity 15）/ verify:adr-contracts=0 / verify:endpoint-adr pass。**Codex 对抗审**：✅ 已过（needs-attention 2 findings 经 arch-reviewer 裁决吸收，见上摘要）。**共享 DTO Opus 背书**：commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。

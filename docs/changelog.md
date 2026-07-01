@@ -3557,3 +3557,28 @@
 - **处置**：URL 显式传 `?at=2026-06-30T00:00:00Z`（< activeFrom）替代默认真 now，比较确定化、保留原「pending」测试意图。照该文件下方 `?at=2026-07-02` 用例既有显式时钟约定。
 - **范围声明**：仅测试层 1 处；零生产代码改动；与 PLAYER-12-A 无关（用户拍板授权作独立微任务 + 独立 commit，先绿化套件再提交 PLAYER-12-A）。
 - **门禁**：该文件 60/60 通过；全库扫描确认仅此一处活跃时间炸弹。
+
+## [PLAYER-12-A-20260701] VideoLineMatrix 契约 + ?view=matrix 端点 + 服务端 JS reduce 聚合（SEQ-20260630-01 根治层）
+- **完成时间**：2026-07-01
+- **记录时间**：2026-07-01 01:20
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：arch-reviewer (claude-opus-4-8) ×3〔母契约 CONDITIONAL PASS + concrete 落地 CONDITIONAL PASS + Codex findings 裁决〕；Codex 对抗审〔adversarial-review，needs-attention 2 findings 吸收〕
+- **修改文件**：
+  - `packages/types/src/line-matrix.ts`（新：`buildLineKey` 跨端真源 + `VideoLineMatrix`/`VideoLineEntry`/`LineRepresentative` DTO + `groupSourcesIntoLineMatrix` 聚合）
+  - `packages/types/src/index.ts`（type + runtime 双导出）
+  - `apps/api/src/services/SourceService.ts`（`listLineMatrix` 复用 listSources JS reduce）
+  - `apps/api/src/routes/sources.ts`（`view=matrix` 分支 + zod refine）
+  - `apps/web-next/src/lib/line-display-name.ts`（`buildLineKey` 定义 → re-export `@resovo/types`，HIGH-1 真源迁移）
+  - `docs/decisions.md`（ADR-217）
+  - `tests/unit/types/line-matrix.test.ts`（新，聚合 12 测）+ `tests/unit/api/sources.test.ts`（view=matrix 路由 5 测）
+- **问题**：CHG-366 止血消了 >2MB 缓存报错，但 SSR 仍把 ~9MB 全集源经 RSC 送客户端（1265 集×11 线=17385 源）。
+- **根因**：契约缺「线路优先」精简 DTO——全集源全量下发是载荷根因。
+- **方案**：服务端聚合出「线路骨架 + focusEpisode 当前集源」精简矩阵（~11 完整 focusEpisodeSource + 11 投影 representative + 集号数组，vs 原 17385 源）。
+- **契约红线落实**：BLOCKER-1 内联 focusEpisode + 每线 focusEpisodeSource（完整可播放）；BLOCKER-2 Service JS reduce 禁 SQL GROUP BY（复用 route-scoring 权威评分 + 熔断分桶，不另立真源）；HIGH-1 分组纯逻辑沉淀 @resovo/types 跨端唯一真源（方案 A 移动 buildLineKey，web-next re-export 零改消费方）；HIGH-2 复用端点 + zod view/episode 组合、与 preview 正交。
+- **Codex 对抗审吸收**（arch-reviewer 裁决）：
+  - Finding 2 [MEDIUM] REVISE：`LineRepresentative` 移除 `sourceUrl`+`type`（可播放定位字段），收敛为纯 label/health 投影，结构上堵死 -B/-C 误播 representative。
+  - Finding 1 [HIGH] UPHOLD：LineKey 维持 siteDisplayName（非权威 source_site_key）——继承现网 buildLineMatrix 同口径、非本次引入；改 source_site_key 会引爆跨 mini↔full 粘性断裂，权威化需全栈迁移。固化为 ADR-217「已知限制」+ follow-up。
+- **-B/-C 消费约束（登记）**：representative 不再供 sourceUrl/type，label 派生仅用 name/quality/effectiveScore/audioLanguage；-B/-C 迁移应把 `RawSourceForTheme.sourceUrl/type` 降为可选（label 层本就不消费）。
+- **Follow-up 登记**：task-queue `PLAYER-13 线路权威身份收敛：source_site_key 全栈化`（Finding 1 UPHOLD 强制项，跨 3+ 消费方，卡内 Opus 子代理）。
+- **范围声明**：packages/types + apps/api + ADR + web-next line-display-name re-export（HIGH-1 真源迁移必要面，arch-reviewer 方案 A 正式纳入）；**不改** PlayerShell/SSR wiring（-B/-C 范围）。默认 `GET sources` list 形态零回归（view 省略即原行为）。
+- **门禁**：typecheck=0 / lint=0 / test:changed 613 文件 8354 测全过 / verify:adr-contracts=0 / verify:endpoint-adr=0（137 ADR 端点，含 ADR-217）。

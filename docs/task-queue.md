@@ -3387,7 +3387,7 @@
 | 任务 | 状态 | 摘要 | 范围 | 模型 | 依赖 | 门禁 |
 | --- | --- | --- | --- | --- | --- | --- |
 | **CHG-366**（止血·hotfix） | ✅ 完成（2026-06-30；详见 changelog [CHG-366-20260630]） | 全集 fetch 去 ISR tag：`video-detail.ts` `fetchVideoSources` 省略 episode 分支 `next:{revalidate:60}`→`cache:'no-store'`（带 episode 单集分支保留 ISR）。消除 >2MB 缓存写入被拒的错误日志（该分支本就从未成功缓存、无 ISR 收益损失）。门禁 typecheck=0/lint=0/test:changed 7/7。**仅止血、不解决 RSC 载荷**（根治见 PLAYER-12-A/-B/-C）。 | `apps/web-next/src/lib/video-detail.ts` + 同名单测（web-next SSR 单层） | **opus**（主循环）；子代理 arch-reviewer claude-opus-4-8（MEDIUM-3 止血背书） | 无 | ✅ typecheck=0/lint=0/test:changed 7/7 |
-| **PLAYER-12-A**（types+API+ADR） | ⬜ 待开始 | `VideoLineMatrix` DTO（含 focusEpisode + 每线 focusEpisodeSource，BLOCKER-1）+ `GET /videos/:id/sources?view=matrix`（zod 收敛 view/episode/preview 组合，HIGH-2）+ Service 层 JS reduce 聚合（复用 listSources，禁 SQL GROUP BY，BLOCKER-2）+ 分组纯逻辑跨端沉淀（HIGH-1）+ 独立 ADR + 单测。 | packages/types + apps/api（sources 路由/SourceService/queries）+ ADR | **opus**（契约已 arch-reviewer 背书；ADR 定稿前 Codex 对抗审） | 无 | typecheck/lint/test:changed/verify:adr-contracts/verify:endpoint-adr |
+| **PLAYER-12-A**（types+API+ADR） | ✅ 完成（2026-07-01；详见 changelog [PLAYER-12-A-20260701]） | `VideoLineMatrix` DTO（focusEpisode + 每线 focusEpisodeSource〔完整可播放〕+ representative〔纯 label/health 投影，Codex Finding 2 去 sourceUrl/type〕，BLOCKER-1）+ `GET /videos/:id/sources?view=matrix`（zod refine：view+episode 必需、与 preview 正交，HIGH-2）+ `SourceService.listLineMatrix` 复用 listSources JS reduce 聚合（禁 SQL GROUP BY，BLOCKER-2）+ `buildLineKey`/`groupSourcesIntoLineMatrix` 沉淀 @resovo/types 跨端真源（HIGH-1 方案 A，web-next re-export）+ ADR-217 + 单测。arch-reviewer 三轮 + Codex 对抗审吸收。门禁全绿。 | packages/types + apps/api（sources 路由/SourceService）+ ADR-217 + web-next line-display-name re-export | **opus**（arch-reviewer claude-opus-4-8 ×3 + Codex 对抗审） | 无 | ✅ typecheck=0/lint=0/test:changed 8354/verify:adr-contracts=0/verify:endpoint-adr=0 |
 | **PLAYER-12-B**（web-next SSR·双供给） | ⬜ 待开始 | `fetchLineMatrix`（可缓存小载荷）+ SSR wiring（detail-page-factory/watch page）**新增** initialMatrix **不删** initialSources（双供给，MEDIUM-2 独立回滚）+ DetailHero/VideoDetailClient 切消费矩阵骨架（只需线路名、风险最低）。 | apps/web-next（video-detail.ts + 2 SSR 入口 + VideoDetailClient/DetailHero） | opus/sonnet | PLAYER-12-A | typecheck/lint/test:changed/test:e2e:video |
 | **PLAYER-12-C**（PlayerShell 重构+回归） | ⬜ 待开始 | PlayerShell 内存模型「全集常驻」→「骨架 + 当前集全线路切片」（切集重取 `?view=matrix&episode=N` 刷全线路切片，MEDIUM-1）；activeSrc/切线覆盖/兜底环扫/看门狗改按 focusEpisodeSource 取；删旧 initialSources prop（双供给收口）。**回归全部播放器关键路径**（断点续播/线路切换/影院模式/字幕/兜底切线/看门狗）。 | apps/web-next（PlayerShell + line-matrix.ts + useMiniPlayerVideo 视需要） | **opus**（播放器 shell 接口重构，CLAUDE.md 强制） | PLAYER-12-A（契约冻结） | typecheck/lint/test:changed/test:e2e:player（关键路径回归） |
 
@@ -3400,3 +3400,11 @@
 - **MEDIUM-1**：切集须重取全线路当前集切片（非只活跃线路），否则兜底环扫拿旧 focusEpisode 集源误判。
 - **MEDIUM-2**：-B 双供给（加 initialMatrix 不删 initialSources），-C 切消费+删旧，保证每卡独立部署/回滚。
 - **契约 Opus 背书**：`VideoLineMatrix` 新共享 DTO，commit 须带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer；-A ADR 定稿前过 Codex 对抗审。
+
+### Follow-up 登记（Codex 对抗审 2026-07-01 裁决产出）
+
+| 任务 | 状态 | 摘要 | 范围 | 模型 | 依赖 | 门禁 |
+| --- | --- | --- | --- | --- | --- | --- |
+| **PLAYER-13**（线路权威身份收敛） | ⬜ 待开始（Finding 1 UPHOLD 强制 follow-up） | LineKey 改用权威 `source_site_key`（现为 `siteDisplayName`，两 crawler 站共享 display_name+source_name 会静默合并线路——继承现网 buildLineMatrix 同口径，非 PLAYER-12 引入）。须**全栈一致**否则粘性断裂：扩 `VideoSource.sourceSiteKey`（DTO）+ server `findActiveSourcesWithSignalsByVideoId` SELECT 补 `COALESCE(vs.source_site_key,v.site_key) AS site_key`（表达式已在 JOIN 现成）+ 迁 `buildLineKey`/`playerStore.activeLineKey`/`useMiniPlayerVideo:134`/`matchActiveSourceIndex` 四处消费链。 | packages/types（VideoSource DTO）+ apps/api（queries）+ apps/web-next（4 处消费链） | **opus**（跨 3+ 消费方 DTO 契约，卡内 spawn Opus 子代理设计） | PLAYER-12-A（矩阵契约冻结） | typecheck/lint/test:changed/test:e2e:player（粘性回归） |
+
+依据：ADR-217「已知限制」节 + Codex Finding 1（HIGH）arch-reviewer UPHOLD 裁决。触发条件：非硬阻塞（现口径继承现网、无新增回归），按优先级排期；若线上出现同 display_name 站合并投诉则升优先级。

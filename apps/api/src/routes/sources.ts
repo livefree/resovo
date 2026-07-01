@@ -28,10 +28,18 @@ export async function sourceRoutes(fastify: FastifyInstance) {
   fastify.get('/videos/:id/sources', async (request, reply) => {
     const { id } = request.params as { id: string }
 
-    const QuerySchema = z.object({
-      episode: z.coerce.number().int().min(1).optional(),
-      preview: z.literal('admin').optional(),
-    })
+    // PLAYER-12-A / HIGH-2：view=matrix 复用本端点（不新增 route），与 preview 正交；
+    // view=matrix 时 episode 必需（.refine 落死组合，缺失 → 422，不默认首集掩盖前端 bug）
+    const QuerySchema = z
+      .object({
+        episode: z.coerce.number().int().min(1).optional(),
+        preview: z.literal('admin').optional(),
+        view: z.literal('matrix').optional(),
+      })
+      .refine((q) => q.view !== 'matrix' || q.episode !== undefined, {
+        message: 'view=matrix 时 episode 必需',
+        path: ['episode'],
+      })
     const parsed = QuerySchema.safeParse(request.query)
     if (!parsed.success) {
       return reply.code(422).send({
@@ -49,6 +57,23 @@ export async function sourceRoutes(fastify: FastifyInstance) {
     }
 
     try {
+      // view=matrix：返回精简线路优先矩阵（response 形态按 view 分歧；默认路径零回归）
+      if (parsed.data.view === 'matrix') {
+        const focusEpisode = parsed.data.episode
+        if (focusEpisode === undefined) {
+          // .refine 已保证不可达，此处收窄类型 + 防御性兜底
+          return reply.code(422).send({
+            error: { code: 'VALIDATION_ERROR', message: 'view=matrix 时 episode 必需', status: 422 },
+          })
+        }
+        const matrix = await sourceService.listLineMatrix(
+          id,
+          focusEpisode,
+          preview ? { preview: true } : undefined,
+        )
+        return reply.send({ data: matrix })
+      }
+
       const sources = await sourceService.listSources(
         id,
         parsed.data.episode,

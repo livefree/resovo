@@ -14,7 +14,8 @@
  */
 
 import type { Pool } from 'pg'
-import type { VideoSource } from '@/types'
+import type { VideoSource, VideoLineMatrix } from '@/types'
+import { groupSourcesIntoLineMatrix } from '@/types'
 import * as sourceQueries from '@/api/db/queries/sources'
 import * as videoQueries from '@/api/db/queries/videos'
 import { calculateEffectiveScore, type RouteQuality } from '@/api/lib/route-scoring'
@@ -91,5 +92,27 @@ export class SourceService {
 
     return withScore.map(({ source, effectiveScore, hostTripped }) =>
       ({ ...source, effectiveScore, hostTripped }))
+  }
+
+  /**
+   * 获取「线路优先矩阵」（PLAYER-12-A / SEQ-20260630-01）
+   *
+   * 复用 listSources 全集排序源（含 effectiveScore/hostTripped 权威排序）→ groupSourcesIntoLineMatrix
+   * JS reduce 聚合出精简矩阵（BLOCKER-2：禁 SQL GROUP BY——SQL 无法复现 effectiveScore 公式 + 熔断
+   * 分桶，会另立评分真源）。避免把全集源经 RSC 下发（消 >2MB 缓存报错 + 载荷瘦身）。
+   *
+   * 越界 focusEpisode（无线路提供该集）→ 矩阵骨架 + 各线 focusEpisodeSource=null（非 404，
+   * 前端仍可拿 episodeNumbers 提示选其他集）；视频不存在 → listSources 抛 NotFoundError（沿用）。
+   *
+   * PLAYER-12-C 优化点：-C 切集重取会每次触发当前全量 load（为算 representative 全局最高分必须
+   * 全集）；representative 缓存 / focus 切片分离待 -C 评估，-A correct-first 不预置优化。
+   */
+  async listLineMatrix(
+    videoShortId: string,
+    focusEpisode: number,
+    options?: { preview?: boolean },
+  ): Promise<VideoLineMatrix> {
+    const sources = await this.listSources(videoShortId, undefined, options)
+    return groupSourcesIntoLineMatrix(sources, focusEpisode)
   }
 }

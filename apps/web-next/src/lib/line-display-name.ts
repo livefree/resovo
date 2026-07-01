@@ -75,24 +75,12 @@ export function resolveSourceDisplayName(
 }
 
 /**
- * 线路稳定分组键（PLAYER-LINE-BOUND-EP / arch-reviewer 红线 2）。
- *
- * 口径与 matchActiveSourceIndex 复合匹配（优先级 1）一致：siteDisplayName 非空 →
- * 复合 `(siteDisplayName, sourceName)`；为 null/空 → 降级 sourceName 单键（同 matchActiveSourceIndex
- * 优先级 2 "单 sourceName 兜底"，兼容历史 siteDisplayName=null / CHG-412 未配置 display_name）。
- *
- * 用 U+0000 作分隔符（业务文案不会出现），避免 "site"+"name" 与 "sitename" 串台。
- * VideoSource 不暴露 source_site_key，故以 siteDisplayName 为站点维度（前台唯一可用站点标识）。
- *
- * line-matrix 分组 + MiniPlayer 跨消费方按 key 解析当前线路共用本函数（唯一真源）。
+ * 线路稳定分组键——**真源已迁至 @resovo/types**（PLAYER-12-A / HIGH-1 方案 A，跨端单一真源）。
+ * 此处 re-export 保 web-next 既有消费方（line-matrix 分组 / MiniPlayer 按 key 解析）import 路径不变。
+ * 口径（U+0000 分隔 / siteDisplayName 降级 / 与 matchActiveSourceIndex 复合匹配一致）详见
+ * `@resovo/types` line-matrix.ts buildLineKey。
  */
-export function buildLineKey(source: {
-  readonly siteDisplayName?: string | null
-  readonly sourceName: string
-}): string {
-  const site = source.siteDisplayName?.trim()
-  return site ? `${site}\u0000${source.sourceName}` : source.sourceName
-}
+export { buildLineKey } from '@resovo/types'
 
 export function deduplicateLabels<T extends { label: string }>(items: T[]): T[] {
   const counts = new Map<string, number>()
