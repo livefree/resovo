@@ -114,7 +114,18 @@
     "tablistAriaLabel": "搜索类型",
     "foundResults": "找到 {count} 个结果",
     "watchNow": "立即观看",
-    "details": "详情"
+    "details": "详情",
+    "overlayHotSearch": "热门搜索",
+    "overlayPrompt": "输入关键词开始搜索",
+    "searching": "搜索中…",
+    "groupContent": "内容",
+    "groupSuggestions": "相关搜索",
+    "noResults": "未找到相关内容",
+    "viewAll": "查看“{query}”的全部结果 →",
+    "noResultsRecommend": "未找到相关内容，为你推荐：",
+    "recommendedTitle": "热门推荐",
+    "hotTitle": "热门内容",
+    "overlayAriaLabel": "搜索快速结果"
   },
   "miniPlayer": {
     "returnToWatch": "返回播放页"

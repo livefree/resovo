@@ -114,7 +114,18 @@
     "tablistAriaLabel": "Search type",
     "foundResults": "Found {count} results",
     "watchNow": "Watch Now",
-    "details": "Details"
+    "details": "Details",
+    "overlayHotSearch": "Trending",
+    "overlayPrompt": "Type a keyword to start searching",
+    "searching": "Searching…",
+    "groupContent": "Content",
+    "groupSuggestions": "Related searches",
+    "noResults": "No matching content",
+    "viewAll": "View all results for “{query}” →",
+    "noResultsRecommend": "No results found. You might like:",
+    "recommendedTitle": "Recommended",
+    "hotTitle": "Trending now",
+    "overlayAriaLabel": "Search quick results"
   },
   "miniPlayer": {
     "returnToWatch": "Return to watch"

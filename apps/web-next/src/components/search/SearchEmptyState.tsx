@@ -1,3 +1,6 @@
+'use client'
+
+import { useTranslations } from 'next-intl'
 import { VideoGrid } from '@/components/video/VideoGrid'
 
 interface SearchEmptyStateProps {
@@ -16,16 +19,17 @@ function SearchResultsSkeleton() {
  * - hasQuery=false：未输入，展示热门内容
  */
 export function SearchEmptyState({ hasQuery }: SearchEmptyStateProps) {
+  const t = useTranslations('search')
   return (
     <div className="pt-4" data-testid="search-empty-state">
       {hasQuery && (
         <p className="mb-6 text-sm" style={{ color: 'var(--fg-muted)' }}>
-          未找到相关内容，为你推荐：
+          {t('noResultsRecommend')}
         </p>
       )}
       <section>
         <h3 className="mb-4 text-base font-semibold" style={{ color: 'var(--fg-default)' }}>
-          {hasQuery ? '热门推荐' : '热门内容'}
+          {hasQuery ? t('recommendedTitle') : t('hotTitle')}
         </h3>
         <VideoGrid
           query="period=week&limit=20"

@@ -19,6 +19,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { apiClient } from '@/lib/api-client'
 import { SafeImage } from '@/components/media'
 import type { SearchSuggestion } from '@resovo/types'
@@ -48,16 +49,6 @@ interface QuickResult {
   shortId: string
 }
 
-// ── 结果类型标签 ──────────────────────────────────────────────────────────────
-
-const TYPE_LABELS: Record<string, string> = {
-  movie:        '电影',
-  series:       '剧集',
-  anime:        '动漫',
-  variety:      '综艺',
-  documentary:  '纪录片',
-}
-
 // ── QuickResultItem ───────────────────────────────────────────────────────────
 
 function QuickResultItem({
@@ -67,6 +58,8 @@ function QuickResultItem({
   result: QuickResult
   onClick: () => void
 }) {
+  // 类型名复用 videoType 段（ChipType 同源真源，避免二次硬编码类型标签）
+  const tType = useTranslations('videoType')
   return (
     <button
       type="button"
@@ -107,7 +100,7 @@ function QuickResultItem({
           {result.title}
         </p>
         <p style={{ fontSize: '12px', color: 'var(--fg-muted)', marginTop: 'var(--space-0-5)' }}>
-          {[TYPE_LABELS[result.type] ?? result.type, result.year].filter(Boolean).join(' · ')}
+          {[tType(result.type), result.year].filter(Boolean).join(' · ')}
         </p>
       </div>
 
@@ -169,6 +162,7 @@ function SuggestionItem({
 
 export function SearchOverlay({ query, onNavigate, onClose, locale = 'zh-CN', hotSearchTerms }: SearchOverlayProps) {
   const router = useRouter()
+  const t = useTranslations('search')
   const [quickResults, setQuickResults] = useState<QuickResult[]>([])
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([])
   const [searching, setSearching] = useState(false)
@@ -234,7 +228,7 @@ export function SearchOverlay({ query, onNavigate, onClose, locale = 'zh-CN', ho
         background: 'var(--bg-surface)',
       }}
       role="listbox"
-      aria-label="搜索快速结果"
+      aria-label={t('overlayAriaLabel')}
     >
       {!hasQuery ? (
         hotSearchTerms && hotSearchTerms.length > 0 ? (
@@ -250,7 +244,7 @@ export function SearchOverlay({ query, onNavigate, onClose, locale = 'zh-CN', ho
                 margin: 0,
               }}
             >
-              热门搜索
+              {t('overlayHotSearch')}
             </p>
             {hotSearchTerms.map((term, i) => (
               <button
@@ -288,12 +282,12 @@ export function SearchOverlay({ query, onNavigate, onClose, locale = 'zh-CN', ho
           </div>
         ) : (
           <div style={{ padding: 'var(--search-empty-pad)', textAlign: 'center', color: 'var(--fg-muted)', fontSize: '13px' }}>
-            输入关键词开始搜索
+            {t('overlayPrompt')}
           </div>
         )
       ) : searching ? (
         <div style={{ padding: 'var(--space-4) var(--space-5)', color: 'var(--fg-muted)', fontSize: '13px' }}>
-          搜索中…
+          {t('searching')}
         </div>
       ) : (
         <>
@@ -311,7 +305,7 @@ export function SearchOverlay({ query, onNavigate, onClose, locale = 'zh-CN', ho
                   margin: 0,
                 }}
               >
-                内容
+                {t('groupContent')}
               </p>
               {quickResults.map((r) => (
                 <QuickResultItem key={r.id} result={r} onClick={() => handleResultClick(r)} />
@@ -338,7 +332,7 @@ export function SearchOverlay({ query, onNavigate, onClose, locale = 'zh-CN', ho
                   margin: 0,
                 }}
               >
-                相关搜索
+                {t('groupSuggestions')}
               </p>
               {suggestions.map((s, i) => (
                 <SuggestionItem
@@ -353,7 +347,7 @@ export function SearchOverlay({ query, onNavigate, onClose, locale = 'zh-CN', ho
           {/* 无结果 */}
           {quickResults.length === 0 && suggestions.length === 0 && (
             <div style={{ padding: 'var(--search-empty-pad)', textAlign: 'center', color: 'var(--fg-muted)', fontSize: '13px' }}>
-              未找到相关内容
+              {t('noResults')}
             </div>
           )}
         </>
@@ -377,7 +371,7 @@ export function SearchOverlay({ query, onNavigate, onClose, locale = 'zh-CN', ho
               cursor: 'pointer',
             }}
           >
-            查看 &ldquo;{query}&rdquo; 的全部结果 →
+            {t('viewAll', { query })}
           </button>
         </div>
       )}

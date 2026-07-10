@@ -3619,3 +3619,21 @@
 - **范围声明**：纯 web-next UI 层；后端 `/search` 契约零改动（早已支持 q 可选 + 三人物维）；未触共享组件 Props；颜色零硬编码沿用既有 CSS 变量。i18n 硬编码文案（浮层/空态）留 SEARCH-FE-2 收敛。
 - **自审**：[AI-CHECK] layering/cross_module/dup_logic/hack_patch/fn_split/file_split/side_effect 全 NO；audit_payload/adr_closure NA。无结构劣化，streak 不 +1。
 - **门禁**：typecheck=0 / lint=0 / test:changed 2 passed / test:e2e:search 21 passed（含新增 facet-only 用例）。
+
+## [SEARCH-FE-2-20260710] 搜索浮层/空态 i18n 补全 + 删死代码 SearchSuggestions（SEQ-20260710-01）
+- **完成时间**：2026-07-10
+- **记录时间**：2026-07-10 16:55
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（i18n 文案迁移 + 死代码删除，未触共享组件 Props / schema）
+- **修改文件**：
+  - `apps/web-next/src/components/search/SearchOverlay.tsx`（接 `useTranslations('search')`，9 处硬编码中文改 t()〔热门搜索/输入关键词/搜索中/内容/相关搜索/未找到/查看全部 + role=listbox aria-label〕；删 `TYPE_LABELS` 常量，类型名复用 `useTranslations('videoType')`〔ChipType 同源真源〕；viewAll 用 `{query}` 插值）
+  - `apps/web-next/src/components/search/SearchEmptyState.tsx`（加 `'use client'` + `useTranslations('search')`，3 处中文改 t()）
+  - `apps/web-next/messages/en.json` + `zh-CN.json`（`search` 段补 11 key：overlayHotSearch/overlayPrompt/searching/groupContent/groupSuggestions/noResults/viewAll/noResultsRecommend/recommendedTitle/hotTitle/overlayAriaLabel）
+  - **删** `apps/web-next/src/components/search/SearchSuggestions.tsx`（全仓零引用死代码，与 SearchOverlay 联想词重复实现）
+- **问题**：Resovo 定位国际化平台，但搜索浮层/空态文案全硬编码中文——`/en` locale 英文用户看到中文。SearchPage 本体已 i18n，浮层/空态漏做。另 SearchSuggestions 为死代码。
+- **方案**：浮层/空态文案迁 next-intl；类型名复用 `videoType` 段消除二次硬编码；删死代码。
+- **关键路径验证**：test:e2e:search 21 passed（回归空态/浮层渲染、facet-only、q 透传、清除、分页全绿）。手动 curl `/en/search`、`/en/search?director=诺兰`、`/zh-CN/next-placeholder` 均 200，SSR 无编译错误。
+- **偏离说明**：e2e 首跑 20 failed 全卡 `_fixtures.ts:33` 导航 ≥500——诊断为并发首次编译损坏 `.next` 缓存的已知环境 flake（tasks/changelog 多次记载）；复用手动预热 3000 server 重跑 21 passed，代码无关。
+- **范围声明**：纯 web-next UI 层 + messages；无颜色改动；未触 Props 契约。`overlayAriaLabel`（a11y）为同文件 i18n 收敛的完整性补充，非范围蔓延。
+- **自审**：[AI-CHECK] 全 NO/NA；dup_logic=NO（类型名收敛 videoType 单一真源，反去重）。无结构劣化，streak 不 +1。
+- **门禁**：typecheck=0 / lint=0 / test:changed（Header.test 6 passed）/ test:e2e:search 21 passed。

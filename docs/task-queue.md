@@ -3414,14 +3414,14 @@
 
 ## SEQ-20260710-01 — 客户端搜索断链与卫生收敛
 
-> 创建时间：2026-07-10 ｜ 最后更新时间：2026-07-10（FE-1 ✅）
+> 创建时间：2026-07-10 ｜ 最后更新时间：2026-07-10（FE-1 ✅ / FE-2 ✅）
 > 起因：搜索功能调查（会话内）暴露前端多处断链与卫生问题——后端 `/search`（q 可选 + 11 facet 含 director/actor/writer）+ SearchService（`.keyword` 精确匹配）能力完整，前端只消费了一部分且 MetaChip / 联想词到结果页的链路断裂。按性价比依次收敛。
 > 范围红线：纯前台 web-next UI 层 + 后端 suggest 单点稳健性；不新增 route / 不改 schema / 不触共享组件 Props 契约（无强制升 Opus 项）；颜色零硬编码沿用 CSS 变量；i18n 走 next-intl messages。
 
 | 任务 | 状态 | 摘要 | 范围 | 模型 | 依赖 | 门禁 |
 | --- | --- | --- | --- | --- | --- | --- |
 | **SEARCH-FE-1**（打通断链·最高性价比） | ✅ 完成（2026-07-10；详见 changelog [SEARCH-FE-1-20260710]） | facet-only 搜索（`doSearch` 短路改为 q+facet 全空才短路）+ `FORWARDED_FILTERS` 补 director/actor/writer + `hasCriteria` 替换 3 处 `hasQuery` 渲染判断 + MetaChip 加 `/${locale}` 前缀。修复详情页 MetaChip / 联想词人名两条落地断链。门禁 typecheck=0/lint=0/test:changed 2/e2e:search 21 passed（含新增 facet-only 用例）。 | `SearchPage.tsx` + `MetaChip.tsx` + e2e | opus（主循环）/ 子代理无 | 无 | ✅ 全绿 |
-| **SEARCH-FE-2**（i18n 补全 + 删死代码） | ⬜ 待开始 | SearchOverlay + SearchEmptyState 硬编码中文文案迁 next-intl（热门搜索/输入关键词/搜索中/内容/相关搜索/未找到/查看全部；TYPE_LABELS）+ en.json/zh-CN.json 补 key + 删死代码 `SearchSuggestions.tsx`（全库零引用，与 SearchOverlay 重复）。 | `SearchOverlay.tsx` + `SearchEmptyState.tsx` + `messages/*.json` + 删 `SearchSuggestions.tsx` | sonnet | 无 | typecheck/lint/test:changed |
+| **SEARCH-FE-2**（i18n 补全 + 删死代码） | ✅ 完成（2026-07-10；详见 changelog [SEARCH-FE-2-20260710]） | SearchOverlay + SearchEmptyState 硬编码中文文案迁 next-intl（9+3 处；TYPE_LABELS 复用 videoType 段）+ en.json/zh-CN.json 补 11 key + 删死代码 `SearchSuggestions.tsx`（全仓零引用）。门禁 typecheck=0/lint=0/test:changed/e2e:search 21 passed。 | `SearchOverlay.tsx` + `SearchEmptyState.tsx` + `messages/*.json` + 删 `SearchSuggestions.tsx` | opus（主循环） | 无 | ✅ 全绿 |
 | **SEARCH-FE-3**（骨架一致 + reveal 卫生） | ⬜ 待开始 | loading / Suspense 骨架从 VideoGrid 网格改为列表行骨架（匹配 SearchResultRow 真实布局，消加载→呈现布局跳变）+ 收敛 SearchCircularReveal 死联动（无人写 `resovo:search-reveal-origin`→origin 永远默认，Nav 补写坐标或简化注释兑现承诺）。 | `SearchEmptyState.tsx` + `SearchPage.tsx` + `SearchCircularReveal.tsx`（+ 视需 `Nav.tsx`） | sonnet | 无 | typecheck/lint/test:changed |
 | **SEARCH-BE-1**（suggest 正则稳健性） | ⬜ 待开始 | SearchService.suggest 人名聚合 `include: \`.*${q}.*\`` 用户输入直拼 ES regexp——转义正则元字符，防异常/高开销扫描（稳健性，潜在 DoS 面）。 | `SearchService.ts` + 单测 | sonnet | 无 | typecheck/lint/test:changed |
 
