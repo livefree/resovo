@@ -3603,3 +3603,19 @@
 - **范围修正（Codex 对抗审）**：**-B 不接线 watch 页 initialMatrix、不加 PlayerShell 预留 prop**——原按卡面「两入口双供给」接线 watch 页，但 PlayerShell -B 不消费 initialMatrix，而 `fetchLineMatrix` 服务端会触发 `listLineMatrix→listSources(全集)` 全量加载 → **播放器关键路径凭空多一次全量源加载却无用**。修正：watch 页保持原样，initialMatrix 注入 + PlayerShell 消费一并放 -C（-C 消费它 + 删 initialSources，届时不重复加载）。-B 仅详情页接线（DetailHero 真消费）。
 - **范围声明**：-B **不改** PlayerShell / watch 页（-C 范围）；GET sources list 形态零回归。RSC 载荷实际瘦身待 -C 删 initialSources fetch。
 - **门禁**：typecheck=0 / lint=0 / test:changed 14 文件 188 测全过 / test:e2e:video（web）10 passed / 0 hard failure。（admin-next videos.spec 部分与 -B 前台改动无关、需 :3003，未跑。）
+
+## [SEARCH-FE-1-20260710] facet-only 搜索打通 + director/actor/writer 透传 + MetaChip locale 前缀（SEQ-20260710-01）
+- **完成时间**：2026-07-10
+- **记录时间**：2026-07-10 16:40
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（SearchPage 内部逻辑 + MetaChip 消费改动，未触共享组件 API 契约 / schema / 播放器接口，模型路由无强制升 Opus 项）
+- **修改文件**：
+  - `apps/web-next/src/app/[locale]/search/_components/SearchPage.tsx`（抽 `FILTER_KEYS`〔8 维含 director/actor/writer〕+ `hasFacet` 谓词；`FORWARDED_FILTERS = [...FILTER_KEYS, 'sort', 'order']`；`doSearch` 短路改为「q 与所有 facet 全空」才短路 + q 非空才透传；初始 `loading` 纳入 facet；`hasCriteria = hasQuery || hasFacet` 替换结果区渲染 / 空态 prop / GridSortBar total 三处 `hasQuery`）
+  - `apps/web-next/src/components/search/MetaChip.tsx`（`useParams` 取 locale，`router.push(\`/${locale}/search?...\`)` 带前缀）
+  - `tests/e2e-next/search-page.spec.ts`（+`mockSearchByDirector` helper + facet-only 透传用例：`/search?director=诺兰` 无 q 也发请求、透传 director、不带空 q、展示结果）
+- **问题**：详情页 MetaChip（导演/演员/编剧/类型/地区/年份 chip）与 Nav 联想词浮层人名项跳 `/search?director=X`（无 q）后一律落"热门内容"空态——`doSearch` 在 `!q` 时短路清空，且 `FORWARDED_FILTERS` 不含 director/actor/writer。后端 `/search`（q 可选）+ SearchService（`.keyword` 精确匹配）能力完整，纯前端断链；MetaChip 跳转另缺 `/${locale}` 前缀，依赖 middleware 兜底重定向。
+- **方案**：facet-only 亦可检索（有任一 FILTER_KEYS 即发请求）；FORWARDED_FILTERS 补三个人物维；引入 `hasCriteria` 统一"搜索意图"语义（有 q 或有 facet），驱动结果/空态/计数三处判定；MetaChip 补 locale 前缀与全站 locale 路由一致。
+- **关键路径验证**：e2e:search 21 passed——既有 q 搜索透传（BLOCKER #8）/ 清除 / 分页 / 空态全回归无破坏；新增 facet-only 用例证明 `director` 透传且 `q` 为 null（改动前该路径永不发请求）。
+- **范围声明**：纯 web-next UI 层；后端 `/search` 契约零改动（早已支持 q 可选 + 三人物维）；未触共享组件 Props；颜色零硬编码沿用既有 CSS 变量。i18n 硬编码文案（浮层/空态）留 SEARCH-FE-2 收敛。
+- **自审**：[AI-CHECK] layering/cross_module/dup_logic/hack_patch/fn_split/file_split/side_effect 全 NO；audit_payload/adr_closure NA。无结构劣化，streak 不 +1。
+- **门禁**：typecheck=0 / lint=0 / test:changed 2 passed / test:e2e:search 21 passed（含新增 facet-only 用例）。

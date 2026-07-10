@@ -86,6 +86,27 @@ async function mockSearchApiEmpty(
   )
 }
 
+// facet-only（无 q）搜索：按 director 精确参数匹配，验证 SEARCH-FE-1 打通的断链。
+async function mockSearchByDirector(
+  page: import('@playwright/test').Page,
+  director: string,
+  results: typeof MOCK_RESULTS
+) {
+  await page.route(
+    (url) => url.pathname === '/v1/search' && url.searchParams.get('director') === director,
+    (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: results,
+          pagination: { total: results.length, page: 1, limit: 20, hasNext: false },
+        }),
+      })
+    },
+  )
+}
+
 // ── 搜索页基础 ───────────────────────────────────────────────────────────
 
 test.describe('搜索页基础', () => {
@@ -205,5 +226,37 @@ test.describe('搜索 q 参数透传（BLOCKER #8 固化）', () => {
     await page.goto('/en/search?q=xyz')
     await expect(page.getByText('xyz 命中').first()).toBeVisible({ timeout: 8_000 })
     await expect(page.getByText('abc 命中')).toHaveCount(0)
+  })
+})
+
+// ── SEARCH-FE-1：facet-only 搜索透传（MetaChip / 联想词人名落地页断链修复）─────
+
+test.describe('搜索 facet-only 透传（SEARCH-FE-1）', () => {
+  test('/search?director=诺兰（无 q）→ API 收到 director、不带 q，且展示结果', async ({ page }) => {
+    const MOCK_DIR = [
+      {
+        ...MOCK_RESULTS[0],
+        title: '诺兰导演作品',
+        slug: 'nolan-film-N1o2L3a4',
+        shortId: 'N1o2L3a4',
+      },
+    ]
+    let directorReceived: string | null = null
+    let qReceived: string | null = 'UNSET'
+    await mockSearchByDirector(page, '诺兰', MOCK_DIR)
+    page.on('request', (req) => {
+      if (req.url().includes('/v1/search?')) {
+        const u = new URL(req.url())
+        if (u.searchParams.get('director')) {
+          directorReceived = u.searchParams.get('director')
+          qReceived = u.searchParams.get('q')
+        }
+      }
+    })
+    await page.goto('/en/search?director=诺兰')
+    // 改动前：doSearch 在无 q 时短路 → 永不发请求 → 落"热门内容"空态。
+    await expect(page.getByText('诺兰导演作品').first()).toBeVisible({ timeout: 8_000 })
+    expect(directorReceived).toBe('诺兰')
+    expect(qReceived).toBeNull() // facet-only 不透传空 q 参数
   })
 })

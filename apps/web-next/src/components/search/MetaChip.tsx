@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { formatCountryName } from '@resovo/types'
 import { cn } from '@/lib/utils'
 
@@ -23,6 +23,8 @@ const TYPE_PARAM_MAP: Record<MetaChipType, string> = {
 
 export function MetaChip({ label, type, className }: MetaChipProps) {
   const router = useRouter()
+  const params = useParams()
+  const locale = (params.locale as string) ?? 'en'
 
   // CHG-366 / plan §10.4.3：country chip 显示本地化名称，但保留原 ISO code 作为
   // 搜索 query（搜索后端按 ISO code 索引；显示层本地化不影响 URL 真源）
@@ -33,7 +35,8 @@ export function MetaChip({ label, type, className }: MetaChipProps) {
     e.preventDefault()
     e.stopPropagation()
     const param = TYPE_PARAM_MAP[type]
-    router.push(`/search?${param}=${encodeURIComponent(label)}`)
+    // 带 locale 前缀，与全站 locale 路由一致（避免 middleware 兜底重定向 / locale 丢失）
+    router.push(`/${locale}/search?${param}=${encodeURIComponent(label)}`)
   }
 
   return (

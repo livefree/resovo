@@ -41,8 +41,20 @@ import { ALL_CATEGORIES } from '@/lib/categories'
 /** type 维选项值集合（派生自 ALL_CATEGORIES，ADR-048 前台 SSOT；注入共享 FilterArea） */
 const TYPE_OPTIONS: readonly VideoType[] = ALL_CATEGORIES.map((c) => c.videoType as VideoType)
 
-/** /search 转发的筛选维度（统一 FilterArea 写入 URL；GridSortBar 写 sort+order，40A 后端已支持） */
-const FORWARDED_FILTERS = ['type', 'genre', 'country', 'lang', 'year', 'sort', 'order'] as const
+/**
+ * /search 透传的筛选维度。写入方：FilterArea 写 type/genre/country/lang/year；
+ * 详情页 MetaChip 写 director/actor/writer/genre/year/country。后端 /search 全部支持
+ * 精确过滤（director/actor/writer 走 .keyword），q 可选——facet-only 亦可检索。
+ */
+const FILTER_KEYS = ['type', 'genre', 'country', 'lang', 'year', 'director', 'actor', 'writer'] as const
+
+/** doSearch 透传给后端 /search 的全部维度（筛选维 + GridSortBar 的 sort/order 双参，40A 后端已支持）。 */
+const FORWARDED_FILTERS = [...FILTER_KEYS, 'sort', 'order'] as const
+
+/** URL 是否带任一筛选维——无 q 但有 facet（如 MetaChip 的 director）时也应发搜索请求。 */
+function hasFacet(sp: URLSearchParams): boolean {
+  return FILTER_KEYS.some((k) => !!sp.get(k))
+}
 
 const PAGE_SIZE = 20
 
@@ -205,7 +217,7 @@ export function SearchPage() {
   const [inputValue, setInputValue] = useState(urlQuery)
   const [results, setResults] = useState<SearchResult[]>([])
   const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(!!urlQuery)
+  const [loading, setLoading] = useState(!!urlQuery || hasFacet(new URLSearchParams(searchKey)))
 
   const inputRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -223,11 +235,12 @@ export function SearchPage() {
   // doSearch 据当前 URL 透传给 /search（40A 后端已支持 genre/sort=hot）。
   const doSearch = useCallback(async (sp: URLSearchParams) => {
     const q = (sp.get('q') ?? '').trim()
-    if (!q) { setResults([]); setTotal(0); setLoading(false); return }
+    // q 与所有筛选维全空才短路清空；有任一 facet（如 MetaChip 的 director）即发请求。
+    if (!q && !hasFacet(sp)) { setResults([]); setTotal(0); setLoading(false); return }
     setLoading(true)
     try {
       const query = new URLSearchParams()
-      query.set('q', q)
+      if (q) query.set('q', q)
       query.set('limit', String(PAGE_SIZE))
       query.set('page', sp.get('page') ?? '1')
       for (const key of FORWARDED_FILTERS) {
@@ -294,6 +307,8 @@ export function SearchPage() {
   }
 
   const hasQuery = !!urlQuery.trim()
+  // 搜索条件 = 有 q 或有任一 facet；facet-only（如 MetaChip 跳转）同样进入结果/空态判定。
+  const hasCriteria = hasQuery || hasFacet(new URLSearchParams(searchKey))
   const hasResults = results.length > 0
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
@@ -385,7 +400,7 @@ export function SearchPage() {
         <div style={{ marginBottom: 'var(--space-4)' }}>
           <GridSortBar
             mode="search"
-            total={hasQuery && hasResults ? total : undefined}
+            total={hasCriteria && hasResults ? total : undefined}
             totalLabelKey="filter.countSearch"
           />
         </div>
@@ -393,7 +408,7 @@ export function SearchPage() {
         {/* 结果区 */}
         {loading ? (
           <SearchEmptyState.Skeleton />
-        ) : hasQuery && hasResults ? (
+        ) : hasCriteria && hasResults ? (
           <section>
             <div
               data-testid="search-results-list"
@@ -414,7 +429,7 @@ export function SearchPage() {
             )}
           </section>
         ) : (
-          <SearchEmptyState hasQuery={hasQuery} />
+          <SearchEmptyState hasQuery={hasCriteria} />
         )}
       </div>
     </div>
