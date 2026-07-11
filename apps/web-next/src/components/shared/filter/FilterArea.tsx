@@ -54,9 +54,15 @@ interface FilterOptionButtonProps {
   readonly label: string
   readonly isActive: boolean
   readonly onClick: () => void
+  /**
+   * label 为运行时 Intl 派生（country 维 formatCountryName）时置 true——Node(SSR) 与
+   * 浏览器(client) ICU 数据差异会使同一 region code 显示名不同，触发 hydration text mismatch。
+   * React 官方对 locale/Intl 格式化 SSR 差异的标准解（client 值权威）。
+   */
+  readonly suppressHydrationWarning?: boolean
 }
 
-function FilterOptionButton({ dim, value, label, isActive, onClick }: FilterOptionButtonProps) {
+function FilterOptionButton({ dim, value, label, isActive, onClick, suppressHydrationWarning }: FilterOptionButtonProps) {
   return (
     <button
       type="button"
@@ -64,6 +70,7 @@ function FilterOptionButton({ dim, value, label, isActive, onClick }: FilterOpti
       aria-checked={isActive}
       data-testid={`filter-${dim}-${value === '' ? 'all' : value}`}
       onClick={onClick}
+      suppressHydrationWarning={suppressHydrationWarning}
       style={{
         padding: 'var(--space-1) var(--space-3)',
         borderRadius: 'var(--radius-pill)',
@@ -136,6 +143,8 @@ function FilterRowItem({ dim, dimLabel, options, activeValue, onSelect }: Filter
             label={opt.label}
             isActive={activeValue === opt.value}
             onClick={() => onSelect(opt.value)}
+            // country 维 label 走 formatCountryName（运行时 Intl）→ SSR/client 可能不同
+            suppressHydrationWarning={dim === 'country'}
           />
         ))}
       </div>

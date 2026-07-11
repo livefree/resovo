@@ -3431,4 +3431,5 @@
 
 - **性价比排序依据**（价值排序 §1 正确性优先）：FE-1 修功能断链（用户可见路径失效）> FE-2 国际化硬伤（国际化平台英文用户看中文）+ 删死代码 > FE-3 UX polish > BE-1 稳健性（无已知触发但有隐患）。
 - **未纳入本序列的 UX 增强**（属新功能、需产品定义，另行登记候选）：搜索历史 / 最近搜索（localStorage）、浮层键盘导航（↑↓/Enter/aria-activedescendant）、无结果拼写纠错（did-you-mean）、debounce 三处统一（Nav 200ms / SearchSuggestions〔已删〕/ SearchPage 300ms）、后端 highlight.description 前端未渲染（白算或补展示）。
-- **Follow-up 登记（FE-4 视觉验证发现）**：搜索页既有 hydration mismatch，定位 `FilterArea` 的 `FilterRowItem dim=country`（Region 维，疑 `formatCountryName` SSR/client 本地化差异或 options 顺序）——非 SEQ-20260710-01 引入（各卡均未触 FilterArea），首页 /en 无此错。属独立 UI 稳健性卡，按优先级排期（前台组件、sonnet 量级）。
+- **Follow-up（FE-4 视觉验证发现）→ ✅ CHG-367 已解决（2026-07-10；详见 changelog [CHG-367-20260710]）**：搜索页 hydration mismatch 定位 `FilterArea` country 维 `formatCountryName`（Intl.DisplayNames SSR/client ICU 差异，如 'HK' Node "Hong Kong SAR China" vs 浏览器 "Hong Kong"）；修复 = FilterOptionButton `suppressHydrationWarning`（仅 country 维），保留 formatCountryName 单源。Playwright 实测 hydration error 消失。
+  - **残留 follow-up（未起卡）**：MetaChip 详情页 country chip 同用 `formatCountryName`（zh-CN 固定），同源 hydration 风险——未报错（可能碰巧一致或详情页未触发），如后续暴露按同法（suppressHydrationWarning）处理。

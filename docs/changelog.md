@@ -3706,3 +3706,18 @@
 - **范围声明**：纯 web-next UI 层；SearchOverlay 单消费方（仅 Nav），Props 移除不构成共享契约破坏；静态 `nav.hotSearchTerms` 保留作 hook 降级源。
 - **自审**：[AI-CHECK] 全 NO/NA；dup_logic=NO（热搜逻辑收敛 useHotSearchTerms 单源，反去重）。无结构劣化，streak 不 +1。
 - **门禁**：typecheck=0 / lint=0 / test:changed（Header.test 6 passed）/ test:e2e:search 23 passed。
+
+## [CHG-367-20260710] FilterArea country 维 Intl hydration mismatch 修复（SEQ-20260710-01 follow-up）
+- **完成时间**：2026-07-10
+- **记录时间**：2026-07-10 18:12
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（hydration bug fix，FilterArea 消费侧加 suppressHydrationWarning，非 Props 契约破坏 / schema）
+- **修改文件**：
+  - `apps/web-next/src/components/shared/filter/FilterArea.tsx`（FilterOptionButton 加可选 `suppressHydrationWarning` prop + 传入 button；FilterRowItem 仅 `dim === 'country'` 传 true）
+- **问题**：搜索页/分类页 FilterArea「地区(Region)」维用 `formatCountryName(code, locale)`（内部 `Intl.DisplayNames` 运行时 API）渲染国家名。Node(SSR) 与浏览器(client) ICU 数据版本差异 → 同一 region code 显示名不同（如 'HK' → Node "Hong Kong SAR China" vs 浏览器可能 "Hong Kong"）→ React hydration「server rendered text didn't match client」。仅 country 维报（其它维走静态 t() messages）。FE-4 视觉验证时 Playwright console 暴露。
+- **根因**：`buildOptions` 的 `case 'curated'`（FilterArea.tsx）唯一运行时 Intl 派生文本分支；SSR 用 Intl 渲染文本必有跨环境不一致风险。
+- **方案裁定**：`CURATED_FILTER_COUNTRIES` 有意「不含中文名 / i18n 零硬编码」（用 formatCountryName 自动本地化，search-filter-taxonomy.ts:99 注释）——不宜 i18n 化（违背设计 + 引入第二真源）。采用 `suppressHydrationWarning`（React 官方对 locale/Intl 格式化 SSR mismatch 的标准解，client 值权威），保留 formatCountryName 单源与零硬编码翻译设计。
+- **验证**（Playwright /en/search）：修复前 console 有「Hydration failed … FilterRowItem dim=country」，修复后 hydration 段清空；Region 维正常渲染 11 项国家名（All/China/Hong Kong SAR China/…/India）。附带确认 useHotSearchTerms 降级链（未起 api 时 trending fetch 失败 → 静态词兜底、不崩）。
+- **范围声明**：单文件消费侧改动；未改 formatCountryName（共享工具）/ CURATED 常量 / Props 契约破坏（新增可选 prop）。MetaChip 详情页 country chip 同用 formatCountryName（zh-CN），同源风险登记 follow-up（未报错、本卡未触）。
+- **自审**：[AI-CHECK] 全 NO/NA。无结构劣化，streak 不 +1。
+- **门禁**：typecheck=0 / lint=0 / test:changed（FilterArea.test 14 passed）/ test:e2e:search 23 passed / Playwright hydration error 消失。
