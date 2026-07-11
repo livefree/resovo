@@ -17,13 +17,27 @@ interface SearchCircularRevealProps {
  * - reduced-motion：opacity 0→1，150ms
  * - 服务端渲染时内容正常显示（无动画），避免 hydration 闪烁
  */
-const ORIGIN_KEY = 'resovo:search-reveal-origin'
+export const SEARCH_REVEAL_ORIGIN_KEY = 'resovo:search-reveal-origin'
+
+/**
+ * 写入圆形扩散起点坐标（视口坐标，px）。由导航到 /search 的入口（Nav 搜索框）在跳转前调用，
+ * 供本组件 mount 时 readStoredOrigin 消费，使扩散从真实搜索框位置发起。
+ * sessionStorage 不可用（隐私模式 / quota）时静默降级到默认 origin，不阻塞导航。
+ */
+export function storeSearchRevealOrigin(x: number, y: number): void {
+  try {
+    sessionStorage.setItem(SEARCH_REVEAL_ORIGIN_KEY, JSON.stringify({ x, y }))
+  } catch {
+    // sessionStorage 不可用时降级默认 origin（读侧 readStoredOrigin 同样 try-catch 兜底）
+    return
+  }
+}
 
 function readStoredOrigin(): { x: string; y: string } | null {
   try {
-    const raw = sessionStorage.getItem(ORIGIN_KEY)
+    const raw = sessionStorage.getItem(SEARCH_REVEAL_ORIGIN_KEY)
     if (!raw) return null
-    sessionStorage.removeItem(ORIGIN_KEY)
+    sessionStorage.removeItem(SEARCH_REVEAL_ORIGIN_KEY)
     const parsed = JSON.parse(raw) as { x: number; y: number }
     if (typeof parsed.x === 'number' && typeof parsed.y === 'number') {
       return { x: `${parsed.x}px`, y: `${parsed.y}px` }

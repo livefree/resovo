@@ -3637,3 +3637,21 @@
 - **范围声明**：纯 web-next UI 层 + messages；无颜色改动；未触 Props 契约。`overlayAriaLabel`（a11y）为同文件 i18n 收敛的完整性补充，非范围蔓延。
 - **自审**：[AI-CHECK] 全 NO/NA；dup_logic=NO（类型名收敛 videoType 单一真源，反去重）。无结构劣化，streak 不 +1。
 - **门禁**：typecheck=0 / lint=0 / test:changed（Header.test 6 passed）/ test:e2e:search 21 passed。
+
+## [SEARCH-FE-3-20260710] 搜索加载骨架对齐结果布局 + SearchCircularReveal 联动兑现（SEQ-20260710-01）
+- **完成时间**：2026-07-10
+- **记录时间**：2026-07-10 17:10
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（骨架/动效卫生，未触共享组件 Props / schema / 播放器接口）
+- **修改文件**：
+  - `apps/web-next/src/components/search/SearchEmptyState.tsx`（`SearchResultsSkeleton` 从 `VideoGrid.Skeleton`〔网格 5 列〕改为列表行骨架：复用 `primitives/feedback/Skeleton` 原语，6 行占位匹配 SearchResultRow〔封面 2:3 + 标题/meta/CTA 条〕，testId 保持 `search-results-skeleton`）
+  - `apps/web-next/src/app/[locale]/search/_components/SearchPage.tsx`（`SearchPageSkeleton` 改为复用 `<SearchEmptyState.Skeleton />`；删仅骨架用途的 `VideoGrid` import）
+  - `apps/web-next/src/components/search/SearchCircularReveal.tsx`（导出 `SEARCH_REVEAL_ORIGIN_KEY` + `storeSearchRevealOrigin(x,y)` 写函数〔封装 try-catch，读写配对同源〕；`ORIGIN_KEY` 重命名为导出常量）
+  - `apps/web-next/src/components/layout/Nav.tsx`（`submitSearch` 导航前写 `searchFormRef` rect 中心坐标 → 圆形扩散从真实搜索框位置发起）
+- **问题**：① loading / Suspense fallback 用网格骨架，真实结果是竖向列表行 → 加载→呈现布局跳变。② SearchCircularReveal 读 `sessionStorage['resovo:search-reveal-origin']` 但全仓无人写 → origin 永远默认 `calc(100%-48px),40px`（Header 最右，非中部搜索框）；"读取 Nav 存储的实际搜索框坐标"注释是空头承诺（死代码路径 + 扩散起点偏移）。
+- **方案**：骨架用共享 Skeleton 原语构列表行版；reveal 写侧实装——Nav 落坐标兑现联动，扩散起点对齐真实搜索框。
+- **关键路径验证**：test:e2e:search 21 passed（骨架渲染 + Nav→/search 导航 + facet-only + q 透传 + 清除 + 分页全回归）。手动 curl `/en/search` 全变体 + browse 各类目 + placeholder 均 200，SSR 无编译错误。
+- **偏离说明**：e2e 首跑 20 failed，dev log 实证 `SyntaxError: Unexpected non-whitespace character after JSON`——playwright 未复用 warm server 而冷启动第二个 web-next 实例，两 dev server 并发写同一 `.next` 损坏 build manifest JSON（预热时页面 200、被并发写污染后才 500，即记载多次的"并发首次编译损坏 .next"环境 flake）。清 `.next` + 起 api+web 充分预热 + 复用 warm server 重跑 21 passed，代码无关。
+- **范围声明**：纯 web-next UI 层；颜色零硬编码（Skeleton 原语走 CSS var）；未触 Props 契约；Nav 改动为纯加性 sessionStorage 写（不改导航逻辑）。
+- **自审**：[AI-CHECK] 全 NO/NA；dup_logic=NO（骨架复用 Skeleton 原语 + SearchPageSkeleton 复用 SearchEmptyState.Skeleton，反去重）；side_effect=NO（storeSearchRevealOrigin catch 含 return 非空块）。无结构劣化，streak 不 +1。
+- **门禁**：typecheck=0 / lint=0 / test:changed（Header.test 6 passed）/ test:e2e:search 21 passed。

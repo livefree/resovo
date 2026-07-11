@@ -9,6 +9,7 @@ import { useBrand } from '@/hooks/useBrand'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 import { SearchOverlay } from '@/components/search/SearchOverlay'
+import { storeSearchRevealOrigin } from '@/components/search/SearchCircularReveal'
 import { SettingsDrawer } from '@/components/layout/SettingsDrawer'
 import { ALL_CATEGORIES, MAIN_TYPE_PARAMS } from '@/lib/categories'
 import { MoreMenu } from '@/components/layout/NavMoreMenu'
@@ -160,6 +161,9 @@ export function Nav() {
   const submitSearch = useCallback(
     (q: string) => {
       const trimmed = q.trim()
+      // 记录搜索框中心坐标，供 /search 页圆形扩散动效从真实搜索框位置发起（无则降级默认 origin）
+      const rect = searchFormRef.current?.getBoundingClientRect()
+      if (rect) storeSearchRevealOrigin(rect.left + rect.width / 2, rect.top + rect.height / 2)
       const url = trimmed
         ? `/${currentLocale}/search?q=${encodeURIComponent(trimmed)}`
         : `/${currentLocale}/search`

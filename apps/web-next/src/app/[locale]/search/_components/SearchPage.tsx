@@ -30,7 +30,6 @@ import { Pagination } from '@/components/primitives/pagination'
 import { SearchEmptyState } from '@/components/search/SearchEmptyState'
 import { parseHighlight } from '@/lib/parse-highlight'
 import { getVideoDetailHref } from '@/lib/video-route'
-import { VideoGrid } from '@/components/video/VideoGrid'
 import { FilterArea } from '@/components/shared/filter/FilterArea'
 import { GridSortBar } from '@/components/shared/filter/GridSortBar'
 import type { SearchResult, ApiListResponse, VideoType } from '@resovo/types'
@@ -439,12 +438,8 @@ export function SearchPage() {
 /**
  * 具名导出 Skeleton（SSR 安全，与 SearchPage Client Reference 分离）
  * 见 commit 9fcaaf1 / SearchPageSkeleton 修复同一 pattern。
+ * 复用列表行骨架，与最终结果（SearchResultRow 列表）布局一致，避免加载→呈现跳变。
  */
 export function SearchPageSkeleton() {
-  return (
-    <VideoGrid.Skeleton
-      gridCols="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5"
-      testId="search-results-skeleton"
-    />
-  )
+  return <SearchEmptyState.Skeleton />
 }

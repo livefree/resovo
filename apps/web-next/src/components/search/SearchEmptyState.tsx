@@ -2,14 +2,49 @@
 
 import { useTranslations } from 'next-intl'
 import { VideoGrid } from '@/components/video/VideoGrid'
+import { Skeleton } from '@/components/primitives/feedback/Skeleton'
 
 interface SearchEmptyStateProps {
   hasQuery: boolean
 }
 
+/**
+ * 列表行骨架——匹配 SearchResultRow 布局（封面 2:3 + 标题/meta/CTA 条），
+ * 消除加载态（网格）→ 结果态（列表）的布局跳变。
+ */
 function SearchResultsSkeleton() {
   return (
-    <VideoGrid.Skeleton gridCols="grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" testId="search-results-skeleton" />
+    <div
+      data-testid="search-results-skeleton"
+      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--search-result-gap)' }}
+    >
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div
+          key={i}
+          style={{
+            display: 'flex',
+            gap: 'var(--search-result-padding)',
+            padding: 'var(--search-result-padding)',
+            borderRadius: 'var(--radius-base)',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--border-subtle)',
+          }}
+        >
+          <Skeleton
+            width="var(--search-result-cover-w)"
+            style={{ aspectRatio: '2/3', borderRadius: 'var(--radius-sm)', flexShrink: 0 }}
+          />
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <Skeleton width="70%" height="18px" />
+            <Skeleton width="40%" height="13px" />
+            <div style={{ display: 'flex', gap: 'var(--search-cta-gap)', marginTop: 'auto', paddingTop: '4px' }}>
+              <Skeleton width="72px" height="30px" style={{ borderRadius: 'var(--radius-sm)' }} />
+              <Skeleton width="64px" height="30px" style={{ borderRadius: 'var(--radius-sm)' }} />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }
 
