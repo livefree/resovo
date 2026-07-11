@@ -172,8 +172,7 @@ export function Nav() {
     [router, currentLocale],
   )
 
-  // 热搜词（来自 messages 的 nav.hotSearchTerms，无 API 调用；?.() 兼容测试 mock）
-  const hotSearchTerms: string[] = (t.raw?.('hotSearchTerms') as string[]) ?? []
+  // 热搜词已下沉 SearchOverlay 内部 useHotSearchTerms（真实周热门 + 降级 nav.hotSearchTerms），Nav 不再传递。
 
   return (
     <>
@@ -342,11 +341,10 @@ export function Nav() {
             {isMac ? '⌘K' : 'Ctrl+K'}
           </kbd>
 
-          {/* SearchOverlay：浮层，无输入时展示热搜，有输入时展示结果 */}
+          {/* SearchOverlay：浮层，无输入时展示热搜（自取真实周热门），有输入时展示结果 */}
           {overlayOpen && (
             <SearchOverlay
               query={searchQuery}
-              hotSearchTerms={hotSearchTerms}
               onNavigate={(q) => {
                 setSearchQuery(q)
                 submitSearch(q)

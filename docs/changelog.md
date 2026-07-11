@@ -3691,3 +3691,18 @@
 - **范围声明**：纯 web-next UI 层；前端走 apiClient 不直接 fetch；颜色零硬编码；SearchResultRow 为搜索模块内复用（非全局共享契约）。后端零改动。
 - **自审**：[AI-CHECK] 全 NO/NA；dup_logic=NO（FILTER_KEYS 提取共享 + SearchResultRow 提取复用，反去重）；side_effect=NO（useHotSearchTerms catch 有落地赋值）。SearchEmptyState 拆子组件（各 <80 行 / 文件 <500）。无结构劣化，streak 不 +1。
 - **门禁**：typecheck=0 / lint=0 / test:changed（无关联单测，纯 UI/hook）/ test:e2e:search 23 passed（含新增 2 用例）。
+
+## [SEARCH-FE-5-20260710] Nav 搜索浮层热门搜索真实化（SEQ-20260710-01）
+- **完成时间**：2026-07-10
+- **记录时间**：2026-07-10 17:58
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（SearchOverlay 单消费方 Props 收敛，非全局共享契约）
+- **修改文件**：
+  - `apps/web-next/src/components/search/SearchOverlay.tsx`（移除 `hotSearchTerms` prop，改内部 `useHotSearchTerms().terms` 消费——与搜索页空态同源真实周热门 + 降级静态）
+  - `apps/web-next/src/components/layout/Nav.tsx`（移除 `hotSearchTerms`（t.raw）计算与 prop 传递）
+- **问题**：Nav 搜索浮层无输入时"热门搜索"来自硬编码静态 `nav.hotSearchTerms`（星际穿越/进击的巨人…通用知名片，与本站真实内容库无关，点击可能搜出空）——用户最初反馈的问题、与 FE-4 空态同源。
+- **方案**：浮层热搜下沉 `useHotSearchTerms`，与搜索页空态单源同构；浮层仅打开时 mount → hook 懒 fetch trending。
+- **视觉验证**（Playwright，聚焦 nav-search 弹浮层）：TRENDING 列表显示真实站内内容（欢乐集结号/机械之声的传奇 第4季/红色珍珠/爱情保卫战2026/冰湖重生/人质/罪案现场/迷墙），带排名序号样式保留，与搜索页空态一致。
+- **范围声明**：纯 web-next UI 层；SearchOverlay 单消费方（仅 Nav），Props 移除不构成共享契约破坏；静态 `nav.hotSearchTerms` 保留作 hook 降级源。
+- **自审**：[AI-CHECK] 全 NO/NA；dup_logic=NO（热搜逻辑收敛 useHotSearchTerms 单源，反去重）。无结构劣化，streak 不 +1。
+- **门禁**：typecheck=0 / lint=0 / test:changed（Header.test 6 passed）/ test:e2e:search 23 passed。

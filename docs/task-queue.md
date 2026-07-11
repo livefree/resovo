@@ -3414,7 +3414,7 @@
 
 ## SEQ-20260710-01 — 客户端搜索断链与卫生收敛
 
-> 创建时间：2026-07-10 ｜ 最后更新时间：2026-07-10（**全 4 卡交付 ✅** FE-1 / FE-2 / FE-3 / BE-1）
+> 创建时间：2026-07-10 ｜ 最后更新时间：2026-07-10（**全 6 卡交付 ✅** FE-1 / FE-2 / FE-3 / BE-1 / FE-4 / FE-5）
 > 起因：搜索功能调查（会话内）暴露前端多处断链与卫生问题——后端 `/search`（q 可选 + 11 facet 含 director/actor/writer）+ SearchService（`.keyword` 精确匹配）能力完整，前端只消费了一部分且 MetaChip / 联想词到结果页的链路断裂。按性价比依次收敛。
 > 范围红线：纯前台 web-next UI 层 + 后端 suggest 单点稳健性；不新增 route / 不改 schema / 不触共享组件 Props 契约（无强制升 Opus 项）；颜色零硬编码沿用 CSS 变量；i18n 走 next-intl messages。
 
@@ -3425,7 +3425,7 @@
 | **SEARCH-FE-3**（骨架一致 + reveal 卫生） | ✅ 完成（2026-07-10；详见 changelog [SEARCH-FE-3-20260710]） | loading / Suspense 骨架改列表行骨架（复用 Skeleton 原语匹配 SearchResultRow）+ 兑现 SearchCircularReveal 联动（导出 `storeSearchRevealOrigin`，Nav submitSearch 写 searchFormRef rect 中心坐标）。门禁 typecheck=0/lint=0/test:changed/e2e:search 21 passed。 | `SearchEmptyState.tsx` + `SearchPage.tsx` + `SearchCircularReveal.tsx` + `Nav.tsx` | opus（主循环） | 无 | ✅ 全绿 |
 | **SEARCH-BE-1**（suggest 正则稳健性） | ✅ 完成（2026-07-10；详见 changelog [SEARCH-BE-1-20260710]） | SearchService.suggest 人名聚合新增 `escapeLuceneRegex` 转义 Lucene 保留字符（三维共用 includePattern），防语法错误 500 + 意外宽匹配。门禁 typecheck=0/lint=0/test:changed（search.test.ts 23 passed）。 | `SearchService.ts` + 单测 | opus（主循环） | 无 | ✅ 全绿 |
 | **SEARCH-FE-4**（空/无结果态重构） | ✅ 完成（2026-07-10；详见 changelog [SEARCH-FE-4-20260710]） | 提取 `SearchResultRow` + `useHotSearchTerms`（trending 真实热门 + 降级）+ `search-params` 共享；无结果态（回显+补救按钮+list推荐）/ 空态（热搜 chips 点击即搜 + 热门内容 grid）；i18n 换 8 key。视觉验证：热搜词=真实站内内容。门禁 typecheck=0/lint=0/e2e:search 23 passed。 | `SearchEmptyState.tsx` + 新 `SearchResultRow.tsx` + 新 `useHotSearchTerms.ts` + 新 `search-params.ts` + `SearchPage.tsx` + `messages/*.json` + e2e | opus（主循环） | 无 | ✅ 全绿 |
-| **SEARCH-FE-5**（浮层热搜真实化） | ⬜ 待开始 | SearchOverlay 无输入热搜从静态 `nav.hotSearchTerms` 改为消费 `useHotSearchTerms`（与空态同源真实周热门 + 降级）；Nav hotSearchTerms 传递链相应调整（浮层自取或 Nav 改造）。 | `SearchOverlay.tsx` + `Nav.tsx` | opus（主循环） | FE-4（hook 地基） | typecheck/lint/test:changed/e2e:search |
+| **SEARCH-FE-5**（浮层热搜真实化） | ✅ 完成（2026-07-10；详见 changelog [SEARCH-FE-5-20260710]） | SearchOverlay 移除 `hotSearchTerms` prop，改内部消费 `useHotSearchTerms().terms`（与空态同源真实周热门）；Nav 移除计算与传递。视觉验证：浮层 TRENDING = 真实站内内容。门禁 typecheck=0/lint=0/e2e:search 23 passed。 | `SearchOverlay.tsx` + `Nav.tsx` | opus（主循环） | FE-4 | ✅ 全绿 |
 
 ### 备注
 

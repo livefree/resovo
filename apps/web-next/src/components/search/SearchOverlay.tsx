@@ -22,6 +22,7 @@ import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { apiClient } from '@/lib/api-client'
 import { SafeImage } from '@/components/media'
+import { useHotSearchTerms } from '@/hooks/useHotSearchTerms'
 import type { SearchSuggestion } from '@resovo/types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -35,8 +36,6 @@ interface SearchOverlayProps {
   onClose: () => void
   /** 当前 locale（用于构建结果链接） */
   locale?: string
-  /** 无输入时展示的热门搜索词（来自 nav.hotSearchTerms，无 API 调用） */
-  hotSearchTerms?: string[]
 }
 
 interface QuickResult {
@@ -160,9 +159,11 @@ function SuggestionItem({
 
 // ── SearchOverlay ─────────────────────────────────────────────────────────────
 
-export function SearchOverlay({ query, onNavigate, onClose, locale = 'zh-CN', hotSearchTerms }: SearchOverlayProps) {
+export function SearchOverlay({ query, onNavigate, onClose, locale = 'zh-CN' }: SearchOverlayProps) {
   const router = useRouter()
   const t = useTranslations('search')
+  // 热门搜索词与搜索页空态同源：真实周热门（/videos/trending），降级静态 nav.hotSearchTerms
+  const { terms: hotSearchTerms } = useHotSearchTerms()
   const [quickResults, setQuickResults] = useState<QuickResult[]>([])
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([])
   const [searching, setSearching] = useState(false)
