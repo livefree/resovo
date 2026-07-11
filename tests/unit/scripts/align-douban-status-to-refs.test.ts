@@ -21,7 +21,7 @@ describe('parseArgs', () => {
 
 describe('buildUndercountedSelectSql — 圈定欠计行（videoRefAppliedSql 同口径）', () => {
   const sql = buildUndercountedSelectSql(null)
-  it('含 applied 谓词（is_primary + auto_matched/manual_confirmed，DC-216-1 单一真源）', () => {
+  it('含 applied 谓词（is_primary + auto_matched/manual_confirmed，DC-219-1 单一真源）', () => {
     expect(sql).toContain("ver.provider = 'douban'")
     expect(sql).toContain('ver.is_primary = true')
     expect(sql).toContain("ver.match_status IN ('auto_matched', 'manual_confirmed')")

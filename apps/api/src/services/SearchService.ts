@@ -95,9 +95,17 @@ export class SearchService {
       relevance: [{ _score: { order: 'desc' } }, { updated_at: { order: 'desc' } }],
       rating: [{ rating: { order: dir, missing: '_last' } }, { _score: { order: 'desc' } }],
       latest: [{ created_at: { order: dir } }],
-      // HANDOFF-40A：人气排序——ES 无 source_count（/videos hot 字段），用 rating_votes
-      // 评分人数作 popularity 代理（更标准的人气信号，无需 reindex）。
-      hot: [{ rating_votes: { order: dir, missing: '_last' } }, { _score: { order: 'desc' } }],
+      // hot 排序真源合并（CHG-368 dev↔main）：
+      //   STATS-06-A（ADR-216 D-216-3）hot 改用 ES play 真源，与 /videos?sort=hot 逐字段对齐
+      //   （hot_score → play_count_7d → play_count_total → updated_at）；退役 HANDOFF-40A rating_votes 占位。
+      //   dev 排序方向切换：主键 hot_score 跟随 dir（asc/desc），tiebreak 固定 desc（跨 surface 对齐不变）。
+      //   missing:'_last' ≡ PG NULLS LAST（前提 buildDocument 保留 null 非 0）。
+      hot: [
+        { hot_score: { order: dir, missing: '_last' } },
+        { play_count_7d: { order: 'desc', missing: '_last' } },
+        { play_count_total: { order: 'desc', missing: '_last' } },
+        { updated_at: { order: 'desc' } },
+      ],
     }
     const sort = sortMap[filters.sort ?? 'relevance']
     const from = (filters.page - 1) * filters.limit

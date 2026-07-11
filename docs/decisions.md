@@ -13903,17 +13903,17 @@ export type TableColumn<T> = DataKindColumn<T> | ActionKindColumn<T> | MediaKind
 
 ---
 
-## ADR-150 AMENDMENT 4 — distinct 白名单移除 videos.douban_status（退役收尾 / ADR-216 D-216-12·B-2 / 2026-06-28）
+## ADR-150 AMENDMENT 4 — distinct 白名单移除 videos.douban_status（退役收尾 / ADR-219 D-219-12·B-2 / 2026-06-28）
 
 > Status: 🟢 Accepted（主循环 claude-opus-4-8 实施 + codex-rescue 对抗审；退役收尾非新架构决策——facet 选项早已静态枚举，本 AMENDMENT 仅移除死配置白名单键 + 防列 DROP 后误查）。
 
-**背景**：ADR-216 退役 `videos.douban_status` 列（过滤侧已迁 video 级谓词，META-58-B-1）。distinct 端点白名单 `DT_DISTINCT_COLUMN_SQL.videos.douban_status`（CHG-VSR-2 / AMENDMENT 3 加）声称为豆瓣状态 facet 数据源。
+**背景**：ADR-219 退役 `videos.douban_status` 列（过滤侧已迁 video 级谓词，META-58-B-1）。distinct 端点白名单 `DT_DISTINCT_COLUMN_SQL.videos.douban_status`（CHG-VSR-2 / AMENDMENT 3 加）声称为豆瓣状态 facet 数据源。
 
-**事实修正（修订 D-216-12 假设）**：arch-reviewer 第三轮 D-216-12 列 B-2 为「facet 改静态枚举」，前提是 facet 当前**动态**查 distinct 端点——经查**不成立**：前端 `VideoColumns.tsx:504` douban_status filter 用静态 `filterOptions: DOUBAN_STATUS_OPTIONS`（= `DOUBAN_STATUSES.map(...)`，4 态闭集）。admin-ui DataTable 列走 distinct 端点的**充要条件是声明 `filterDistinctTable`**（如 country 列 `filterDistinctTable: 'media_catalog'`，VideoColumns.tsx:450 / Codex 实证 EnumFilter 分支）——douban_status 列**从未声明** `filterDistinctTable`、仅有静态 `filterOptions`，故**从来不可能**触发 `distinctFetcher`，facet **早已静态**；全仓零 `/distinct?table=videos&column=douban_status` 调用。distinct 白名单 `videos.douban_status` 键自 CHG-VSR-2 起即为**死配置**。
+**事实修正（修订 D-219-12 假设）**：arch-reviewer 第三轮 D-219-12 列 B-2 为「facet 改静态枚举」，前提是 facet 当前**动态**查 distinct 端点——经查**不成立**：前端 `VideoColumns.tsx:504` douban_status filter 用静态 `filterOptions: DOUBAN_STATUS_OPTIONS`（= `DOUBAN_STATUSES.map(...)`，4 态闭集）。admin-ui DataTable 列走 distinct 端点的**充要条件是声明 `filterDistinctTable`**（如 country 列 `filterDistinctTable: 'media_catalog'`，VideoColumns.tsx:450 / Codex 实证 EnumFilter 分支）——douban_status 列**从未声明** `filterDistinctTable`、仅有静态 `filterOptions`，故**从来不可能**触发 `distinctFetcher`，facet **早已静态**；全仓零 `/distinct?table=videos&column=douban_status` 调用。distinct 白名单 `videos.douban_status` 键自 CHG-VSR-2 起即为**死配置**。
 
 **决策**：
 - 移除 `DT_DISTINCT_COLUMN_SQL.videos.douban_status` 键（`distinct-whitelist.ts`）。`videos` 表仍保 `type` / `source_check_status` / `bangumi_status` 白名单列（满足「每表 ≥1 列」约束）。
-- **bangumi_status 白名单键保留**（D-216-11：bangumi_status 列暂留）。注：bangumi distinct 键**此刻亦已是死配置**（`BANGUMI_STATUS_OPTIONS` 同为静态 4 态枚举、列亦未声明 `filterDistinctTable`），保留非因其有用，仅因本卡 ADR-216 范围只限 douban——随 META-61 bangumi 退役时一并清理。
+- **bangumi_status 白名单键保留**（D-219-11：bangumi_status 列暂留）。注：bangumi distinct 键**此刻亦已是死配置**（`BANGUMI_STATUS_OPTIONS` 同为静态 4 态枚举、列亦未声明 `filterDistinctTable`），保留非因其有用，仅因本卡 ADR-219 范围只限 douban——随 META-61 bangumi 退役时一并清理。
 - `datatable-shared.test.ts` 断言同步（douban_status `toBe` → `toBeUndefined` 守护移除，保留 bangumi_status/country）。
 
 **零回归依据**：前端 douban_status facet 用静态 `DOUBAN_STATUS_OPTIONS`（不变）；distinct 端点零 douban_status 调用；移除后该列自然落入 `COLUMN_NOT_WHITELISTED` 403（distinct 端点对退役列正确拒绝）。§端点契约表为表级粒度（「7 表白名单」+ col 运行时 lookup，不列级枚举），无需同步。**纯死配置移除，无前端/API 行为变更。**
@@ -24104,145 +24104,207 @@ A2-0 本 ADR（docs + Codex）→ A2-1 SCHEMA（migration 126 单行全局 + typ
 
 ---
 
-## ADR-216：per-video 状态列退役、external refs 收口为元数据匹配状态单一真源（SEQ-20260627-01 / META-55-ADR）
+## ADR-216：视频级播放量统计体系 — 匿名事件真源 + 双重幂等聚合 + 跨前台/搜索一致热度（SEQ-20260624-02 / STATS-01-ADR）
 
-**状态**：**Accepted（方向 + 收口契约），强制拆 2 张设计卡前置，待用户裁可解锁实现**（2026-06-27；arch-reviewer〔claude-opus-4-8〕两轮裁定〔初裁 + 复议收回承重错误〕+ Codex 对抗审 **round-1〔4 BLOCKER+3 CONCERN〕 + round-2〔1 BLOCKER+3 CONCERN〕全数吸收**，见文末摘要）。**不可直接进实现**：须先定 **DC-216-1（谓词语义契约）+ DC-216-2（refs 读路径软删处置表）** 两张设计卡（D-216-9）；用户裁可后解锁 DC-216-1→META-57~60。**类型**：ADR-201（refs 派生 canonical / 状态列 fallback）的逻辑终点收口——把"fallback 但仍被直接消费"的漏洞封死。**列物理 DROP 不在本 ADR 拍板**（拆独立后续 ADR，软泡期后）。
+> status: Accepted（arch-reviewer Opus CONDITIONAL PASS + Codex 对抗审 BLOCK/HIGH/MEDIUM/LOW 全处理，2026-06-25）
+> 来源：`docs/designs/video-play-stats-structure_20260624.md`（方案合并稿）
+> 影响序列：SEQ-20260624-02（STATS-01~07）
+> last_reviewed: 2026-06-25
 
-**问题（实库只读诊断 + 两轮对抗审，2026-06-27 核验）**：
+### 状态与序号核验
 
-`videos.douban_status` / `videos.bangumi_status`（migration 032/082，4 态 `pending|matched|candidate|unmatched`）与 `video_external_refs`(video 级)/`catalog_external_refs`(catalog 级，ADR-177/201 canonical)构成**双真源**：
+- **Accepted（2026-06-25）**：arch-reviewer (Opus) CONDITIONAL PASS（B1/B2/H1/H2/H3/M1/M2/M3/L1/L3 全吸收）+ Codex 对抗审（1 BLOCK + 2 HIGH + 2 MEDIUM + 1 LOW 全处理，见 §评审记录）。
+- **序号核验**：`decisions.md` 现最大 ADR-215（210→215 连续无空洞），全仓 `ADR-216/217/218` 零引用零占用 → 本 ADR 占 **216**。STATS-07 admin analytics 端点契约**另起 ADR-217**（参照 ADR-214 主 + ADR-215 route 分体先例），不并入本 ADR。
 
-- **douban 真漂移**：60 条 live video 持 `is_primary=true` 的 applied douban ref（`meta_score` 80–100 / `enriched_at` 非空 / catalog `douban_id` 存在）却 `douban_status='unmatched'`；**60/60 满足 `ref.linked_at ≤ enriched_at`** → ref 由 identity 子系统（`linked_by=auto`/`method=network`）先写好，之后 MetadataEnrichService 重跑按自身判据判"未匹配"覆写列。两套非事务耦合、判据不一致的状态机 → 直接读列的后台消费方欠计 ~60 个已匹配视频。
-- **bangumi 假漂移**：`auto_matched` ref 277 = live 241（100% `bangumi_status=matched`）+ 36 挂在软删 anime 视频上。`ON DELETE CASCADE` 不触发软删（`deleted_at` 置位）→ 残留虚高。
-- **tmdb 结构正解**：无状态列、单 refs 真源（auto_matched 1260 + catalog exact 564），不可漂移——反证双真源才是病灶。
-- **⚠️ 对抗审揭示的更深一层（Codex B-1 实库证实，推翻初裁承重假设）**：`videos.{douban,bangumi}_status` 列（video 级，auto_matched=matched）与 ADR-201 `derive` overall（**catalog-first**：`deriveProviderStatus` 中 catalog ref 分支先于 video ref 分支命中）**是两层不同语义**。catalog rollup 对 auto-only consensus 保守判 `candidate`（待人工升 exact，`externalRefRollup.ts:76-78`），故对那 60 漂移行经 derive overall：**仅 34 → applied，28 → candidate（被 catalog candidate 拦截降级）**；连现有 137 个 `douban_status='matched'` 行，derive overall 也只判 **123 applied + 14 candidate**。→ "消费方迁到 derive overall 谓词"**非等价替换**，会把 auto 匹配已落地视频误降级。本 ADR 的核心架构产出即**厘清两套谓词的语义分工**（D-216-2）。
+### 背景与边界
 
-### 决策
+`videos` 无播放量字段；`lists.view_count` 仅列表用。`watch_history` 登录绑定（`user_id NOT NULL`）不能代表匿名播放量。`POST /feedback/playback` 是 `video_sources` 的 source-health 信号，**不得复用**为视频级播放量真源。本 ADR 建立独立的视频级统计体系，满足三用途：前台展示累计播放、跨前台/搜索一致热度排序、后台运营分析。**匿名用户一等公民**（视频可匿名播放，只计登录用户无效）。
 
-- **D-216-1（主方向：A 变体——refs 谓词收口 + 列冻结，DROP 延后独立 ADR）**：① 直接读状态列的消费方改读 **refs 派生谓词**（具体谓词由 D-216-2 区分）；② enrich 写入侧先守卫、读路径全迁后再冻结（D-216-3）；③ 列物理 DROP 拆独立后续 ADR。**否决 B**（列转去规范化缓存 + 写入同步）：把漂移根源从"两状态机非事务耦合"换成"双写靠纪律"，本质未根除，且 tmdb/imdb 永久无列、asymmetry 固化，违反价值排序 #2 单一真源 + #4 一致。**C（新建 per-(video,provider) applied 物化层）挂起为性能逃生 ADR**（D-216-6），当前 ~6900 量级用不到。
+### 核心不变量（价值排序 1：正确性优先，不可被实现卡放宽）
 
-- **D-216-2（核心产出：两谓词语义分工——消费方迁 video-ref-applied 谓词，非 catalog-overall）**：实库证实 derive overall（catalog-first）≠ 旧列 video-level matched。裁定**区分两类谓词，并存各司其职**：
-  - **`videoRefAppliedSql`（video 级，新提取的单一真源常量）**：`EXISTS (video_external_refs WHERE provider=X AND is_primary AND match_status IN ('auto_matched','manual_confirmed'))`。**阈值必须含 `auto_matched`**（旧列 `matched` 含 enrich auto 写入，含 auto 方等价、无 14 行意外降级）。服务语义 = **"该 video 是否已和某外部条目落地绑定"**（发布门禁 / 富集完成 / "豆瓣是否已匹配"过滤）= video 级 identity 事实。对那 60 漂移行**全部判 applied → 真止血**，且与旧列 matched 等价。
-  - **`METADATA_STATUS_JOIN_SQL` overall 谓词（catalog-first，既有）**：**不废弃、不改**，继续服务"元数据状态列排序/过滤 + 待人工确认工作队列"（META-32-B 既有用途）。catalog candidate「auto 待人工升 exact」是有效运营信号，归此谓词，**不混入"是否匹配"门禁**。
-  - 复用先例：`home-autofill-douban.ts:82-83`、`externalIdLoader.ts:66` 已是按消费语义选 match_status 阈值的 video-ref 桥——本决策是复用既有范式（价值排序 #2），非新原语。
-  - **两谓词边界 + `videoRefAppliedSql` 提取为导出常量 + JS↔SQL 对拍 = DC-216-1 设计卡产出**（D-216-9）。
+1. `video_play_events` 为 append-only 可重放真源；聚合表（hourly/daily/visitors/totals/hot_scores）均派生、可重建。
+2. **写入与聚合双重幂等**：写靠唯一约束，聚合靠 `aggregated_at` 标记 + 单批单事务。
+3. 公共未登录路径**不得访问 `users` 表**。
+4. 所有 bucket 计算一律用服务端 **trusted `occurred_at`**，不信客户端原始时间。
+5. 不存原始 IP / User-Agent；`visitor_hash` 不可逆。
+6. 限流**不是计数真源**；计数真源 = 唯一约束 + 聚合幂等。
 
-- **D-216-3（root-cause 守卫先行、停写后置——修正排序，B-2 吸收）**：**META-57 = enrich 一致性守卫**（写列前：已存在 applied video ref〔同 `videoRefAppliedSql` 判据〕时**不得覆写列为 `unmatched`**），**不完全停写**——列仍随 refs 演进。**守卫只阻止"新覆写型漂移"的产生（`linked_at ≤ enriched_at` 竞态），不修复 ADR 自承的既有 60 条 stale 列；真正止血仍依赖 META-58 迁读**（Codex r2 C-2 澄清，避免误读为 META-57 可单独消除 stale 读）。守卫使 57→58 窗口期未迁移消费方读到"被保护、不再倒退"的值（不恶化），但既有 60 欠计须待 58 迁移消除。**完全停写 + 列冻结并入 META-60**（读路径全迁、确认零消费方依赖列后）。**约束**：守卫的 applied 判据必须与 D-216-2 消费方谓词**同一 SQL 真源**（`videoRefAppliedSql`），否则守卫口径与读口径分叉 = 新漂移。
+### 决策（Open Decision 1–10 全决议）
 
-- **D-216-4（软删 ref 卫生：纯读期 join `videos.deleted_at IS NULL`，零 schema——B-3 吸收，收回 tombstone）**：**收回初裁的写期 tombstone / `refs.deleted_at` 方案**（需 schema 变更，且 `match_status` CHECK 不含 tombstone 值会污染语义域）。改**纯读期方案**：refs 读路径按"该不该过滤软删"分类加 `JOIN videos v ON ... AND v.deleted_at IS NULL`。恢复天然无损（refs 物理不动，video 恢复即重新 live，无需级联清理）。残留 refs 是惰性垃圾、非正确性问题（可选低优先 GC 运维卡，非本 ADR 必需）。**但非无脑全局 join——逐路径裁定见下"refs 读路径软删处置表"（DC-216-2 产出）**。
+- **D-216-1 Qualified Play 阈值**：`watch_seconds ≥ 20s` **OR**（短媒体 `duration < 25s` 时）`watch_seconds ≥ 0.8 × duration`。常量**单一真源**：前端 helper 与 API schema/service 同名常量 `QUALIFIED_PLAY_MIN_SECONDS=20` / `SHORT_MEDIA_MAX_SECONDS=25` / `SHORT_MEDIA_QUALIFY_RATIO=0.8`，禁止散落各组件。不计：`previewMode=true`、初始化无播放、source 切换本身、阈值前重试、同 `(play_session_id, video_id, episode_number)` 重复。
 
-- **D-216-5（tmdb/imdb asymmetry 终态：四源对称 refs-only）**：douban/bangumi 退列后与 tmdb/imdb（本就 `statusCol: null`）对称。列冻结+DROP 阶段，`statusColumnState`（derive.ts `statusColumnState`）与 SQL status 列兜底分支（`providerStateBranches` 的 status 列 CASE）**必须同一 commit 删除**，`MetadataStatusSourceRow.{douban,bangumi}Status` 字段一并降级可删。
+- **D-216-2 `today`/`week`/`month` 语义（Codex MEDIUM 修正：口径自洽）**：`today` = **滚动 24h**，读 `video_play_hourly` `bucket_hour ≥ now()−24h`（精确滚动、无时区争议、与 hot_score 24h 窗口统一）。`week`/`month` = **近 7/30 个自然日**，读 `video_play_daily` `bucket_date ≥ current_date − 6/29`（**日粒度**，对齐 daily 表 `occurred_at::date` bucket，非精确到秒的滚动）。即 today 用 hourly 精确滚动、week/month 用 daily 日粒度，二者数据源不同但各自口径自洽——消除「滚动窗口 vs date bucket」冲突。
 
-- **D-216-6（C 性能逃生门槛写死）**：当 `videos` 行数 **> 50k** 或 "COUNT(*) + metadata 状态过滤"P95 **> 200ms** 时，触发独立 ADR 建 per-(video,provider) applied 物化层。此前不建。注：video-ref-applied 谓词（D-216-2）是单层 `EXISTS` 子查询，比 overall 的 8 子查询 LATERAL 更轻；overall 谓词仅在元数据状态列排序路径用，性能画像不变。
+- **D-216-3 hot_score 公式**：加权时间窗和（可解释 + 可物化），`hot_score = play_count_24h × 1.0 + play_count_7d × 0.3 + play_count_30d × 0.1`，等价半衰期 ≈ 3 天（权重比体现衰减）。常量集中 worker 聚合 service（`HOT_SCORE_W24/W7/W30`），物化到 `video_hot_scores.hot_score (NUMERIC)`，`computed_at` 标快照时刻。统一排序口径：`hot_score DESC NULLS LAST, play_count_7d DESC, total_play_count DESC, updated_at DESC`。**窗口语义（L1 消歧）**：`play_count_24h/7d/30d` 为**嵌套（cumulative）**——7d 含近 24h、30d 含近 7d，故权重 1.0/0.3/0.1 是对近期的**累加加成**，近 24h 等效总权重 1.4，为刻意的近期偏置。**重算模型（Codex BLOCK 修正，硬决策，否则实现卡无法唯一落地）**：`video_hot_scores` 与三窗口计数为**按窗口全量重算、非增量累加**。每批 commit 时对本批受影响 `video_id`，**从 `video_play_hourly` 按 `bucket_hour ∈ [now()−window, now()]` 聚合重算** `play_count_24h/7d/30d` 与 `hot_score` 快照（数据源 = **hourly 聚合表**，非 raw events，故不受 events 90 天 retention 影响——30d 窗口 < 90d 保留）。增量累加无法在旧事件滑出窗口时正确递减，**禁用**。验证门必加「旧事件滑出 24h 窗口后该 video 的 `hot_score`/`play_count_24h` 下降」断言。后续可 amendment 改指数半衰期/调权重。
 
-- **D-216-7（JS↔SQL 对拍 + 覆盖索引 + EXPLAIN 基线）**：① `videoRefAppliedSql`（若同时有 JS 侧判定）与 overall 派生均逐分支镜像，对拍单测登记为放行门禁；② 补 `idx_video_external_refs_video_provider_status (video_id, provider, is_primary DESC, match_status)`（041 现无 match_status 索引），同时加速 `videoRefAppliedSql` EXISTS 与 overall 8 子查询，并入 META-58；③ META-58 PR 加 moderation 列表分页 + videos COUNT 两路径 `EXPLAIN ANALYZE` 基线。
+- **D-216-4 ES 同步路径与陈旧度**：v1 = **聚合 commit 后增量更新变更视频文档**（partial doc：`play_count_total` / `play_count_7d` / `hot_score`）+ 既有 maintenance/reconcile 周期**兜底**。陈旧度容差 ≤ 聚合周期(1min) + ES refresh ≈ **≤2min**。ES 真源 client = `apps/api/src/lib/elasticsearch.ts`；mapping 加字段为 **additive**。具体 updater + reindex/回填脚本落 STATS-06。
 
-- **D-216-8（derive 注释校正）**：`metadata-status.derive.ts` 头注「tmdb/imdb 当前无 refs 写入路径」与现状（tmdb auto_matched 1260）不符，META-58 随手校正。
+- **D-216-5 `user_id` v1 边界**：schema **保留** `user_id` 列；写端点**挂 `fastify.optionalAuthenticate` 作为 preHandler**（该已有原语仅验 JWT + Redis 黑名单、**全程不碰 `users` 表**，见 `apps/api/src/plugins/authenticate.ts:119-131`），取 `user_id = request.user?.userId ?? null`。**绝不在写端点查 `users`**。无 auth context → `user_id=NULL`（匿名）。anon/logged-in 拆分以 `user_id IS NULL` 判定。注意：是「挂 optionalAuthenticate 填充可选身份」而非「不挂 auth preHandler」——后者会使 `user_id` 恒 NULL、D-216-5 登录分支沦为死代码。
 
-- **D-216-9（强制拆 2 张设计卡前置——不可直接进实现，CLAUDE.md 强制升 Opus 情形 1「定义共享谓词契约」）**：
-  - **DC-216-1（谓词语义契约·Opus·META-57+58 共同前置）**：定义 `videoRefAppliedSql` 导出常量（match_status 阈值 = auto+confirmed，写死）；明确 video-ref-applied 谓词 vs catalog-overall 谓词的语义边界（前者=是否匹配/发布门禁/富集完成；后者=元数据状态列排序/工作队列）；JS↔SQL 对拍单测义务登记。**`is_primary` invariant 登记（Codex r2 C-1）**：041 仅约束「每 (video,provider) ≤1 primary」，**未**约束「applied ⟹ is_primary」（`upsertVideoExternalRef` 的 matchStatus/isPrimary 独立传入）。**实测（2026-06-27）：live video 中 applied 非 primary 的 (video,provider) = 0**（applied ref 现状全 is_primary：bangumi 241/douban 199/tmdb 1258），故谓词含 `is_primary` 当前安全；但 DC-216-1 须裁定「谓词是否强制 `is_primary`」+ 加约束测试/数据诊断守护此 invariant（防未来写出 applied 非 primary 致漏算）。
-  - **DC-216-2（refs 读路径软删处置表·META-59 实施清单）**：B-4 三类逐路径裁定落表（下表），作为防遗漏 checklist。
+- **D-216-6 retention（v1 代码常量，不进 system settings）**：`video_play_events` = `aggregated_at IS NOT NULL` 后 90 天（**未聚合永不删**）；`video_play_daily_visitors` = 400 天；`video_play_hourly` = 90 天；`video_play_daily` / `video_play_totals` / `video_hot_scores` = 永久。独立 maintenance job，绝不删 `aggregated_at IS NULL`。常量集中，后续可 amendment 转可配。
 
-### refs 读路径软删处置表（DC-216-2 产出 / B-4 三类裁定）
+- **D-216-7 匿名 visitor cookie**：现状**无**匿名 cookie middleware → v1 新建**单一边界**（`apps/api` 全局 `onRequest` hook/plugin）签发/刷新。cookie 名 `rv_vid`，值 = 随机 nanoid（无 PII）；flags `HttpOnly + Secure + SameSite=Lax + Path=/ + Max-Age=400d`（对齐 daily_visitors retention）。`visitor_hash = HMAC-SHA256(rv_vid, SERVER_VISITOR_SECRET)` 截断 hex，**不可逆**。归属：cookie 由该 `onRequest` 边界**唯一**签发，write 端点只消费已解析 `visitor_hash`，不自行 Set-Cookie。**fallback**：cookie 缺失/禁用 → request-scoped ephemeral hash（`ip_hash + ua_hash + 时窗`）**仅供限流**。**ephemeral 标记字段冻结（H1，跨 STATS-02/03/04）**：`video_play_events` 增列 `visitor_is_ephemeral BOOLEAN NOT NULL DEFAULT false`（STATS-02 建表即含），ephemeral 行置 `true`；聚合（STATS-04，设计稿 §Aggregation step 4）**仅对 `NOT visitor_is_ephemeral` 的行**写 `video_play_daily_visitors` 与计 `unique_visitor_count` → daily UV 只统计 cookie-backed visitor、ephemeral **不虚增 UV**（用列语义，不靠脆弱的 hash 前缀启发式）。**SSR 首屏竞态（H2，已知接受偏差）**：首次访问时 `rv_vid` 的 Set-Cookie 可能晚于首个 play-event 请求 → 该次落 ephemeral、不计 UV；可接受（UV 轻微低估优于虚增），后续访问 cookie 就绪后稳定计入。
 
-| 类 | 路径 | 该不该过滤软删 | 改法 |
-|---|---|---|---|
-| **B 不改（外层 gate·arch-reviewer 改判 ab76495e）** | `metadata-status.derive.ts` `getMetadataProviderRefs` + `METADATA_STATUS_JOIN_SQL`（correlated 子查询 / 显式 videoIds 列表） | 否（**全消费方已 gate**） | **原判类A 系误判**（arch-reviewer 改判类B）：getMetadataProviderRefs←VideoService:258(list)/:295(detail) + listAdminVideos:365 + findAdminVideoById:586 均 `deleted_at IS NULL`；METADATA_STATUS_JOIN_SQL correlated `ver.video_id=v.id`、外层 listAdminVideos gated；per-video 取数非聚合，碰不到软删 ref。**「277→241 假漂移」实为 stats 行(24128)跨 video COUNT 污染,非 derive**。改它冗余 + 触 META-32-B JS↔SQL 守护红线(derive.ts:414-419) + catalog 级(catalog_external_refs)无 per-video 软删可 gate。 |
-| **B 不改（外层 gate·DC-216-2 核实）** | moderation/staging/videos 列表消费方（经 `video-ref-applied.ts` 谓词 videoRefAppliedSql/doubanRefStateSql/doubanRefStateFilterSql） | 否（外层已 gate） | **修正原表「已含 live video join」误判**：谓词 EXISTS **不自 gate** `deleted_at`，安全性靠外层 videos 已 gate（实测全 gate：moderation:205 / videos:365,633 / videos.status:130 / staging:116,312）；**invariant：新消费方必须在外层 `v.deleted_at IS NULL`** |
-| **A 已正确** | `home-autofill-douban.ts:listDoubanCandidateSourceRows` | 是 | 已 `JOIN videos … deleted_at IS NULL`（:102），**无需改** |
-| **B 不改** | `externalData.ts:listVideoExternalRefs`(:565)/`findPrimaryVideoExternalRef`(:619)〔Codex r2 I-1 名校正〕 | 否（按单 `video_id` 直查，调用方已 gate 可见性） | 不改（加 join 无收益增成本） |
-| **B 不改** | `externalIdLoader.ts:loadExternalIdSummaries` | 否（videoIds 由上游 identity job 已圈定） | 不改 |
-| **B 不改（Codex r2 C-3 补）** | `split-suggestions.ts:38-43` `WHERE ver.video_id=$1 AND match_status<>'rejected'` | 否（单 `video_id` 直查） | 不改 |
-| **B 不改（DC-216-2 核实 ✅ 闭合）** | `video-merge-candidates.ts:73-81` `external_ids` 相关子查询（:77 `FROM video_external_refs r WHERE r.video_id=v.id AND is_primary AND match_status IN('manual_confirmed','auto_matched')`，jsonb_agg 展示用） | 否（per-video 展示投影 + 调用方提供 videoIds） | **修正本会话误判**（原写「:69 JOIN videos deleted_at 已 gate」**该 JOIN 不存在**）：实为 `fetchVideoDetailsForCandidates(videoIds: string[])`，外层 `FROM videos v … WHERE v.id = ANY($1::uuid[])`（按显式 videoIds 列表，调用方=identity 折叠管线 stage 5 提供 live 候选，**无 deleted_at gate**）；refs 为 **per-video 展示投影**（非跨 video 聚合），即便传入软删 id 仅影响该行展示、不污染计数 → 类 B（同 externalData 由调用方 gate；Codex r2 C-3 待确认项闭合） |
-| **C 须改结构** | `home-autofill-douban.ts:listDoubanGapSourceRows`(:168) `NOT EXISTS … is_primary AND manual_confirmed` 判缺口 | 是（软删 video 的人工确认不该让条目退出缺口池，恢复后又缺映射） | 改 `NOT EXISTS(… JOIN videos … deleted_at IS NULL)` |
-| **C 须改结构（Codex r2 B-1 补）** | `home-autofill-bangumi.ts:listBangumiGapSourceRows`(:165-168) 同构 `NOT EXISTS … is_primary AND manual_confirmed` | 是（与 douban gap 同构）。**现状无污染**（bangumi 软删 36 全 `auto_matched`，gap 只看 `manual_confirmed`），结构上须过滤防未来软删 `manual_confirmed` 污染 | 同 douban gap |
-| **C 须改 + 注明基线变更** | `external-resources-stats.ts:aggregateExternalRefMatch`(:85-97) 纯 `COUNT GROUP BY` 无 video join | 是（**277 vs 241 统计虚高源头**；治理概览应统计 live 口径） | 加 `JOIN videos … deleted_at IS NULL`；ADR/changelog 注明历史统计基线变更 |
+- **D-216-8 `idempotency_key` 公式 + 业务唯一约束（双防线）**：`idempotency_key = sha256Hex(playSessionId + '|' + shortId + '|' + String(episodeNumber ?? 0) + '|' + eventType)`，前端**确定性**构造（同一 qualified play retry 同值），API **原样存** UNIQUE 列（不重算，避免前后端口径分裂；`shortId ↔ video_id` 一一对应）。第二防线 DB 唯一约束 `UNIQUE(play_session_id, video_id, COALESCE(episode_number,0))`（null-safe 表达式索引，用内部 `video_id`）。写路径 `INSERT ... ON CONFLICT (idempotency_key) DO NOTHING`，**并捕获两个唯一约束的 `23505`** → 均视为幂等命中返回 `202`，不二插不 500。**23505 收敛（M1）**：处理必须校验 `err.constraint ∈ {idempotency_key 唯一约束名, uq_video_play_events_session_video_episode}` 二者之一才当幂等命中；其余 `23505`（如未来新增的第三个唯一约束）一律上抛 500，**不得无差别吞 23505**。FK（`23503`）/CHECK（`23514`）错误码不同，不会被本捕获误吞。**前提假设（Codex 补充）**：`short_id` 在视频生命周期内**不可变、不复用**，保证 `idempotency_key`（前端 shortId 构造）与第二防线（内部 `video_id`）一一对应、不漏判重。
 
-DC-216-2 门禁=**穷举 refs 读路径并逐条归类**（不止上表，Codex r2 C-3）：落地时复跑全仓 `grep video_external_refs` 补全 + 核 `video-merge-candidates` 外层 gate。无"天然不该过滤软删"的现存恢复/审计路径（类 B 是按 video_id 的属性查询，非全表审计）。
+- **D-216-9 `occurred_at` 信任策略（非对称容差，arch-reviewer H3 + Codex HIGH 合并修正）**：弱网延迟是**过去**方向、未来方向无正当理由 → 容差**非对称**：过去最大 **−30 分钟**（容弱网/离线缓冲），未来最大 **+2 分钟**（仅补网络/时钟漂移）。`ingested_at − 1800s ≤ clientOccurredAt ≤ ingested_at + 120s` → 用 client 值（trusted）；超出 → **回退 `ingested_at`**（不 clamp 到边界，避免边界堆积）；缺失/非法 → 用 `ingested_at`。所有 hourly/daily bucket 用 trusted `occurred_at`，且**所有窗口查询显式加 `bucket_hour ≤ now()`** 防未来桶。**理由**：对称 ±30min 会让攻击者把事件精准注入未来桶操纵 trending today / hot_score 24h 窗口；非对称 + 未来桶过滤封堵该面，同时保留过去 30min 容弱网（fire-and-forget 前端正常路径延迟小，超窗回退仅尾部）。
 
-**DC-216-2 穷举闭合（2026-06-28，本会话复跑 `grep -rln video_external_refs` 全仓 13 文件）**：上表读路径分类已穷举全部 13 引用文件。**新增确认**：① `video-ref-applied.ts`（B-1 谓词生成器）归类 B（外层 gate，见上表 invariant 行）② `video-merge-candidates.ts`（`fetchVideoDetailsForCandidates`）待确认项闭合为类 B——`external_ids` per-video 展示投影（:73-81，refs :77），外层 `WHERE v.id = ANY($1::uuid[])` 按显式 videoIds（调用方 gate），per-video 非聚合不污染（**更正本会话曾误写 :69 deleted_at JOIN，该结构不存在**）。**N/A 非读路径（写/审计，不入软删读过滤）**：`MetadataEnrichService.ts:146`（审计 from_table 标记）/ `BangumiService.ts:196`（INSERT 写 ref）/ `DoubanService.ts:239,362`（confirm 写 manual_confirmed）。**命名核实**：douban gap 文件为 `home-autofill-douban.ts`（非 `home-autofill.ts`，上表已正确）。类 A/C 实施清单交 META-59。
+- **D-216-10 batch size + 调度**：batch `LIMIT=500`，单批单事务，`FOR UPDATE SKIP LOCKED` 取 `aggregated_at IS NULL ORDER BY ingested_at ASC`。调度 `apps/worker` node-cron `config.cron.playStatsAggregate = '* * * * *'`（每 1min，`{ scheduled:false }` 手动启动，参照 `feedbackTask` 范式），**独立 job**，不并入 source-health `feedback-driven-recheck`。单 tick 循环 drain 至无 pending 或达 `maxBatchesPerTick=10`（≈5000 events/min 上限）防长占用。**事务语义（M2）**：单 tick 内**顺序执行 ≤10 个独立事务**（非一个大事务），各批独立 commit；与「单批单事务」一致，crash 仅当前批 pending 保留、已 commit 批不回滚。**背压（M3）**：≈5000 events/min 为已知容量边界；持续高峰使 pending 增速超此值时**不丢事件、仅延迟聚合**，由 STATS-04 监控告警，后续可调 `LIMIT/maxBatchesPerTick` 或迁 Bull queue（amendment）。
 
-### 实施序列影响（两轮裁定后定稿，覆盖立案初排 + 初裁重排）
+### 公共写端点契约（STATS-03-A；契约守护方式见 §契约门禁说明）
 
-调整后串行主链：**DC-216-1（谓词契约·Opus）→ META-57（enrich 一致性守卫）→ META-58（读路径迁 `videoRefAppliedSql` + 索引 + EXPLAIN 基线 + derive 注释校正）→ DC-216-2（软删处置表）→ META-59（软删读期过滤，按表 A/C）→ META-60（完全停写 + 列冻结 + 守卫）→ 独立后续 ADR（列 DROP，软泡期 + architecture.md 同步）**。
+`POST /videos/:id/play-events`
 
-- **META-57** = 一致性守卫（非完全停写，B-2）；判据用 DC-216-1 的 `videoRefAppliedSql`。
-- **META-58** = A 核心交付，迁 `videoRefAppliedSql`（非 overall）→ 60 漂移行真止血、无 14 行降级；含 `ENRICH_COMPLETE_SQL`(moderation.ts:111) 两口径整体替换 + C-1 扩展消费方（distinct facet / route query schema / server-next URL serialization / 隐藏列 / moderation 过滤 UI）+ 同步改测试口径（C-3：admin-video-list / backfill-enrich / moderation-pending / VideoColumns 测）。
-- **META-59** = 软删读期过滤，按处置表只改类 A/C，类 B 不动。
-- **META-56** = 维持降级 DROP-prep（非止血前置；止血由 57 守卫 + 58 迁移完成，回填仅 DROP 前列值对齐；方向与 `fix-douban-status-consistency.ts` 相反）。
-- **META-60** = 完全停写 + 列冻结守卫；守卫定义为"运行时代码 / 新测试禁读写列"（**非字面全仓 grep 零残留**，C-2：历史 migration/类型注释天然保留列名）。
+- `:id` = 8 字符 `short_id`（公共路由口径，handler 内部可命名 `shortId`）。
+- auth：**public**，无需登录；**不查 `users`**（但挂 `optionalAuthenticate` 填充可选 `request.user`，见 D-216-5）。
+- body（zod，**含长度上限防超长冲击唯一索引/表膨胀，Codex MEDIUM**）：`sourceId?: uuid` / `episodeNumber?: int≥1` / `playSessionId: string(nanoid，len 16–32)` / `idempotencyKey: string(64 hex 固定)` / `watchSeconds: int≥0` / `durationSeconds?: int>0` / `occurredAt: string(ISO datetime)` / `locale?: string(max 16)` / `referrerPath?: string(max 2048)`。
+- 成功：`202 { data: { received: true } }`。
+- 错误码（**对齐现网公共路由谱系**，见 `feedback.ts` / `videos.ts`，不新造 code/status）：`422 VALIDATION_ERROR`（message `'参数错误'`；zod / shortId 格式非法，与 `feedback.ts:137` 逐字对齐）；`404 NOT_FOUND`（short_id 不存在或非公开可见，沿用 `videos.ts:93/120`，**不新造** `VIDEO_NOT_FOUND`、**不用 `400`**）；`422 INVALID_SOURCE`（message `'线路无效'`；sourceId 不属于该 video 或 inactive，本端点新场景）；`429 RATE_LIMITED`（双维限流命中）。
+- 限流：Redis 固定窗口双维 `visitor_hash + video_id + episode_number` 与 `ip_hash + video_id + episode_number`（参照 `feedback.ts` `redis.set EX NX` 范式）。**限流故障 fail-closed（Codex HIGH 修正）**：统计写端点与 `feedback.ts`（无统计影响、可 fail-open）不同——限流是防刷量唯一防线，Redis 故障时**返回 `429`**（宁少计、不刷量；播放本身 fire-and-forget 不受影响）。注：双维含 `visitor_hash`（cookie 稳定），攻击者轮换 `playSessionId/idempotencyKey` 不改 `visitor_hash`、仍被该维拦截；`ip_hash` 维兜底清 cookie 场景。per-visitor/video 每日硬上限 + 异常检测告警列 **STATS-04 必交付**。
+- 仅用 `request.ip`，**不手工解析** `X-Forwarded-For`。
+- 幂等：见 D-216-8。
 
-### 风险/取舍
+> admin analytics 端点 `GET /admin/analytics/video-plays/{overview,trend,top-videos}` 契约**不在本 ADR**，留 **ADR-217 / STATS-07**，须过 `verify:endpoint-adr` + arch-reviewer (Opus) PASS。
 
-- 列 DROP 不在本 ADR 拍日期：硬约束 DC-216-1→57→58→（读路径全迁）→60 完全停写→软泡期 ≥1 完整 enrich 周期+观察→独立 DROP ADR（同步 architecture.md）。
-- 两谓词并存增认知成本：DC-216-1 须把"何时用 applied 谓词 vs overall 谓词"写成明确边界，防消费方误用（这正是本次 B-1 暴露的坑）。
-- `external-resources-stats` 统计基线变更（类 C）：治理概览数字会从含软删降到 live 口径，须 changelog 注明。
-- 热路径性能：当前量级可接受；越 D-216-6 门槛触发 C 物化 ADR。
+### 契约门禁说明（B1 修正：避免无法兑现的门禁承诺）
 
-### 关联 ADR
+**`verify:endpoint-adr` 仅扫 admin 路由**（`scripts/verify-endpoint-adr.mjs:20` 硬编码 `ROUTES_DIR=.../routes/admin`；`adr-parser.mjs` 只解析 `### 端点契约` markdown 表格）。因此本公共端点 `POST /videos/:id/play-events`（落 `routes/videos.ts`）**不被 `verify:endpoint-adr` 覆盖**。其契约由 **STATS-03-A 卡的端点契约/集成测试 + 本 ADR 文字契约人工守护**，并跑 `verify:adr-contracts`（端点/错误码/D-N 偏离 3 类核验）。STATS-07 的 admin 端点才走 `verify:endpoint-adr` 机器核验。各实现卡与本 ADR 均**不得**声称公共端点已被 `verify:endpoint-adr` 对齐。
 
-- **ADR-201**（metadata 状态统一派生 / refs canonical · 状态列 fallback）：本 ADR 是其逻辑终点收口；明确 overall 谓词与 video-ref-applied 谓词的分工是对 ADR-201 的补充契约。
-- **ADR-177**（catalog_external_refs canonical / 上卷规则）：catalog-first overall 的保守降级语义来源（`externalRefRollup` auto-consensus→candidate）。
-- **ADR-186**（enrich douban 一致性 INV-1/INV-2 + `fix-douban-status-consistency.ts`）：既有矫正先例；META-56 方向与之相反。
+### schema 起号
 
-### arch-reviewer 裁定登记（claude-opus-4-8 / 2026-06-27，两轮）
+STATS schema 从 migration **128** 起（dev 当前最新 `127_video_sources_audio_language_index` 已占用；设计文档 / SEQ-02「若 127 已合入则顺延 128」条件**已触发**）。STATS-02 建 6 表 + 索引并同步 `docs/architecture.md` §schema。**`video_play_events` 须含 D-216-7 冻结的 `visitor_is_ephemeral BOOLEAN NOT NULL DEFAULT false` 列**（建表即含）。**可扩展性（L3）**：`event_type CHECK IN ('qualified_play')` 单值为 v1 边界，未来 `share`/`complete` 等扩展走 migration 加 CHECK 值 + amendment（结构已留口）。
 
-- **初裁**：选 A 变体、否决 B、C 挂起。**断言 D-216-2「消费方迁 derive overall 谓词即结构性止血、不依赖回填」。**
-- **复议（收回承重错误）**：初裁误读 `deriveProviderStatus` 控制流——catalog ref 分支先于 video ref 分支，catalog `relation='candidate'`（auto-consensus 上卷）会拦截底层 video `auto_matched`，把 28/60 漂移行 + 14/137 现 matched 判 candidate。**正式收回该假设**，改裁：① D-216-2 迁 **video-ref-applied 谓词**（非 overall），两谓词语义分工为本 ADR 核心产出；② B-2 採纳（守卫先行、停写后置）；③ B-3 收回 tombstone、改纯读期 join；④ B-4 三类处置表；⑤ 强制拆 DC-216-1/DC-216-2 设计卡，方向 Accepted 但不直接进实现。
+### watch_history 边界
 
-### Codex 对抗审摘要 round-1 2026-06-27（codex-rescue runtime 等效对抗审 / agentId a875c79236ebb127c）
+`watch_history` = 登录用户进度/续播（per-user resume）；`video_play_events` = 视频级聚合信号。登录播放可同时更新两者，但语义不同、**不做行级对账**。
 
-**4 BLOCKER + 3 CONCERN + 1 NIT，全数吸收。** 方向 A 不被质疑，但初裁的承重假设与实施边界被系统性挑战：
+### 关系 / 影响
 
-- **B-1（D-216-2 承重假设缺证）→ 吸收（最重）**：catalog ref 优先级导致 applied 分支可能未命中。实库验证证实（34 applied / 28 candidate；137 matched→123/14）→ 改裁 video-ref-applied 谓词（D-216-2 重写）。
-- **B-2（停写先于迁移制造 stale 读）→ 吸收**：META-57 降一致性守卫不完全停写，完全停写并入 META-60（D-216-3）。
-- **B-3（tombstone 需 schema 未落实）→ 吸收**：收回 tombstone，改纯读期 join `videos.deleted_at`（D-216-4）。
-- **B-4（软删覆盖面不止 metadata 派生）→ 吸收**：refs 读路径分三类处置表（externalData 类 B 不改 / gap+stats 类 C 须改）。
-- **C-1（四消费方清单不完整）→ 吸收**：META-58 扩展 distinct facet / route schema / server-next URL serialization / 隐藏列 / moderation 过滤 UI。
-- **C-2（DROP 前全仓 grep 零残留不可操作）→ 吸收**：守卫定义为"运行时代码/新测试禁读写"作用域，非字面全仓零 grep。
-- **C-3（现有测试固化旧列读取）→ 吸收**：META-58 同步改 admin-video-list/backfill-enrich/moderation-pending/VideoColumns 测试口径。
-- **I-1（行号脆）→ 吸收**：ADR 引用函数名/分支语义为主。
+- 替换 `/videos?sort=hot` 的 active source count 占位（STATS-05-B）。
+- 替换 `/videos/trending` 的 `updated_at` recency（STATS-05-B）。
+- `/search?sort=hot` 从 `rating_votes` 改 ES play fields（STATS-06）。
+- 新增 `apps/api` onRequest visitor-cookie 单一边界（STATS-03-A）。
+- 新增 `apps/worker` 聚合 cron（STATS-04）。
+- `packages/types` `Video.playCount`（STATS-05-A）。
 
-### Codex 对抗审 round-2 2026-06-27（codex-rescue runtime 等效对抗审 / agentId a875c79236ebb127c）
+### 验证门
 
-**1 BLOCKER + 3 CONCERN + 1 NIT，全数吸收。** 方向与 video-ref 谓词改裁不被质疑，剩收敛性补全：
+各实现卡按域跑 `typecheck` / `lint` / `test:changed` / `verify:adr-contracts`；新增 **admin** 端点跑 `verify:endpoint-adr`（**公共端点不被其覆盖**，见 §契约门禁说明）；PLAYER/SEARCH/VIDEO/ADMIN 触达卡按域 e2e。附加测试见设计文档 §Validation Gates（双唯一约束幂等、聚合不 double count、crash 留 pending、daily UV 去重、匿名免 auth、preview 不上报、occurredAt clamp、双维限流）。**hot_score 滑窗断言（Codex BLOCK）**：STATS-04 须加——旧事件滑出 24h 窗口后该 video `hot_score`/`play_count_24h` 下降（验证全量重算非增量累加）。**跨 surface 一致性断言（Codex LOW）**：STATS-06 须加——reconcile 后同一 fixture 下 `/videos?sort=hot` 与 `/search?sort=hot` 排序一致，自然流量允许 PG 领先 ES ≤2min，并有对应指标/测试覆盖。
 
-- **B-1r2（bangumi gap 漏出处置表）→ 吸收**：`home-autofill-bangumi.ts:165-168` 同构 douban gap（`NOT EXISTS … is_primary AND manual_confirmed`）未分类 → 补入处置表类 C。**实库佐证**：bangumi 软删 36 条全 `auto_matched`、gap 只看 `manual_confirmed` → **现状无污染**，但结构上须过滤防未来。
-- **C-1r2（`is_primary` 非 schema 不变量）→ 吸收**：041 未约束 applied⟹is_primary；实测 0 边角（applied ref 全 primary）但 DC-216-1 须登记约束测试 + 强制 is_primary 裁定。
-- **C-2r2（META-57「无 stale 暴露面」过强）→ 吸收**：D-216-3 澄清守卫只阻新覆写、不修既有 60 stale、止血靠 META-58。
-- **C-3r2（refs 读路径未尽分类）→ 吸收**：`split-suggestions`(类 B 单 video_id)/`video-merge-candidates`(待核外层 gate) 补入处置表；DC-216-2 门禁=穷举全仓不止 ADR 现列。
-- **I-1r2（externalData 函数名错）→ 吸收**：改 `listVideoExternalRefs`/`findPrimaryVideoExternalRef`。
+### 留待实现卡
 
-**两轮 Codex（5 BLOCKER + 6 CONCERN + 2 NIT）+ 两轮 arch-reviewer 全数收敛，ADR-216 方向与收口契约定稿，待用户裁可解锁 DC-216-1。**
+本 ADR 仅冻结决策与契约，**不落任何实现代码**。全部实现归 STATS-02~07。
 
-### META-58-B 实现期增补：video 级 4 态谓词契约 + bangumi 退役范围收窄（arch-reviewer 裁定 claude-opus-4-8 / 2026-06-28）
+### 评审记录
 
-META-58-A 落地后发现多值过滤消费方（审核台/视频库 4 态下拉）超 DC-216-1（只 applied boolean），arch-reviewer 第三次裁定 video 级 4 态谓词契约，揭示两处代码事实纠正卡片假设：
+- **arch-reviewer (Opus, `claude-opus-4-8`, agentId a17bf370fb4489a22) round-1 2026-06-25：CONDITIONAL PASS → 全部吸收**。
+  - **B1（门禁名实不符）**：`verify:endpoint-adr` 仅扫 admin 路由（`scripts/verify-endpoint-adr.mjs:20`）+ 只解析表格式契约 → 公共端点不被覆盖。**已改**：§契约门禁说明明确公共端点由 STATS-03-A 端点测试 + 文字契约人工守护 + `verify:adr-contracts`，删除误导措辞；§验证门同步改"admin 端点跑 verify:endpoint-adr"。
+  - **B2（错误码偏离现网）**：`videos.ts` short_id 非法→`404 NOT_FOUND`、zod→`422 VALIDATION_ERROR '参数错误'`（`feedback.ts:137` 先例）。**已改**：契约错误码全对齐现网谱系，删除新造 `VIDEO_NOT_FOUND` 与 `400`，`INVALID_SOURCE` 补 message 模板。
+  - **H1（ephemeral UV 字段下放风险）**：**已改**：D-216-7 冻结 `video_play_events.visitor_is_ephemeral BOOLEAN`，聚合仅对 `NOT visitor_is_ephemeral` 计 UV（跨 STATS-02/03/04）。
+  - **H2（cookie 边界/SSR 竞态）**：**已改**：D-216-5 点名 `optionalAuthenticate`（不碰 users，`plugins/authenticate.ts:119-131`）；D-216-7 承认首屏 cookie 竞态为已知接受偏差。
+  - **H3（occurred_at 容差过窄）**：**已改**：D-216-9 容差 ±10min→**±30min**，并注明回退对 hourly/hot_score 的取舍。
+  - **M1（23505 捕获过宽）**：**已改**：D-216-8 收敛到校验 `err.constraint` 二选一，其余 23505 上抛 500。
+  - **M2（单 tick 多事务）/ M3（背压）**：**已改**：D-216-10 明确多独立事务一致性 + 5000/min 容量边界告警路径。
+  - **L1（hot_score 窗口嵌套）/ L3（event_type 扩展口）**：**已改**：D-216-3 注明嵌套累加、schema 起号段注明扩展走 amendment。
+  - **L2**：确认通过（hourly 90d 保留对所有 trending 窗口充分），无需改。
+  - 红线合规：未登录路径不访问 users（通过，optionalAuth 仅验 JWT+Redis）；分层/配置不写死/可扩展（通过）；10 个 Open Decision 与设计稿逐项对应、无漏决。
+- **Codex 对抗审（codex-rescue runtime 等效，codex-cli 0.125.0, agentId a84f77e18db6811cc）round-1 2026-06-25：1 BLOCK + 2 HIGH + 2 MEDIUM + 1 LOW，全处理**（`/codex:adversarial-review` 配 disable-model-invocation 不可自动触发，自动推进模式走 codex-rescue 等效对抗审，同 ADR-214 先例）。
+  - **BLOCK（hot_score 重算模型未决）**：滑窗 24h/7d/30d 增量累加无法在旧事件滑出时递减 → 实现卡无法唯一落地。**已改**：D-216-3 冻结「按窗口全量重算（数据源 = hourly 聚合表）、非增量累加」+ 验证门加滑窗下降断言。
+  - **HIGH（occurred_at 未来注入）**：对称 ±30min 可注入未来桶操纵 trending/hot_score。**已改**：D-216-9 改**非对称**（过去 −30min / 未来 +2min）+ 窗口查询 `bucket_hour ≤ now()`。
+  - **HIGH（限流 fail-open 刷量）**：fail-open + 限流是唯一防线 → 刷量风险。**已改**：契约限流改 **fail-closed（429）**，per-visitor 硬上限 + 告警列 STATS-04 必交付；并澄清 visitor_hash 维已拦 session 轮换。
+  - **MEDIUM（trending 口径冲突）**：滚动 7d/30d 与 daily date bucket 冲突。**已改**：D-216-2 明确 today=hourly 滚动 24h、week/month=daily 近 7/30 自然日，口径自洽。
+  - **MEDIUM（public body 无长度上限）**：**已改**：契约 body 补 zod 长度约束（idempotencyKey 64hex / playSessionId 16-32 / locale 16 / referrerPath 2048）。
+  - **LOW（PG/ES 一致性缺可测断言）**：**已改**：验证门加 STATS-06 跨 surface 排序一致断言（允许 ≤2min stale）。
+  - **补充**：D-216-8 补「short_id 生命周期内不可变/不复用」前提假设（强化 key 一一对应）；并发闭环与 retention 竞态经 Codex 确认无新风险（30d 窗口 < 90d 保留）。
 
-- **D-216-10（video 级 4 态谓词定义）**：旧列 4 态（032）迁 video 级谓词，**douban 真源信号 = `meta_quality.douban_match_status`**（video.types.ts 4 态，对齐 video_external_refs.match_status + unmatched）：
-  - `matched` = `videoRefAppliedSql`（is_primary applied，DC-216-1 复用）
-  - `candidate` = `NOT matched AND EXISTS(video_external_refs WHERE provider=X AND match_status='candidate')`——**不加 is_primary**（关键事实：candidate ref 默认 `is_primary=false`，`MetadataEnrichService.ts:551`/`BangumiService.ts:567`，加 is_primary 则恒空筛不出 candidate 态）；`AND NOT matched` 人工恢复旧列单值互斥。
-  - `unmatched` = `NOT matched AND NOT candidate AND meta_quality->>'douban_match_status'='unmatched'`（跑过没匹配）
-  - `pending` = `NOT matched AND NOT candidate AND (meta_quality IS NULL OR douban_match_status IS NULL)`——**pending 权威信号 = `meta_quality IS NULL`**（never enrich，对齐 videos.ts:642），**非 `enriched_at`**。
-  - **拒绝 unmatched/pending 合并为 not_applied**：破坏运营「Job 积压未跑 vs 跑过匹配不上」区分 + `getRescoreVideos` unmatched 重跑工作流（价值排序 #1 正确性 + #4 一致）。
-  - 4 态谓词**越出纯 refs 边界**（unmatched/pending 依赖 meta_quality 信号列），jsdoc 须显式声明（与 videoRefAppliedSql 纯 refs 的契约差异）。
-- **D-216-11（bangumi 退役范围排除——重大范围收窄）**：**ADR-216 退役范围只含 `douban_status`，`bangumi_status` 暂留**。理由：bangumi 在 meta_quality **无对等 `bangumi_match_status` 信号**（grep 零命中），无法表达 unmatched/pending；退役 bangumi_status 列会永久丢失 bangumi 匹配状态。**bangumi_status 退役另起独立卡**，前置补 `meta_quality.bangumi_match_status` 信号（独立 schema/信号契约卡，强制 Opus）。`videos.ts:438` bangumi 多值过滤本卡**不迁移**。
-- **D-216-12（契约组织 + 对拍 + 连带面）**：4 态谓词**扩展 `video-ref-applied.ts`**（不新建，共享 `VIDEO_REF_APPLIED_MATCH_STATUSES` 真源）；**JS↔SQL 双向对拍单测必须**（4 态互斥性 + candidate 非 primary + pending 用 meta_quality，沿用 derive.ts:414-419 铁律）。**连带退役面**（卡片未列，实现卡须纳入）：`videos.status.ts:207` `SELECT v.douban_status` 投影、`videos.ts:644` getRescoreVideos unmatched、`metadata-status.derive.ts:471-473` douban_status 兜底分支（死代码清理）、`distinct-whitelist.ts:60-61`（facet 改静态枚举 + ADR-150 AMENDMENT 登记）。索引 `idx_video_external_refs_video_provider_status` 卡片假设不存在，建议先用现有 `(video_id)` 索引上线（功能正确）、性能瓶颈再起独立索引卡（对齐 derive.ts:411 原则）。
-- **拆卡（强制，> 5 项跨 3 层）**：**META-58-B-1**（后端 4 态谓词扩展 + JS 对拍 + douban 多值过滤迁移〔moderation:219 / videos:434 / videos.status:180+207 投影 / videos:644 douban 半〕 + derive 兜底清理 + 本增补）；**META-58-B-2**（前端 facet 静态枚举 + distinct-whitelist AMENDMENT + URL/隐藏列/moderation UI 零回归验证，依赖 B-1）；**独立后续 bangumi_status 退役卡**（前置 meta_quality.bangumi_match_status 信号）。
-- **风险**：① bangumi 信号缺口（已由 D-216-11 排除范围规避）② candidate 非 primary（D-216-10 锁定，单测守护）③ pending/unmatched 信号选 meta_quality IS NULL 非 enriched_at（D-216-10）。
+---
 
-### D-216-13（META-58-B-1 实现落地 + Codex 对抗审修正 + 投影/derive 延后裁定，主循环 claude-opus-4-8 / 2026-06-28）
+## ADR-217：后台视频播放分析只读端点契约 — `/admin/analytics/video-plays/{overview,trend,top-videos}` daily-only 聚合读模型（SEQ-20260624-02 / STATS-07-ADR）
 
-META-58-B-1 实现完成（门禁：typecheck=0 / lint=0 / test:changed 1202 全过 / verify:adr-contracts=0）。`video-ref-applied.ts` 扩展 **过滤侧** 4 导出（`DoubanRefStateInput` / `matchesDoubanRefState` JS 逐态 / `doubanRefStateSql` SQL 单态 / `doubanRefStateFilterSql` SQL 多态 OR），共享 `VIDEO_REF_APPLIED_MATCH_STATUSES` 真源；JS↔SQL 对拍单测（穷尽四分恰好命中 1 态 + candidate 非 primary `slice(lastIndexOf('EXISTS'))` 守护 + pending `IS DISTINCT FROM` + unmatched/pending 二分）。迁 douban **过滤侧**：moderation:219（单值）/ videos:434（多值）/ videos.status:180（单值）/ videos:644+660 rescore unmatched douban 半；bangumi 半全部保留（D-216-11）。`PendingQueueFilters.doubanStatus` 由 `string` 收窄 `DoubanStatus`（route :32 已 z.enum 校验）。
+> status: **Accepted**（2026-06-25；arch-reviewer Opus CONDITIONAL PASS〔2H/5M/2L〕+ Codex 任务卡审 CONDITIONAL PASS〔4H/4M/2L〕+ Codex ADR 终审〔1 假阳性 BLOCK + 3H/3M 真问题全吸收〕，见 §评审记录）
+> 来源：`docs/designs/video-play-stats-structure_20260624.md` §Admin Analytics（407-429）
+> 关联：实现 **ADR-216** 数据模型的后台分析读通道；端点契约从 STATS-07 析出独立成 ADR 以满足 CLAUDE.md 红线（新增 admin route 须先起独立 ADR + Opus PASS，`verify:endpoint-adr` 核验）；范式参照 **ADR-215**（route 分体端点契约表）
+> last_reviewed: 2026-06-25
 
-**Codex 对抗审两处 BLOCK 修正（2026-06-28，codex-rescue agentId a187e6f3）**：
+### 背景与边界
 
-- **穷尽性修正（BLOCK 2，修订 D-216-10 pending 定义）**：D-216-10 原 pending = `meta_quality IS NULL OR dms IS NULL` **非穷尽**——「meta_quality 存在 + dms ∈ {auto_matched/candidate/manual_confirmed} 但无 ref」的漂移中间态 4 态皆 false，造成「全选 4 态仍漏行」+「投影 pending 但过滤 pending 选不中」语义 bug。**改为 pending 兜底穷尽**：`NOT matched AND NOT candidate AND dms IS DISTINCT FROM 'unmatched'`（NULL-safe，含 never enrich 的 dms NULL + 中间态）。NOT matched ∧ NOT candidate 之下按 dms 二分（`='unmatched'`→unmatched / 其余→pending），保旧列每行迁移后恰好一态。单测 `matchesDoubanRefState` 强守护「任意 input 恰好命中 1 态」。
-- **投影迁移整体延 META-60（BLOCK 3，修订 D-216-12 连带面遗漏）**：D-216-12 仅列 `videos.status.ts:207` 投影，**遗漏** `moderation.ts:344` 队列投影 + `videos.internal.ts` `VIDEO_FULL_SELECT` 投影。单独迁部分投影会造成**投影侧分裂 + 过滤/投影口径不一致**，且 `VIDEO_FULL_SELECT.douban_status` 同时喂 `buildEnrichmentSummary`（展示）+ `buildMetadataStatusSummary`（derive `statusColumnState` 兜底），迁投影耦合 derive。**裁定：投影迁移（含已迁的 videos.status:207，本卡回退）整体延 META-60，与 derive 列兜底清理统一处理。** 本卡仅迁过滤侧。
+ADR-216 建立视频级播放统计体系并冻结公共写端点 + 聚合 + 热度，但**显式将后台 analytics 端点契约留给本 ADR**（ADR-216 §公共写端点契约尾注：「admin analytics 端点契约不在本 ADR，留 ADR-217 / STATS-07」）。STATS-07 提供后台运营三视图：周期概览（overview）、每日趋势（trend）、热门视频榜（top-videos）。本 ADR 只冻结**后台只读端点契约 + 口径 + 数据源约束**，不落实现代码（归 STATS-07-A/B）。
 
-**遗留中间态（已知，META-56 消除）**：过滤侧已迁 refs 真源、投影侧暂留旧列，存量漂移行（refs applied 但列 unmatched）存在「过滤 matched 命中但投影显示旧态」瞬时不一致。缓解：META-57 enrich 守卫已止新漂移（禁 applied 列覆写 unmatched）；META-56 DROP-prep 回填对齐消除存量；derive overall（catalog-first）不依赖该投影值，运营工作队列不受影响。
+**核心边界**：① 只读 aggregate 表，**绝不扫 `video_play_events` raw 真源**（设计稿 §Admin Analytics）；② 不改 schema（migration 128 已含全部维度）；③ analytics 口径与 `watch_history` **不做行级对账**（ADR-216 watch_history 边界）；④ 隐私：只暴露聚合维度、**不暴露 `visitor_hash`**（设计稿 §Privacy）；⑤ **不查 `users` 表**做 anon/logged 拆分（用聚合列）。
 
-**derive 列兜底清理延后（并入 META-60）**：`metadata-status.derive.ts:471-473` douban 列兜底不在 B-1 删——当下非死代码，删除会使「`douban_status='unmatched'` 但 `mc.douban_id` 非空(stale cache)」行经 cache-only 兜底（derive.ts:476-477 `cache present → applied`）误升 applied（missing→applied 回归）。须列完全停写（META-60）+ DROP-prep（META-56）对齐 cache 后才安全，届时同步删 `statusColumnState` douban 分支 + `PROVIDER_SQL_SPECS` douban statusCol（保留 bangumi）。依据：价值排序 1（正确性）> 改动清单一致性；D-216-2（derive overall 独立语义域）。**META-60 卡片须纳入：douban 列兜底清理 + 全部投影迁移（moderation:344 / VIDEO_FULL_SELECT / videos.status:207）。**
+### 事实核验
+
+- **数据源充分性**：migration 128 `video_play_daily(video_id, bucket_date)` 已含本 ADR 所需全部加性维度——`play_count` / `anon_play_count` / `logged_in_play_count` / `total_watch_seconds`（+ `unique_visitor_count` per-day），且 **retention 永久**（D-216-6），90d 窗口安全。→ overview/trend/top-videos 三视图**全部可只读 `video_play_daily` 单表**，零 raw-event 扫描、零 schema 变更。
+- **现有 legacy 端点**：`apps/api/src/routes/admin/analytics.ts` 已挂 `GET /admin/analytics{,/content-quality,/es-health}`（legacy allowlist 豁免）。其 `content-quality` handler 在 **route 层内联大段 SQL = 分层反例**，本 ADR 端点**不得沿用**，须走 Route→Service→queries。
+- **`verify:endpoint-adr` 机制**：`scripts/verify-endpoint-adr.mjs` 扫 `routes/admin` 提取 `(method, path)` 比对各 ADR `### 端点契约` 表行（path 列须 = route 字面 path）；新增 admin route 必须在某 ADR 表匹配，否则阻塞（**不走 allowlist**）。本 ADR 提供规范端点契约表。
+
+### 决策（D-217-1 ~ D-217-12）
+
+- **D-217-1（三端点 + 鉴权）**：新增 3 个 admin GET——`/admin/analytics/video-plays/overview`、`/admin/analytics/video-plays/trend`、`/admin/analytics/video-plays/top-videos`。均 `adminOnly` preHandler（复用 `[fastify.authenticate, fastify.requireRole(['admin'])]`，镜像 `analytics.ts:17`）。响应统一 envelope `{ data: ... }`（对齐现网）。挂载文件 `apps/api/src/routes/admin/analytics.ts` 追加 或 新建 `analytics.video-plays.ts`（实现卡定，端点契约不变）；**不动 legacy 3 端点**。
+
+- **D-217-2（period 口径 + 时区同源，吸收 Codex HIGH-1）**：query `period ∈ {7d, 30d, 90d}`（zod enum，默认 `7d`）。窗口 = 近 N 自然日：`bucket_date ≥ CURRENT_DATE − (N−1) AND bucket_date ≤ CURRENT_DATE`（延伸 D-216-2 week/month daily 口径，**无 today**，最小 7d）。**时区同源不变量**：聚合 worker 用裸 `occurred_at::date`（DB session TimeZone，`play-stats-aggregate.ts:155/172`）产生 `bucket_date`；本 analytics 窗口锚点用裸 `CURRENT_DATE`（同 session TimeZone），**二者日界定义同源、自洽**。ADR 冻结「**不在 analytics 层引入独立时区转换**」——读写共享单一 PG 实例 server TimeZone（部署约定单值）。若未来强制 UTC，须聚合 + 读**同步** amendment，不可单边改一侧（否则日界错配）。**守护（arch-reviewer HIGH-1 + Codex 终审 HIGH-1：多进程 TZ 错配静默风险，消自相矛盾）**：「读写共享单一 GUC」原为隐式运维约定（worker / api 不同连接池、不同进程），ADR 把它升为**可观测不变量**——① 冻结「**禁止任一侧单边 per-connection `SET TIME ZONE`**造成读写 TZ 不一致」（已核验 `apps/api/src/lib` 当前零 `SET TIME ZONE`，须保持现状、不被单边引入）；② STATS-07-A **验证门加集成测断言**：api 读连接与 worker 聚合连接 `SHOW timezone` 一致（隐式约定升为 CI 可拦）；③ **统一 UTC 的正确路径（Codex 终审 HIGH-1 消矛盾）**：「显式 `SET TIME ZONE 'UTC'`」**只作未来 ADR-216 amendment**——届时 **worker + api 两侧池同步**设 UTC（**双侧一致**设置，与 ① 的「禁单边不一致覆盖」**不矛盾**：① 禁的是单边/不一致覆盖，amendment 是双侧一致统一）+ 同步改不变量措辞；**本卡 STATS-07-A 不做任何 pool-level `SET`**（避免单边引入 + 回溯改已落地聚合 worker）。**当前日窗口语义（Codex 终审 MEDIUM-1）**：窗口含 `CURRENT_DATE`（今日桶仍在聚合写入）→ 今日数据**刻意 partial/mutable**，API **不保证同日重复调用数值稳定**（含「今天」符合 trending/运营直觉，优于闭合日滞后一天）；前端 / 测试**不得假设今日桶闭合稳定**（断言用历史闭合日或容忍今日抖动）。
+
+- **D-217-3（数据源唯一约束，吸收 Codex LOW-1）**：三端点**唯一数据源 = `video_play_daily`**。**显式禁止**：扫 `video_play_events`（raw、90d retention）/ 读 `video_play_hourly`（90d retention，不覆盖 90d 窗口，且无小时粒度需求）/ 用 `video_play_totals`（all-time、非 period）/ 用 `video_hot_scores`（热度排序、非播放分析）/ 暴露 `video_play_daily_visitors`（visitor_hash 明细、隐私）。防实现 drift。
+
+- **D-217-4（overview 指标口径，吸收 Codex HIGH-2 / MEDIUM-5）**：period 窗口内对 `video_play_daily` 聚合——`totalPlays = SUM(play_count)`；`totalWatchSeconds = SUM(total_watch_seconds)`；`avgWatchSeconds = totalPlays > 0 ? totalWatchSeconds / totalPlays : 0`（**除零保护**，无播放返回 0 非 null/NaN）；anon/logged 拆分 = `SUM(anon_play_count)` vs `SUM(logged_in_play_count)`（**play-count based**、不查 `users`；**ephemeral 匿名播放计入 anonPlays**——ephemeral 仅排除于 UV、不排除于 play 拆分，D-216-7）。**v1 不暴露 period 级 unique visitor**（HIGH-2）：`daily.unique_visitor_count` 是 per-(video,date)，跨日 SUM 得 **visitor-days 非去重 UV**，daily-only 无法算 period 去重 UV（须扫 daily_visitors 明细、违 D-217-3 + 隐私）；设计稿 metrics 本就无 period UV，如未来需要另起 amendment。空 period（无行）：所有计数与 avg 返回 0（定义良好空响应）。
+
+- **D-217-5（trend 口径 + zero-fill，吸收 Codex MEDIUM-1 + arch-reviewer MEDIUM-3）**：返回**恰好 N 个有序日点**（`bucket_date` 升序），每点 `{ date, plays, watchSeconds, anonPlays, loggedInPlays }`。**无事件日 zero-fill**：service 用 `generate_series(CURRENT_DATE−(N−1), CURRENT_DATE, '1 day')` **显式 `::date` 转 DATE**（`generate_series(date,date,interval)` 返 `timestamp`，须转 DATE 才能与 `video_play_daily.bucket_date`〔DATE〕LEFT JOIN，否则类型不匹配 → JOIN 不上、zero-fill 全 0）后 LEFT JOIN daily 聚合，缺行日补 0，避免前端图表缺日断裂。**日界一致性**：`generate_series` 锚点 `CURRENT_DATE` 与聚合桶 `occurred_at::date` 须同 TZ（**交叉引用 D-217-2 守护**，否则 zero-fill 序列与真实桶错位一日）。日点为**全站跨视频汇总**（非 per-video）。**`date` 线格式冻结（Codex 终审 HIGH-2）**：`VideoPlaysTrendPoint.date` 为严格 `YYYY-MM-DD` string——SQL 须 `to_char(s.day, 'YYYY-MM-DD')`（或 `s.day::date::text`，PG `DATE::text` 即 `YYYY-MM-DD`）显式返回，**禁止**裸返 `timestamp` / ISO datetime / JS `Date` 序列化（防 node-pg DATE 映射 off-by-one/TZ 漂移）；验证门加断言「trend 每点 `date` 匹配 `^\d{4}-\d{2}-\d{2}$`、不含 `T` 时间分量」。
+
+- **D-217-6（top-videos 口径 + 可见性，吸收 Codex HIGH-3 / MEDIUM-2 / MEDIUM-3）**：period 窗口内 `GROUP BY video_id` 聚合 `SUM(play_count)` 取前 N。query `limit`（zod int，**默认 20、上限 100**，超界 422）。**可见性策略（Codex HIGH-3 + arch-reviewer MEDIUM-4）**：`JOIN videos v ON v.id = d.video_id AND v.deleted_at IS NULL`（**INNER JOIN 仅按 `deleted_at IS NULL` 过滤**，排除已删视频，防泄露已删标题/孤儿行）；**`is_published` / `visibility` 等前台可见性维度一律不过滤**——后台运营需看**全部存活视频**（含未发布、含前台隐藏）播放表现，与前台公开可见口径不同（后台一等需求；端点 adminOnly，无对外泄露面）。展示字段取 `v.short_id` / `v.title`（+ period 内 `plays` / `watchSeconds`），**绝不含 `visitor_hash`**。**确定性排序（任务卡审 MEDIUM-3）**：`ORDER BY SUM(play_count) DESC, SUM(total_watch_seconds) DESC, v.id ASC`（tie-break 防分页/快照漂移）。**与 overview/trend 刻意不对账（Codex 终审 MEDIUM-2）**：top-videos 经 INNER JOIN 排除已删视频 → 是 **live-video eligible 子集**；overview/trend 只读 `video_play_daily`（**含已删视频历史播放行**，无 videos join）→ overview `totalPlays` ≠ Σ(top-videos eligible plays)。**二者口径刻意不同、不对账**（top = 当前可运营视频榜；overview/trend = 全量聚合真值），实现 / 测试 / UI **不得跨视图做总和等式校验**。
+
+- **D-217-7（BIGINT→JSON DTO 表示，吸收 Codex HIGH-4 + arch-reviewer HIGH-2）**：`play_count` / `total_watch_seconds` 为 BIGINT，node-pg 返回 string，period SUM 仍为 numeric/bigint string。DTO 字段裁决为 **`number`**，service 层 **裸 `Number()` 转换**，**真正对齐现网 analytics DTO 范式**（`analytics.ts` `ContentQualityRow`、`videoPlayStats.ts` mapRow 均用 `parseInt`/`Number`→number，**全仓零 `MAX_SAFE_INTEGER` 断言**）。业务量级：单视频/周期播放数与 watch 秒远低于 `Number.MAX_SAFE_INTEGER`（2^53 ≈ 9×10^15），实际不溢出 → **v1 不加上界断言**（arch-reviewer HIGH-2 指出原稿「与现网一致」与「加断言」自相矛盾——现网根本无此断言，故取**删断言**方案，沿用裸转换才是真一致；同时省去为不可能事件抛 500 的错误码歧义）。若未来量级逼近 2^53，另起 amendment 改 string-number 契约。
+
+- **D-217-8（per-endpoint query 契约 + 错误码，吸收 Codex MEDIUM-2〔任务卡审〕+ 终审 HIGH-3）**：**per-endpoint 独立 zod schema**（非全局，`limit` 仅 top-videos）——**overview / trend**：严格 `{ period?: '7d'|'30d'|'90d' }`（**不接受 `limit`**）；**top-videos**：严格 `{ period?: ..., limit?: int [1,100] }`。`period` 默认 `7d`、`limit` 默认 20；**省略走默认**，但**空串（`period=` / `limit=`）、越界、非枚举值、无关/未知 query key 一律 → 422 VALIDATION_ERROR**（message `'参数错误'`，对齐现网 `feedback.ts:137` / ADR-216 谱系；zod `.strict()` 拒未知键）。成功 **200 `{ data }`**。错误响应沿用统一框架 `{ error: { code, message, status } }`。
+
+- **D-217-9（分层，吸收反例规避）**：`Route → VideoPlayAnalyticsService → videoPlayStats queries`，**route 层零内联 SQL**（不沿用 content-quality 反例）。SQL 落 DB query 模块（`apps/api/src/db/queries/videoPlayStats.ts` 既有骨架扩展），service 编排 + DTO 映射，route 仅校验 query + 调 service + 回包。
+
+- **D-217-10（DTO 归属 + 后台 UI 组件，吸收 task-queue 过时引用纠正）**：DTO 类型入 `packages/types`（`VideoPlaysOverview` / `VideoPlaysTrendPoint` / `VideoPlaysTopVideo`，统一 `@/types` 出口——别名同源，对齐 CLAUDE.md §统一类型入口 + 既有 `videoPlayStats.ts:12` import 风格）。后台 UI 用 **`packages/admin-ui` 一体化 `DataTable`**（top-videos 榜）+ 图表原语（trend）——**纠正** task-queue「ModernDataTable 等后台规范组件」过时表述：v1 三件套（ModernDataTable / 外置 PaginationV2 / SelectionActionBar）已随 apps/server 退役（CHG-CUTOVER-EXECUTE），新模块**禁止**复用，唯一后台表格范式 = admin-ui DataTable（CLAUDE.md §后台表格）。
+
+- **D-217-11（growth v1 不做，吸收范围控制）**：设计稿「top videos by growth / previous-window comparison」标 optional → **v1 不做**，留 amendment（控 STATS-07 范围 ≤5 项；previous-window 对比需双窗口聚合、独立增量）。
+
+- **D-217-12（拆卡建议，吸收 Codex LOW-2）**：ADR 定稿后实现范围 = types + queries + service + route + admin 测（API 侧）+ server-next analytics 页面 + ADMIN e2e（UI 侧），**> 5 项 → 拆**：**STATS-07-A**（`packages/types` DTO + `videoPlayStats` 三 query + `VideoPlayAnalyticsService` + 3 route + `verify:endpoint-adr` + 单测/集成测）/ **STATS-07-B**（server-next analytics 页面〔overview 卡片 + trend 图 + top-videos DataTable〕+ ADMIN e2e）。**依赖约束（LOW-2）**：`packages/types` DTO 为 A/B 共享契约，**必须 A 先落地**，B 消费已冻结类型。
+
+### 端点契约（verify:endpoint-adr）
+
+| # | 方法 | 路径 | 鉴权 | 入参 | 成功 | 错误 | audit |
+|---|---|---|---|---|---|---|---|
+| 1 | GET | `/admin/analytics/video-plays/overview` | adminOnly | query `period?∈{7d,30d,90d}`（默认 7d，zod） | 200 `{ data: VideoPlaysOverview }` | 422 VALIDATION_ERROR | —（只读） |
+| 2 | GET | `/admin/analytics/video-plays/trend` | adminOnly | query `period?∈{7d,30d,90d}`（默认 7d，zod） | 200 `{ data: VideoPlaysTrendPoint[] }`（N 个有序日点 zero-fill） | 422 VALIDATION_ERROR | —（只读） |
+| 3 | GET | `/admin/analytics/video-plays/top-videos` | adminOnly | query `period?` + `limit?∈[1,100]`（默认 20，zod） | 200 `{ data: VideoPlaysTopVideo[] }` | 422 VALIDATION_ERROR | —（只读） |
+
+**新增 3 个 admin route** → 本 ADR 即满足红线前置（`verify:endpoint-adr` 核验 ADR-217 端点契约表 + Opus 背书）。只读端点**无 audit**（沿用 legacy analytics 只读无 audit 范式）。
+
+### DTO 契约（`packages/types`，统一 `@/types` 出口〔别名同源，对齐 CLAUDE.md §统一类型入口 + 既有 `videoPlayStats.ts` import 风格〕；实现归 STATS-07-A）
+
+- `VideoPlaysOverview = { period: '7d'|'30d'|'90d'; totalPlays: number; totalWatchSeconds: number; avgWatchSeconds: number; anonPlays: number; loggedInPlays: number }`
+- `VideoPlaysTrendPoint = { date: string /* YYYY-MM-DD */; plays: number; watchSeconds: number; anonPlays: number; loggedInPlays: number }`
+- `VideoPlaysTopVideo = { shortId: string; title: string; plays: number; watchSeconds: number }`
+
+**响应信封（arch-reviewer MEDIUM-1）**：trend / top-videos 的 `data` 为**裸数组**（`{ data: VideoPlaysTrendPoint[] }` / `{ data: VideoPlaysTopVideo[] }`），**不包 `{ items, total }` 信封、无分页、无 total 回显**（trend 恒 N 点、top 取前 limit，均无需 total）。overview 的 `data` 为单对象。**overview 回显 `period` 的理由（arch-reviewer MEDIUM-2，刻意不对称）**：overview `period` 字段供前端卡片标题展示「近 N 天」并校验响应窗口=请求窗口；trend 每点已含 `date` 自描述、top-videos 是榜单——二者无需 period 字段，窗口由前端 period 选择器自持。
+
+（字段名/可选性最终以 STATS-07-A 实现 + arch-reviewer 复核为准；本表为契约基线。）
+
+### watch_history 边界 / 隐私
+
+- analytics 口径独立于 `watch_history`（per-user resume），**不做行级对账**（ADR-216）。
+- 全程聚合维度输出，**不暴露 `visitor_hash` / 原始 IP / UA**；top-videos 仅 short_id/title/计数；**不查 `users`**（anon/logged 用聚合列）。
+
+### 验证门
+
+- STATS-07-A：`typecheck` / `lint` / `test:changed` / **`verify:endpoint-adr`（3 新 admin route 对齐本表）** / `verify:adr-contracts`；单测（period enum 默认/非法 422、limit 越界 422、avg 除零、anon+logged 含 ephemeral anon、**overview `totalPlays === anonPlays + loggedInPlays` 恒等**〔arch-reviewer MEDIUM-5：schema 层 `play_count = anon + logged` 互补关系升为读模型不变量〕、top-videos 排除 deleted、trend N 天 zero-fill、确定性 tie-break）+ 集成测（daily 真值聚合 + **api 读连接与 worker 聚合连接 `SHOW timezone` 一致**〔arch-reviewer HIGH-1 时区同源守护〕）。
+- STATS-07-B：ADMIN e2e（三视图渲染 + period 切换）。
+- **数据源静态门（Codex 终审 MEDIUM-3：把「不扫 events」从口号升为可拦）**：STATS-07-A 加静态测——扫 `videoPlayStats` analytics query 模块 SQL 字符串，**拒绝出现** `video_play_events` / `video_play_hourly` / `video_play_totals` / `video_hot_scores` / `video_play_daily_visitors` / `users`（仅允许 `video_play_daily` + `videos`）；route/service 测断言 **route 只调 `VideoPlayAnalyticsService`、不直接 `db.query`**（守 D-217-9 分层、不沿用 content-quality 反例）。
+
+### 留待实现卡
+
+本 ADR 仅冻结端点契约与口径，**不落任何实现代码**。实现归 STATS-07-A/B。
+
+### 评审记录
+
+- **任务卡 Codex 对抗审 round-1 2026-06-25：CONDITIONAL PASS → 全吸收**（4 HIGH + 4 MEDIUM + 2 LOW）：HIGH 时区同源（D-217-2）/ period UV 不可加 → v1 不暴露（D-217-4）/ top-videos 可见性 → INNER JOIN `deleted_at IS NULL`（D-217-6）/ BIGINT JSON → number + 安全上界（D-217-7）；MEDIUM trend zero-fill（D-217-5）/ query 契约补全（D-217-8）/ tie-break（D-217-6）/ 端点表精确字面量（端点契约表）/ anon split + ephemeral 措辞（D-217-4）；LOW 显式排除 totals/hot_scores（D-217-3）/ A 先于 B 类型依赖（D-217-12）。
+- **arch-reviewer (Opus, `claude-opus-4-8`, agentId a5f5f7bf958e94610) round-1 2026-06-25：CONDITIONAL PASS（无 BLOCK）→ 全吸收**（2 HIGH + 5 MEDIUM + 2 LOW）：**HIGH-1** 时区同源缺可执行守护、多进程 TZ 错配静默风险 → D-217-2 升为可观测不变量（禁 per-connection `SET TIME ZONE` + 验证门断言 `SHOW timezone` 读写一致 + 推荐 amendment 统一 UTC）；**HIGH-2** D-217-7「与现网一致」与「加上界断言」自相矛盾（全仓零 `MAX_SAFE_INTEGER` 断言）+ SUM 溢出语义未冻结 → 取**删断言**方案（裸 `Number()` 真一致）；**MEDIUM-1** 裸数组信封冻结 / **MEDIUM-2** overview 回显 period 不对称补理由（DTO 契约段）/ **MEDIUM-3** `generate_series(...)::date` 显式转 + TZ 交叉引用（D-217-5）/ **MEDIUM-4** 可见性口径说全〔`is_published`/`visibility` 均不过滤〕（D-217-6）/ **MEDIUM-5** `totalPlays === anonPlays + loggedInPlays` 恒等升验证门断言；**LOW-1** `@/types` 出口对齐（D-217-10 + DTO 段）/ **LOW-2** 端点表 500 列随 HIGH-2 删断言自动消解。焦点逐项裁决：数据源可行性成立、与 ADR-216/215 一致、红线合规、admin 端点门禁 path 字面量可机器匹配——全部通过。
+- **Codex ADR 产物终审（codex-cli 0.125.0, threadId 019f0213-…）round-1 2026-06-25：1 BLOCK〔假阳性〕+ 3 HIGH + 3 MEDIUM → 真问题全吸收**。**BLOCK（端点表非 parseable）= 审核 prompt 压缩失真假阳性**：为控 prompt 长度把 `### 端点契约` 表压成散文喂 Codex，实际 ADR 文件含规范 8 列 3 行表（line 24219-24225，具体 path 字面量），arch-reviewer 已机器核验 parseable（path 反引号剥离 + 字面量匹配 route literal），**不成立**（复核确认）。**HIGH-1** 时区「禁 per-connection SET」与「推荐 pool SET UTC」自相矛盾 → D-217-2 消矛盾（① 禁单边不一致覆盖 vs ③ 双侧一致 UTC amendment 不冲突 + 本卡不做 pool SET）；**HIGH-2** trend `date` 线格式未冻结 → D-217-5 冻结严格 `YYYY-MM-DD`（SQL `to_char`/`::text` + 正则断言）；**HIGH-3** per-endpoint query 校验欠定 → D-217-8 改 per-endpoint 严格 schema（`limit` 仅 top-videos + `.strict()` 拒空串/未知键）；**MEDIUM-1** 今日 partial 未声明 → D-217-2 补「今日桶刻意 partial/mutable、不保证同日 repeat-call 稳定」；**MEDIUM-2** top-videos 与 overview/trend 不对账 → D-217-6 补「刻意不对账、不得跨视图总和等式校验」；**MEDIUM-3** no-event-scan 缺机制 → 验证门补「静态扫 SQL 拒禁表 + route-only-calls-service 断言」。
+- **裁定 Accepted（2026-06-25）**：三轮独立评审（Codex 任务卡审 + arch-reviewer Opus + Codex ADR 终审）的全部真问题已吸收，无悬留 BLOCK；ADR-217 冻结端点契约 + 口径 + 数据源约束，实现归 STATS-07-A/B。
 
 ---
 
@@ -24301,3 +24363,147 @@ META-58-B-1 实现完成（门禁：typecheck=0 / lint=0 / test:changed 1202 全
 ### BLOCKER / 前置
 
 **前置**：无（-A 契约后端层，无 schema/migration）。**门禁**：typecheck=0 / lint pass / 单测（groupSourcesIntoLineMatrix 聚合口径 12 + view=matrix 路由 5 + web-next line-matrix re-export parity 15）/ verify:adr-contracts=0 / verify:endpoint-adr pass。**Codex 对抗审**：✅ 已过（needs-attention 2 findings 经 arch-reviewer 裁决吸收，见上摘要）。**共享 DTO Opus 背书**：commit 带 `Subagents: arch-reviewer (claude-opus-4-8)` trailer。
+
+---
+
+## ADR-219：per-video 状态列退役、external refs 收口为元数据匹配状态单一真源（SEQ-20260627-01 / META-55-ADR）
+
+> **编号溯源（合并 dev→main 前置，2026-07-10）**：本 ADR 原起草为 ADR-216（SEQ-20260627-01 / META-55-ADR），与 main 并行 track 的 STATS-01-ADR「视频级播放量统计体系」（SEQ-20260624-02）撞号——两 track 并行期未协调编号。合并前重编为 **ADR-219**（本 ADR 更晚定稿〔06-27〕、未上 main；STATS ADR-216 已交付且 migration 128 / 代码 / 测试深度引用，故 STATS 保留 216、本 ADR 让号）。全部 `D-216-N`→`D-219-N`、`DC-216-N`→`DC-219-N` 同步重编，并迁移 changelog / task-queue / tasks / 代码注释 / 测试中 META 语境引用。承接 CHG-368（ADR-217→218 重编）同类撞车处置。
+
+**状态**：**Accepted（方向 + 收口契约），强制拆 2 张设计卡前置，待用户裁可解锁实现**（2026-06-27；arch-reviewer〔claude-opus-4-8〕两轮裁定〔初裁 + 复议收回承重错误〕+ Codex 对抗审 **round-1〔4 BLOCKER+3 CONCERN〕 + round-2〔1 BLOCKER+3 CONCERN〕全数吸收**，见文末摘要）。**不可直接进实现**：须先定 **DC-219-1（谓词语义契约）+ DC-219-2（refs 读路径软删处置表）** 两张设计卡（D-219-9）；用户裁可后解锁 DC-219-1→META-57~60。**类型**：ADR-201（refs 派生 canonical / 状态列 fallback）的逻辑终点收口——把"fallback 但仍被直接消费"的漏洞封死。**列物理 DROP 不在本 ADR 拍板**（拆独立后续 ADR，软泡期后）。
+
+**问题（实库只读诊断 + 两轮对抗审，2026-06-27 核验）**：
+
+`videos.douban_status` / `videos.bangumi_status`（migration 032/082，4 态 `pending|matched|candidate|unmatched`）与 `video_external_refs`(video 级)/`catalog_external_refs`(catalog 级，ADR-177/201 canonical)构成**双真源**：
+
+- **douban 真漂移**：60 条 live video 持 `is_primary=true` 的 applied douban ref（`meta_score` 80–100 / `enriched_at` 非空 / catalog `douban_id` 存在）却 `douban_status='unmatched'`；**60/60 满足 `ref.linked_at ≤ enriched_at`** → ref 由 identity 子系统（`linked_by=auto`/`method=network`）先写好，之后 MetadataEnrichService 重跑按自身判据判"未匹配"覆写列。两套非事务耦合、判据不一致的状态机 → 直接读列的后台消费方欠计 ~60 个已匹配视频。
+- **bangumi 假漂移**：`auto_matched` ref 277 = live 241（100% `bangumi_status=matched`）+ 36 挂在软删 anime 视频上。`ON DELETE CASCADE` 不触发软删（`deleted_at` 置位）→ 残留虚高。
+- **tmdb 结构正解**：无状态列、单 refs 真源（auto_matched 1260 + catalog exact 564），不可漂移——反证双真源才是病灶。
+- **⚠️ 对抗审揭示的更深一层（Codex B-1 实库证实，推翻初裁承重假设）**：`videos.{douban,bangumi}_status` 列（video 级，auto_matched=matched）与 ADR-201 `derive` overall（**catalog-first**：`deriveProviderStatus` 中 catalog ref 分支先于 video ref 分支命中）**是两层不同语义**。catalog rollup 对 auto-only consensus 保守判 `candidate`（待人工升 exact，`externalRefRollup.ts:76-78`），故对那 60 漂移行经 derive overall：**仅 34 → applied，28 → candidate（被 catalog candidate 拦截降级）**；连现有 137 个 `douban_status='matched'` 行，derive overall 也只判 **123 applied + 14 candidate**。→ "消费方迁到 derive overall 谓词"**非等价替换**，会把 auto 匹配已落地视频误降级。本 ADR 的核心架构产出即**厘清两套谓词的语义分工**（D-219-2）。
+
+### 决策
+
+- **D-219-1（主方向：A 变体——refs 谓词收口 + 列冻结，DROP 延后独立 ADR）**：① 直接读状态列的消费方改读 **refs 派生谓词**（具体谓词由 D-219-2 区分）；② enrich 写入侧先守卫、读路径全迁后再冻结（D-219-3）；③ 列物理 DROP 拆独立后续 ADR。**否决 B**（列转去规范化缓存 + 写入同步）：把漂移根源从"两状态机非事务耦合"换成"双写靠纪律"，本质未根除，且 tmdb/imdb 永久无列、asymmetry 固化，违反价值排序 #2 单一真源 + #4 一致。**C（新建 per-(video,provider) applied 物化层）挂起为性能逃生 ADR**（D-219-6），当前 ~6900 量级用不到。
+
+- **D-219-2（核心产出：两谓词语义分工——消费方迁 video-ref-applied 谓词，非 catalog-overall）**：实库证实 derive overall（catalog-first）≠ 旧列 video-level matched。裁定**区分两类谓词，并存各司其职**：
+  - **`videoRefAppliedSql`（video 级，新提取的单一真源常量）**：`EXISTS (video_external_refs WHERE provider=X AND is_primary AND match_status IN ('auto_matched','manual_confirmed'))`。**阈值必须含 `auto_matched`**（旧列 `matched` 含 enrich auto 写入，含 auto 方等价、无 14 行意外降级）。服务语义 = **"该 video 是否已和某外部条目落地绑定"**（发布门禁 / 富集完成 / "豆瓣是否已匹配"过滤）= video 级 identity 事实。对那 60 漂移行**全部判 applied → 真止血**，且与旧列 matched 等价。
+  - **`METADATA_STATUS_JOIN_SQL` overall 谓词（catalog-first，既有）**：**不废弃、不改**，继续服务"元数据状态列排序/过滤 + 待人工确认工作队列"（META-32-B 既有用途）。catalog candidate「auto 待人工升 exact」是有效运营信号，归此谓词，**不混入"是否匹配"门禁**。
+  - 复用先例：`home-autofill-douban.ts:82-83`、`externalIdLoader.ts:66` 已是按消费语义选 match_status 阈值的 video-ref 桥——本决策是复用既有范式（价值排序 #2），非新原语。
+  - **两谓词边界 + `videoRefAppliedSql` 提取为导出常量 + JS↔SQL 对拍 = DC-219-1 设计卡产出**（D-219-9）。
+
+- **D-219-3（root-cause 守卫先行、停写后置——修正排序，B-2 吸收）**：**META-57 = enrich 一致性守卫**（写列前：已存在 applied video ref〔同 `videoRefAppliedSql` 判据〕时**不得覆写列为 `unmatched`**），**不完全停写**——列仍随 refs 演进。**守卫只阻止"新覆写型漂移"的产生（`linked_at ≤ enriched_at` 竞态），不修复 ADR 自承的既有 60 条 stale 列；真正止血仍依赖 META-58 迁读**（Codex r2 C-2 澄清，避免误读为 META-57 可单独消除 stale 读）。守卫使 57→58 窗口期未迁移消费方读到"被保护、不再倒退"的值（不恶化），但既有 60 欠计须待 58 迁移消除。**完全停写 + 列冻结并入 META-60**（读路径全迁、确认零消费方依赖列后）。**约束**：守卫的 applied 判据必须与 D-219-2 消费方谓词**同一 SQL 真源**（`videoRefAppliedSql`），否则守卫口径与读口径分叉 = 新漂移。
+
+- **D-219-4（软删 ref 卫生：纯读期 join `videos.deleted_at IS NULL`，零 schema——B-3 吸收，收回 tombstone）**：**收回初裁的写期 tombstone / `refs.deleted_at` 方案**（需 schema 变更，且 `match_status` CHECK 不含 tombstone 值会污染语义域）。改**纯读期方案**：refs 读路径按"该不该过滤软删"分类加 `JOIN videos v ON ... AND v.deleted_at IS NULL`。恢复天然无损（refs 物理不动，video 恢复即重新 live，无需级联清理）。残留 refs 是惰性垃圾、非正确性问题（可选低优先 GC 运维卡，非本 ADR 必需）。**但非无脑全局 join——逐路径裁定见下"refs 读路径软删处置表"（DC-219-2 产出）**。
+
+- **D-219-5（tmdb/imdb asymmetry 终态：四源对称 refs-only）**：douban/bangumi 退列后与 tmdb/imdb（本就 `statusCol: null`）对称。列冻结+DROP 阶段，`statusColumnState`（derive.ts `statusColumnState`）与 SQL status 列兜底分支（`providerStateBranches` 的 status 列 CASE）**必须同一 commit 删除**，`MetadataStatusSourceRow.{douban,bangumi}Status` 字段一并降级可删。
+
+- **D-219-6（C 性能逃生门槛写死）**：当 `videos` 行数 **> 50k** 或 "COUNT(*) + metadata 状态过滤"P95 **> 200ms** 时，触发独立 ADR 建 per-(video,provider) applied 物化层。此前不建。注：video-ref-applied 谓词（D-219-2）是单层 `EXISTS` 子查询，比 overall 的 8 子查询 LATERAL 更轻；overall 谓词仅在元数据状态列排序路径用，性能画像不变。
+
+- **D-219-7（JS↔SQL 对拍 + 覆盖索引 + EXPLAIN 基线）**：① `videoRefAppliedSql`（若同时有 JS 侧判定）与 overall 派生均逐分支镜像，对拍单测登记为放行门禁；② 补 `idx_video_external_refs_video_provider_status (video_id, provider, is_primary DESC, match_status)`（041 现无 match_status 索引），同时加速 `videoRefAppliedSql` EXISTS 与 overall 8 子查询，并入 META-58；③ META-58 PR 加 moderation 列表分页 + videos COUNT 两路径 `EXPLAIN ANALYZE` 基线。
+
+- **D-219-8（derive 注释校正）**：`metadata-status.derive.ts` 头注「tmdb/imdb 当前无 refs 写入路径」与现状（tmdb auto_matched 1260）不符，META-58 随手校正。
+
+- **D-219-9（强制拆 2 张设计卡前置——不可直接进实现，CLAUDE.md 强制升 Opus 情形 1「定义共享谓词契约」）**：
+  - **DC-219-1（谓词语义契约·Opus·META-57+58 共同前置）**：定义 `videoRefAppliedSql` 导出常量（match_status 阈值 = auto+confirmed，写死）；明确 video-ref-applied 谓词 vs catalog-overall 谓词的语义边界（前者=是否匹配/发布门禁/富集完成；后者=元数据状态列排序/工作队列）；JS↔SQL 对拍单测义务登记。**`is_primary` invariant 登记（Codex r2 C-1）**：041 仅约束「每 (video,provider) ≤1 primary」，**未**约束「applied ⟹ is_primary」（`upsertVideoExternalRef` 的 matchStatus/isPrimary 独立传入）。**实测（2026-06-27）：live video 中 applied 非 primary 的 (video,provider) = 0**（applied ref 现状全 is_primary：bangumi 241/douban 199/tmdb 1258），故谓词含 `is_primary` 当前安全；但 DC-219-1 须裁定「谓词是否强制 `is_primary`」+ 加约束测试/数据诊断守护此 invariant（防未来写出 applied 非 primary 致漏算）。
+  - **DC-219-2（refs 读路径软删处置表·META-59 实施清单）**：B-4 三类逐路径裁定落表（下表），作为防遗漏 checklist。
+
+### refs 读路径软删处置表（DC-219-2 产出 / B-4 三类裁定）
+
+| 类 | 路径 | 该不该过滤软删 | 改法 |
+|---|---|---|---|
+| **B 不改（外层 gate·arch-reviewer 改判 ab76495e）** | `metadata-status.derive.ts` `getMetadataProviderRefs` + `METADATA_STATUS_JOIN_SQL`（correlated 子查询 / 显式 videoIds 列表） | 否（**全消费方已 gate**） | **原判类A 系误判**（arch-reviewer 改判类B）：getMetadataProviderRefs←VideoService:258(list)/:295(detail) + listAdminVideos:365 + findAdminVideoById:586 均 `deleted_at IS NULL`；METADATA_STATUS_JOIN_SQL correlated `ver.video_id=v.id`、外层 listAdminVideos gated；per-video 取数非聚合，碰不到软删 ref。**「277→241 假漂移」实为 stats 行(24128)跨 video COUNT 污染,非 derive**。改它冗余 + 触 META-32-B JS↔SQL 守护红线(derive.ts:414-419) + catalog 级(catalog_external_refs)无 per-video 软删可 gate。 |
+| **B 不改（外层 gate·DC-219-2 核实）** | moderation/staging/videos 列表消费方（经 `video-ref-applied.ts` 谓词 videoRefAppliedSql/doubanRefStateSql/doubanRefStateFilterSql） | 否（外层已 gate） | **修正原表「已含 live video join」误判**：谓词 EXISTS **不自 gate** `deleted_at`，安全性靠外层 videos 已 gate（实测全 gate：moderation:205 / videos:365,633 / videos.status:130 / staging:116,312）；**invariant：新消费方必须在外层 `v.deleted_at IS NULL`** |
+| **A 已正确** | `home-autofill-douban.ts:listDoubanCandidateSourceRows` | 是 | 已 `JOIN videos … deleted_at IS NULL`（:102），**无需改** |
+| **B 不改** | `externalData.ts:listVideoExternalRefs`(:565)/`findPrimaryVideoExternalRef`(:619)〔Codex r2 I-1 名校正〕 | 否（按单 `video_id` 直查，调用方已 gate 可见性） | 不改（加 join 无收益增成本） |
+| **B 不改** | `externalIdLoader.ts:loadExternalIdSummaries` | 否（videoIds 由上游 identity job 已圈定） | 不改 |
+| **B 不改（Codex r2 C-3 补）** | `split-suggestions.ts:38-43` `WHERE ver.video_id=$1 AND match_status<>'rejected'` | 否（单 `video_id` 直查） | 不改 |
+| **B 不改（DC-219-2 核实 ✅ 闭合）** | `video-merge-candidates.ts:73-81` `external_ids` 相关子查询（:77 `FROM video_external_refs r WHERE r.video_id=v.id AND is_primary AND match_status IN('manual_confirmed','auto_matched')`，jsonb_agg 展示用） | 否（per-video 展示投影 + 调用方提供 videoIds） | **修正本会话误判**（原写「:69 JOIN videos deleted_at 已 gate」**该 JOIN 不存在**）：实为 `fetchVideoDetailsForCandidates(videoIds: string[])`，外层 `FROM videos v … WHERE v.id = ANY($1::uuid[])`（按显式 videoIds 列表，调用方=identity 折叠管线 stage 5 提供 live 候选，**无 deleted_at gate**）；refs 为 **per-video 展示投影**（非跨 video 聚合），即便传入软删 id 仅影响该行展示、不污染计数 → 类 B（同 externalData 由调用方 gate；Codex r2 C-3 待确认项闭合） |
+| **C 须改结构** | `home-autofill-douban.ts:listDoubanGapSourceRows`(:168) `NOT EXISTS … is_primary AND manual_confirmed` 判缺口 | 是（软删 video 的人工确认不该让条目退出缺口池，恢复后又缺映射） | 改 `NOT EXISTS(… JOIN videos … deleted_at IS NULL)` |
+| **C 须改结构（Codex r2 B-1 补）** | `home-autofill-bangumi.ts:listBangumiGapSourceRows`(:165-168) 同构 `NOT EXISTS … is_primary AND manual_confirmed` | 是（与 douban gap 同构）。**现状无污染**（bangumi 软删 36 全 `auto_matched`，gap 只看 `manual_confirmed`），结构上须过滤防未来软删 `manual_confirmed` 污染 | 同 douban gap |
+| **C 须改 + 注明基线变更** | `external-resources-stats.ts:aggregateExternalRefMatch`(:85-97) 纯 `COUNT GROUP BY` 无 video join | 是（**277 vs 241 统计虚高源头**；治理概览应统计 live 口径） | 加 `JOIN videos … deleted_at IS NULL`；ADR/changelog 注明历史统计基线变更 |
+
+DC-219-2 门禁=**穷举 refs 读路径并逐条归类**（不止上表，Codex r2 C-3）：落地时复跑全仓 `grep video_external_refs` 补全 + 核 `video-merge-candidates` 外层 gate。无"天然不该过滤软删"的现存恢复/审计路径（类 B 是按 video_id 的属性查询，非全表审计）。
+
+**DC-219-2 穷举闭合（2026-06-28，本会话复跑 `grep -rln video_external_refs` 全仓 13 文件）**：上表读路径分类已穷举全部 13 引用文件。**新增确认**：① `video-ref-applied.ts`（B-1 谓词生成器）归类 B（外层 gate，见上表 invariant 行）② `video-merge-candidates.ts`（`fetchVideoDetailsForCandidates`）待确认项闭合为类 B——`external_ids` per-video 展示投影（:73-81，refs :77），外层 `WHERE v.id = ANY($1::uuid[])` 按显式 videoIds（调用方 gate），per-video 非聚合不污染（**更正本会话曾误写 :69 deleted_at JOIN，该结构不存在**）。**N/A 非读路径（写/审计，不入软删读过滤）**：`MetadataEnrichService.ts:146`（审计 from_table 标记）/ `BangumiService.ts:196`（INSERT 写 ref）/ `DoubanService.ts:239,362`（confirm 写 manual_confirmed）。**命名核实**：douban gap 文件为 `home-autofill-douban.ts`（非 `home-autofill.ts`，上表已正确）。类 A/C 实施清单交 META-59。
+
+### 实施序列影响（两轮裁定后定稿，覆盖立案初排 + 初裁重排）
+
+调整后串行主链：**DC-219-1（谓词契约·Opus）→ META-57（enrich 一致性守卫）→ META-58（读路径迁 `videoRefAppliedSql` + 索引 + EXPLAIN 基线 + derive 注释校正）→ DC-219-2（软删处置表）→ META-59（软删读期过滤，按表 A/C）→ META-60（完全停写 + 列冻结 + 守卫）→ 独立后续 ADR（列 DROP，软泡期 + architecture.md 同步）**。
+
+- **META-57** = 一致性守卫（非完全停写，B-2）；判据用 DC-219-1 的 `videoRefAppliedSql`。
+- **META-58** = A 核心交付，迁 `videoRefAppliedSql`（非 overall）→ 60 漂移行真止血、无 14 行降级；含 `ENRICH_COMPLETE_SQL`(moderation.ts:111) 两口径整体替换 + C-1 扩展消费方（distinct facet / route query schema / server-next URL serialization / 隐藏列 / moderation 过滤 UI）+ 同步改测试口径（C-3：admin-video-list / backfill-enrich / moderation-pending / VideoColumns 测）。
+- **META-59** = 软删读期过滤，按处置表只改类 A/C，类 B 不动。
+- **META-56** = 维持降级 DROP-prep（非止血前置；止血由 57 守卫 + 58 迁移完成，回填仅 DROP 前列值对齐；方向与 `fix-douban-status-consistency.ts` 相反）。
+- **META-60** = 完全停写 + 列冻结守卫；守卫定义为"运行时代码 / 新测试禁读写列"（**非字面全仓 grep 零残留**，C-2：历史 migration/类型注释天然保留列名）。
+
+### 风险/取舍
+
+- 列 DROP 不在本 ADR 拍日期：硬约束 DC-219-1→57→58→（读路径全迁）→60 完全停写→软泡期 ≥1 完整 enrich 周期+观察→独立 DROP ADR（同步 architecture.md）。
+- 两谓词并存增认知成本：DC-219-1 须把"何时用 applied 谓词 vs overall 谓词"写成明确边界，防消费方误用（这正是本次 B-1 暴露的坑）。
+- `external-resources-stats` 统计基线变更（类 C）：治理概览数字会从含软删降到 live 口径，须 changelog 注明。
+- 热路径性能：当前量级可接受；越 D-219-6 门槛触发 C 物化 ADR。
+
+### 关联 ADR
+
+- **ADR-201**（metadata 状态统一派生 / refs canonical · 状态列 fallback）：本 ADR 是其逻辑终点收口；明确 overall 谓词与 video-ref-applied 谓词的分工是对 ADR-201 的补充契约。
+- **ADR-177**（catalog_external_refs canonical / 上卷规则）：catalog-first overall 的保守降级语义来源（`externalRefRollup` auto-consensus→candidate）。
+- **ADR-186**（enrich douban 一致性 INV-1/INV-2 + `fix-douban-status-consistency.ts`）：既有矫正先例；META-56 方向与之相反。
+
+### arch-reviewer 裁定登记（claude-opus-4-8 / 2026-06-27，两轮）
+
+- **初裁**：选 A 变体、否决 B、C 挂起。**断言 D-219-2「消费方迁 derive overall 谓词即结构性止血、不依赖回填」。**
+- **复议（收回承重错误）**：初裁误读 `deriveProviderStatus` 控制流——catalog ref 分支先于 video ref 分支，catalog `relation='candidate'`（auto-consensus 上卷）会拦截底层 video `auto_matched`，把 28/60 漂移行 + 14/137 现 matched 判 candidate。**正式收回该假设**，改裁：① D-219-2 迁 **video-ref-applied 谓词**（非 overall），两谓词语义分工为本 ADR 核心产出；② B-2 採纳（守卫先行、停写后置）；③ B-3 收回 tombstone、改纯读期 join；④ B-4 三类处置表；⑤ 强制拆 DC-219-1/DC-219-2 设计卡，方向 Accepted 但不直接进实现。
+
+### Codex 对抗审摘要 round-1 2026-06-27（codex-rescue runtime 等效对抗审 / agentId a875c79236ebb127c）
+
+**4 BLOCKER + 3 CONCERN + 1 NIT，全数吸收。** 方向 A 不被质疑，但初裁的承重假设与实施边界被系统性挑战：
+
+- **B-1（D-219-2 承重假设缺证）→ 吸收（最重）**：catalog ref 优先级导致 applied 分支可能未命中。实库验证证实（34 applied / 28 candidate；137 matched→123/14）→ 改裁 video-ref-applied 谓词（D-219-2 重写）。
+- **B-2（停写先于迁移制造 stale 读）→ 吸收**：META-57 降一致性守卫不完全停写，完全停写并入 META-60（D-219-3）。
+- **B-3（tombstone 需 schema 未落实）→ 吸收**：收回 tombstone，改纯读期 join `videos.deleted_at`（D-219-4）。
+- **B-4（软删覆盖面不止 metadata 派生）→ 吸收**：refs 读路径分三类处置表（externalData 类 B 不改 / gap+stats 类 C 须改）。
+- **C-1（四消费方清单不完整）→ 吸收**：META-58 扩展 distinct facet / route schema / server-next URL serialization / 隐藏列 / moderation 过滤 UI。
+- **C-2（DROP 前全仓 grep 零残留不可操作）→ 吸收**：守卫定义为"运行时代码/新测试禁读写"作用域，非字面全仓零 grep。
+- **C-3（现有测试固化旧列读取）→ 吸收**：META-58 同步改 admin-video-list/backfill-enrich/moderation-pending/VideoColumns 测试口径。
+- **I-1（行号脆）→ 吸收**：ADR 引用函数名/分支语义为主。
+
+### Codex 对抗审 round-2 2026-06-27（codex-rescue runtime 等效对抗审 / agentId a875c79236ebb127c）
+
+**1 BLOCKER + 3 CONCERN + 1 NIT，全数吸收。** 方向与 video-ref 谓词改裁不被质疑，剩收敛性补全：
+
+- **B-1r2（bangumi gap 漏出处置表）→ 吸收**：`home-autofill-bangumi.ts:165-168` 同构 douban gap（`NOT EXISTS … is_primary AND manual_confirmed`）未分类 → 补入处置表类 C。**实库佐证**：bangumi 软删 36 条全 `auto_matched`、gap 只看 `manual_confirmed` → **现状无污染**，但结构上须过滤防未来。
+- **C-1r2（`is_primary` 非 schema 不变量）→ 吸收**：041 未约束 applied⟹is_primary；实测 0 边角（applied ref 全 primary）但 DC-219-1 须登记约束测试 + 强制 is_primary 裁定。
+- **C-2r2（META-57「无 stale 暴露面」过强）→ 吸收**：D-219-3 澄清守卫只阻新覆写、不修既有 60 stale、止血靠 META-58。
+- **C-3r2（refs 读路径未尽分类）→ 吸收**：`split-suggestions`(类 B 单 video_id)/`video-merge-candidates`(待核外层 gate) 补入处置表；DC-219-2 门禁=穷举全仓不止 ADR 现列。
+- **I-1r2（externalData 函数名错）→ 吸收**：改 `listVideoExternalRefs`/`findPrimaryVideoExternalRef`。
+
+**两轮 Codex（5 BLOCKER + 6 CONCERN + 2 NIT）+ 两轮 arch-reviewer 全数收敛，ADR-219 方向与收口契约定稿，待用户裁可解锁 DC-219-1。**
+
+### META-58-B 实现期增补：video 级 4 态谓词契约 + bangumi 退役范围收窄（arch-reviewer 裁定 claude-opus-4-8 / 2026-06-28）
+
+META-58-A 落地后发现多值过滤消费方（审核台/视频库 4 态下拉）超 DC-219-1（只 applied boolean），arch-reviewer 第三次裁定 video 级 4 态谓词契约，揭示两处代码事实纠正卡片假设：
+
+- **D-219-10（video 级 4 态谓词定义）**：旧列 4 态（032）迁 video 级谓词，**douban 真源信号 = `meta_quality.douban_match_status`**（video.types.ts 4 态，对齐 video_external_refs.match_status + unmatched）：
+  - `matched` = `videoRefAppliedSql`（is_primary applied，DC-219-1 复用）
+  - `candidate` = `NOT matched AND EXISTS(video_external_refs WHERE provider=X AND match_status='candidate')`——**不加 is_primary**（关键事实：candidate ref 默认 `is_primary=false`，`MetadataEnrichService.ts:551`/`BangumiService.ts:567`，加 is_primary 则恒空筛不出 candidate 态）；`AND NOT matched` 人工恢复旧列单值互斥。
+  - `unmatched` = `NOT matched AND NOT candidate AND meta_quality->>'douban_match_status'='unmatched'`（跑过没匹配）
+  - `pending` = `NOT matched AND NOT candidate AND (meta_quality IS NULL OR douban_match_status IS NULL)`——**pending 权威信号 = `meta_quality IS NULL`**（never enrich，对齐 videos.ts:642），**非 `enriched_at`**。
+  - **拒绝 unmatched/pending 合并为 not_applied**：破坏运营「Job 积压未跑 vs 跑过匹配不上」区分 + `getRescoreVideos` unmatched 重跑工作流（价值排序 #1 正确性 + #4 一致）。
+  - 4 态谓词**越出纯 refs 边界**（unmatched/pending 依赖 meta_quality 信号列），jsdoc 须显式声明（与 videoRefAppliedSql 纯 refs 的契约差异）。
+- **D-219-11（bangumi 退役范围排除——重大范围收窄）**：**ADR-219 退役范围只含 `douban_status`，`bangumi_status` 暂留**。理由：bangumi 在 meta_quality **无对等 `bangumi_match_status` 信号**（grep 零命中），无法表达 unmatched/pending；退役 bangumi_status 列会永久丢失 bangumi 匹配状态。**bangumi_status 退役另起独立卡**，前置补 `meta_quality.bangumi_match_status` 信号（独立 schema/信号契约卡，强制 Opus）。`videos.ts:438` bangumi 多值过滤本卡**不迁移**。
+- **D-219-12（契约组织 + 对拍 + 连带面）**：4 态谓词**扩展 `video-ref-applied.ts`**（不新建，共享 `VIDEO_REF_APPLIED_MATCH_STATUSES` 真源）；**JS↔SQL 双向对拍单测必须**（4 态互斥性 + candidate 非 primary + pending 用 meta_quality，沿用 derive.ts:414-419 铁律）。**连带退役面**（卡片未列，实现卡须纳入）：`videos.status.ts:207` `SELECT v.douban_status` 投影、`videos.ts:644` getRescoreVideos unmatched、`metadata-status.derive.ts:471-473` douban_status 兜底分支（死代码清理）、`distinct-whitelist.ts:60-61`（facet 改静态枚举 + ADR-150 AMENDMENT 登记）。索引 `idx_video_external_refs_video_provider_status` 卡片假设不存在，建议先用现有 `(video_id)` 索引上线（功能正确）、性能瓶颈再起独立索引卡（对齐 derive.ts:411 原则）。
+- **拆卡（强制，> 5 项跨 3 层）**：**META-58-B-1**（后端 4 态谓词扩展 + JS 对拍 + douban 多值过滤迁移〔moderation:219 / videos:434 / videos.status:180+207 投影 / videos:644 douban 半〕 + derive 兜底清理 + 本增补）；**META-58-B-2**（前端 facet 静态枚举 + distinct-whitelist AMENDMENT + URL/隐藏列/moderation UI 零回归验证，依赖 B-1）；**独立后续 bangumi_status 退役卡**（前置 meta_quality.bangumi_match_status 信号）。
+- **风险**：① bangumi 信号缺口（已由 D-219-11 排除范围规避）② candidate 非 primary（D-219-10 锁定，单测守护）③ pending/unmatched 信号选 meta_quality IS NULL 非 enriched_at（D-219-10）。
+
+### D-219-13（META-58-B-1 实现落地 + Codex 对抗审修正 + 投影/derive 延后裁定，主循环 claude-opus-4-8 / 2026-06-28）
+
+META-58-B-1 实现完成（门禁：typecheck=0 / lint=0 / test:changed 1202 全过 / verify:adr-contracts=0）。`video-ref-applied.ts` 扩展 **过滤侧** 4 导出（`DoubanRefStateInput` / `matchesDoubanRefState` JS 逐态 / `doubanRefStateSql` SQL 单态 / `doubanRefStateFilterSql` SQL 多态 OR），共享 `VIDEO_REF_APPLIED_MATCH_STATUSES` 真源；JS↔SQL 对拍单测（穷尽四分恰好命中 1 态 + candidate 非 primary `slice(lastIndexOf('EXISTS'))` 守护 + pending `IS DISTINCT FROM` + unmatched/pending 二分）。迁 douban **过滤侧**：moderation:219（单值）/ videos:434（多值）/ videos.status:180（单值）/ videos:644+660 rescore unmatched douban 半；bangumi 半全部保留（D-219-11）。`PendingQueueFilters.doubanStatus` 由 `string` 收窄 `DoubanStatus`（route :32 已 z.enum 校验）。
+
+**Codex 对抗审两处 BLOCK 修正（2026-06-28，codex-rescue agentId a187e6f3）**：
+
+- **穷尽性修正（BLOCK 2，修订 D-219-10 pending 定义）**：D-219-10 原 pending = `meta_quality IS NULL OR dms IS NULL` **非穷尽**——「meta_quality 存在 + dms ∈ {auto_matched/candidate/manual_confirmed} 但无 ref」的漂移中间态 4 态皆 false，造成「全选 4 态仍漏行」+「投影 pending 但过滤 pending 选不中」语义 bug。**改为 pending 兜底穷尽**：`NOT matched AND NOT candidate AND dms IS DISTINCT FROM 'unmatched'`（NULL-safe，含 never enrich 的 dms NULL + 中间态）。NOT matched ∧ NOT candidate 之下按 dms 二分（`='unmatched'`→unmatched / 其余→pending），保旧列每行迁移后恰好一态。单测 `matchesDoubanRefState` 强守护「任意 input 恰好命中 1 态」。
+- **投影迁移整体延 META-60（BLOCK 3，修订 D-219-12 连带面遗漏）**：D-219-12 仅列 `videos.status.ts:207` 投影，**遗漏** `moderation.ts:344` 队列投影 + `videos.internal.ts` `VIDEO_FULL_SELECT` 投影。单独迁部分投影会造成**投影侧分裂 + 过滤/投影口径不一致**，且 `VIDEO_FULL_SELECT.douban_status` 同时喂 `buildEnrichmentSummary`（展示）+ `buildMetadataStatusSummary`（derive `statusColumnState` 兜底），迁投影耦合 derive。**裁定：投影迁移（含已迁的 videos.status:207，本卡回退）整体延 META-60，与 derive 列兜底清理统一处理。** 本卡仅迁过滤侧。
+
+**遗留中间态（已知，META-56 消除）**：过滤侧已迁 refs 真源、投影侧暂留旧列，存量漂移行（refs applied 但列 unmatched）存在「过滤 matched 命中但投影显示旧态」瞬时不一致。缓解：META-57 enrich 守卫已止新漂移（禁 applied 列覆写 unmatched）；META-56 DROP-prep 回填对齐消除存量；derive overall（catalog-first）不依赖该投影值，运营工作队列不受影响。
+
+**derive 列兜底清理延后（并入 META-60）**：`metadata-status.derive.ts:471-473` douban 列兜底不在 B-1 删——当下非死代码，删除会使「`douban_status='unmatched'` 但 `mc.douban_id` 非空(stale cache)」行经 cache-only 兜底（derive.ts:476-477 `cache present → applied`）误升 applied（missing→applied 回归）。须列完全停写（META-60）+ DROP-prep（META-56）对齐 cache 后才安全，届时同步删 `statusColumnState` douban 分支 + `PROVIDER_SQL_SPECS` douban statusCol（保留 bangumi）。依据：价值排序 1（正确性）> 改动清单一致性；D-219-2（derive overall 独立语义域）。**META-60 卡片须纳入：douban 列兜底清理 + 全部投影迁移（moderation:344 / VIDEO_FULL_SELECT / videos.status:207）。**

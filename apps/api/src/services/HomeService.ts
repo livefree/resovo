@@ -86,10 +86,14 @@ export class HomeService {
       isPinned: false,
     }))
 
-    const items: Top10Item[] = [...orderedPinned, ...fillItems].map((item, i) => ({
-      ...item,
-      rank: i + 1,
-    }))
+    // 人工置顶无数量上限（listActiveHomeModules 无 LIMIT，且 all-brands 与品牌专属置顶叠加），
+    // 故合并后必须截断到 size，使其成为唯一硬上限，避免 Top10 溢出（rank > size）。
+    const items: Top10Item[] = [...orderedPinned, ...fillItems]
+      .slice(0, size)
+      .map((item, i) => ({
+        ...item,
+        rank: i + 1,
+      }))
 
     const response: Top10Response = { items, sortStrategy: 'manual_plus_rating' }
     await this.redis.setex(cacheKey, TOP10_TTL, JSON.stringify(response))

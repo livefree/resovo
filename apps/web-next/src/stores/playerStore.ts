@@ -3,6 +3,7 @@ import type { HostPlayerMode, PlayerHostOrigin, PersistedPlayerHostV1 } from '@/
 import type { MiniGeometryV1 } from './_persist/mini-geometry'
 import { readMiniGeometry, writeMiniGeometry } from './_persist/mini-geometry'
 import { clientLogger } from '@/lib/logger.client'
+import { buildPlaySessionId } from '@/lib/play-stats'
 
 export type { HostPlayerMode, PlayerHostOrigin } from '@/app/[locale]/_lib/player/types'
 export type { MiniGeometryV1, MiniCorner } from './_persist/mini-geometry'
@@ -69,6 +70,16 @@ interface PlayerState {
   activeLineKey: string | null
   setActiveLineKey: (key: string | null) => void
 
+  // === STATS-03-B（ADR-216）：Qualified Play 上报会话 ===
+  // playSessionId：一次播放会话的稳定 id，跨 full(PlayerShell)↔mini(MiniPlayer) 两独立 <video> 实例共享，
+  // 保证同会话 idempotency_key 一致、后端双防线只计一次。切视频换新、同视频复用。
+  playSessionId: string | null
+  // playSessionShortId（内部）：当前 session 绑定的 shortId，供 ensurePlaySessionId 原子比较复用/换新。
+  playSessionShortId: string | null
+  // ensurePlaySessionId：上报前调用，返回当前 shortId 对应的 session id（同 shortId 复用、变化换新）。
+  // 集中收敛覆盖 initPlayer/enter/hydrate 全路径，不在各入口分散设置（Codex HIGH-1）。
+  ensurePlaySessionId: (shortId: string) => string
+
   // === HANDOFF-31 新增：完整关闭 + 清零 mini 播放状态 ===
   releaseMiniPlayer: () => void
 
@@ -114,8 +125,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   flipOrigin: null,
   miniAutoplay: false,
   miniResumeTime: 0,
+  playSessionId: null,
+  playSessionShortId: null,
 
   setActiveLineKey: (key) => set({ activeLineKey: key }),
+  // 同 shortId 复用现有 session（含 mini↔full mount / remount）；shortId 变化或缺失则生成新 session。
+  // hydrateFromSession 恢复 mini 时 playSessionId 仍为 null → 首次上报在此生成 = 「新会话」语义（已知接受偏差）。
+  ensurePlaySessionId: (shortId) => {
+    const s = get()
+    if (s.playSessionId && s.playSessionShortId === shortId) return s.playSessionId
+    const id = buildPlaySessionId()
+    set({ playSessionId: id, playSessionShortId: shortId })
+    return id
+  },
   setMiniAutoplay: (v) => set({ miniAutoplay: v }),
   setMiniResumeTime: (t) => set({ miniResumeTime: t }),
   setIsMuted: (muted) => set({ isMuted: muted }),
@@ -123,7 +145,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setFlipOrigin: (rect) => set({ flipOrigin: rect }),
 
   releaseMiniPlayer: () => {
-    set({ shortId: null, currentTime: 0, duration: 0, isPlaying: false, activeLineKey: null, miniAutoplay: false, miniResumeTime: 0 })
+    set({ shortId: null, currentTime: 0, duration: 0, isPlaying: false, activeLineKey: null, miniAutoplay: false, miniResumeTime: 0, playSessionId: null, playSessionShortId: null })
     get().closeHost()
   },
 

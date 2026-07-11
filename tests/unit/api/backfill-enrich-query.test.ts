@@ -22,14 +22,14 @@ describe('listVideosForBackfillEnrich (META-15-C)', () => {
     expect(sql).not.toContain("douban_status = 'unmatched'")
   })
 
-  it('mode=unmatched → douban 迁 4 态谓词(unmatched) + bangumi 列暂留（ADR-216 D-216-10/11）', async () => {
+  it('mode=unmatched → douban 迁 4 态谓词(unmatched) + bangumi 列暂留（ADR-219 D-219-10/11）', async () => {
     await listVideosForBackfillEnrich(db, { mode: 'unmatched' })
     const [sql] = query.mock.calls[0]
     // douban 半迁 video 级谓词（refs + meta_quality.douban_match_status 真源，非 douban_status 列）
     expect(sql).toContain("(v.meta_quality->>'douban_match_status') = 'unmatched'")
     expect(sql).toContain("ver.provider = 'douban'")
     expect(sql).not.toContain("v.douban_status = 'unmatched'")
-    // bangumi 半暂留（D-216-11，无 bangumi_match_status 信号）
+    // bangumi 半暂留（D-219-11，无 bangumi_match_status 信号）
     expect(sql).toContain("v.bangumi_status = 'unmatched'")
     // mode=unmatched 不混入 never 信号（meta_quality IS NULL 是 never/pending，非 unmatched）
     expect(sql).not.toContain('v.meta_quality IS NULL')
@@ -48,7 +48,7 @@ describe('listVideosForBackfillEnrich (META-15-C)', () => {
     await listVideosForBackfillEnrich(db)
     const [sql] = query.mock.calls[0]
     expect(sql).toContain('v.meta_quality IS NULL OR')
-    // douban 半迁 4 态谓词；bangumi 半暂留（ADR-216 D-216-10/11）
+    // douban 半迁 4 态谓词；bangumi 半暂留（ADR-219 D-219-10/11）
     expect(sql).toContain("(v.meta_quality->>'douban_match_status') = 'unmatched'")
     expect(sql).not.toContain("v.douban_status = 'unmatched'")
     expect(sql).toContain("v.bangumi_status = 'unmatched'")

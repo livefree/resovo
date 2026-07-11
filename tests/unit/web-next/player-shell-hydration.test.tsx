@@ -136,6 +136,7 @@ const MOCK_VIDEO: Video = {
   doubanId: null,
   doubanStatus: 'pending',
   sourceCount: 1,
+  playCount: 88888,
   status: 'completed',
   metaScore: 80,
   createdAt: '2026-05-01T00:00:00Z',
@@ -176,6 +177,13 @@ describe('PlayerShell hydration（PLAYER-LINE-BOUND-EP / 线路优先一次拉�
     render(<PlayerShell slug="test-aB3kR9x1" initialVideo={MOCK_VIDEO} initialSources={[MOCK_SOURCE]} />)
     await waitFor(() => expect(initPlayerMock).toHaveBeenCalled())
     expect(apiGetMock).not.toHaveBeenCalled()
+  })
+
+  it('meta 行展示播放次数（STATS-05-A，无条件渲染含 0）', async () => {
+    const { getByTestId } = render(
+      <PlayerShell slug="test-aB3kR9x1" initialVideo={MOCK_VIDEO} initialSources={[MOCK_SOURCE]} />,
+    )
+    await waitFor(() => expect(getByTestId('player-play-count').textContent).toContain('8.9万'))
   })
 
   it('无 initialVideo → 走 client video fetch', async () => {

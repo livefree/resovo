@@ -112,16 +112,23 @@ export async function listVideos(
     params.push(filters.lang)
   }
 
-  // 方向受控枚举（asc → 'ASC'，否则 'DESC'），非用户拼接，无注入风险。
-  // NULLS LAST 在两个方向都保留：未知评分不抢占升序首屏（"评分低高" 仍以已知低分打头）。
+  // 方向受控枚举（asc → 'ASC'，否则 'DESC'），非用户拼接，无注入风险（dev 排序方向切换）。
+  // NULLS LAST 两方向都保留：未知值不抢占升序首屏。
   const dir = filters.order === 'asc' ? 'ASC' : 'DESC'
+  // STATS-05-B（ADR-216 D-216-3）：sort=hot 改用 video_hot_scores 物化热度真源，不再用 active
+  // source count（SOURCE_COUNT_SUBQUERY）占位。hot 主键 hot_score 跟随 dir（保留 dev 方向切换），
+  // tiebreak 固定 DESC（play_count_7d → total_play_count → updated_at，跨 surface 逐字段对齐不变）。
+  // vhs 条件 LEFT JOIN（PK video_id，additive，不改行数/COUNT）；vpt 已由 STATS-05-A 在 VIDEO_JOIN JOIN。
+  // 非 hot 排序不引入无谓 join（hotJoin = ''）。
+  const sort = filters.sort ?? 'latest'
   const orderBy: Record<string, string> = {
-    hot: `${SOURCE_COUNT_SUBQUERY} ${dir}`,
+    hot: `vhs.hot_score ${dir} NULLS LAST, vhs.play_count_7d DESC NULLS LAST, vpt.total_play_count DESC NULLS LAST, v.updated_at DESC`,
     rating: `mc.rating ${dir} NULLS LAST`,
     latest: `v.created_at ${dir}`,
     updated: `v.updated_at ${dir}`,
   }
-  const order = orderBy[filters.sort ?? 'latest']
+  const order = orderBy[sort]
+  const hotJoin = sort === 'hot' ? ' LEFT JOIN video_hot_scores vhs ON vhs.video_id = v.id' : ''
   const where = conditions.join(' AND ')
   const offset = (filters.page - 1) * filters.limit
 
@@ -130,7 +137,7 @@ export async function listVideos(
       `SELECT ${VIDEO_FULL_SELECT},
         ${SOURCE_COUNT_SUBQUERY} AS source_count,
         ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs
-       ${VIDEO_JOIN}
+       ${VIDEO_JOIN}${hotJoin}
        WHERE ${where}
        ORDER BY ${order}
        LIMIT $${idx} OFFSET $${idx + 1}`,
@@ -195,21 +202,35 @@ export interface TrendingFilters {
   limit: number
 }
 
+// STATS-05-B（ADR-216 D-216-2 / D-216-9）：trending 改用播放聚合桶真源，不再用 updated_at recency 占位。
+//   today  = 滚动 24h，读 video_play_hourly（bucket_hour ≤ now() 防未来桶，D-216-9）
+//   week   = 近 7 自然日，读 video_play_daily（bucket_date ≥ current_date − 6）
+//   month  = 近 30 自然日，读 video_play_daily（bucket_date ≥ current_date − 29）
+// period 经 route zod enum 校验；本 map key 为代码常量、谓词为字面量（无用户输入拼接）→ 同既有 INTERVAL 范式，无注入面。
+const TRENDING_WINDOW: Record<TrendingFilters['period'], { source: string; predicate: string }> = {
+  today: {
+    source: 'video_play_hourly',
+    predicate: "bucket_hour >= NOW() - INTERVAL '24 hours' AND bucket_hour <= NOW()",
+  },
+  week: {
+    source: 'video_play_daily',
+    predicate: 'bucket_date >= CURRENT_DATE - 6 AND bucket_date <= CURRENT_DATE',
+  },
+  month: {
+    source: 'video_play_daily',
+    predicate: 'bucket_date >= CURRENT_DATE - 29 AND bucket_date <= CURRENT_DATE',
+  },
+}
+
 export async function listTrendingVideos(
   db: Pool,
   filters: TrendingFilters
 ): Promise<VideoCard[]> {
-  const periodMap = {
-    today: '1 day',
-    week: '7 days',
-    month: '30 days',
-  }
-  const interval = periodMap[filters.period]
+  const win = TRENDING_WINDOW[filters.period]
   const conditions: string[] = [
     'v.is_published = true',
     'v.deleted_at IS NULL',
     "v.visibility_status = 'public'",
-    `v.updated_at >= NOW() - INTERVAL '${interval}'`,
   ]
   const params: unknown[] = []
   let idx = 1
@@ -220,13 +241,22 @@ export async function listTrendingVideos(
   }
 
   const where = conditions.join(' AND ')
+  // LEFT JOIN 窗口聚合：有播放数据的视频按窗口播放量降序；无数据 → window_plays NULL。
+  // 稳定 fallback：NULLS LAST 后 updated_at DESC 兜底 → 聚合空窗（系统冷启动 / 窗口内零播放）
+  // 退化为 recency，不产出空列表；对 home-curation / home-autofill 消费方零回归（签名/返回不变）。
   const result = await db.query<DbVideoRow>(
     `SELECT ${VIDEO_FULL_SELECT},
       ${SOURCE_COUNT_SUBQUERY} AS source_count,
       ${SUBTITLE_LANGS_SUBQUERY} AS subtitle_langs
      ${VIDEO_JOIN}
+     LEFT JOIN (
+       SELECT video_id, SUM(play_count) AS window_plays
+       FROM ${win.source}
+       WHERE ${win.predicate}
+       GROUP BY video_id
+     ) w ON w.video_id = v.id
      WHERE ${where}
-     ORDER BY v.updated_at DESC
+     ORDER BY w.window_plays DESC NULLS LAST, v.updated_at DESC
      LIMIT $${idx}`,
     [...params, filters.limit]
   )
@@ -436,7 +466,7 @@ export async function listAdminVideos(
     params.push(filters.isPublished)
   }
   if (filters.doubanStatus?.length) {
-    // META-58-B-1 / ADR-216 D-216-10：douban 多值过滤迁 video 级 4 态谓词 OR 组合（refs + meta_quality 真源）
+    // META-58-B-1 / ADR-219 D-219-10：douban 多值过滤迁 video 级 4 态谓词 OR 组合（refs + meta_quality 真源）
     conditions.push(doubanRefStateFilterSql(filters.doubanStatus, 'v'))
   }
   if (filters.bangumiStatus?.length) {
@@ -646,7 +676,7 @@ export async function listVideosForBackfillEnrich(
   if (mode === 'never') {
     conditions.push('v.meta_quality IS NULL')
   } else if (mode === 'unmatched') {
-    // META-58-B-1 / ADR-216 D-216-10：douban 半迁 4 态谓词（refs + meta_quality）；bangumi 半暂留（D-216-11）
+    // META-58-B-1 / ADR-219 D-219-10：douban 半迁 4 态谓词（refs + meta_quality）；bangumi 半暂留（D-219-11）
     conditions.push(`(${doubanRefStateSql('unmatched', 'v')} OR v.bangumi_status = 'unmatched')`)
   } else if (mode === 'missing-characters') {
     conditions.push(ANIME_MISSING_CHARS)
@@ -663,7 +693,7 @@ export async function listVideosForBackfillEnrich(
     params.push(TV_FAMILY_TYPES)
   } else {
     conditions.push(
-      // META-58-B-1 / ADR-216 D-216-10：douban unmatched 半迁 4 态谓词；meta_quality IS NULL（never）+ bangumi 半暂留
+      // META-58-B-1 / ADR-219 D-219-10：douban unmatched 半迁 4 态谓词；meta_quality IS NULL（never）+ bangumi 半暂留
       `(v.meta_quality IS NULL OR ${doubanRefStateSql('unmatched', 'v')} OR v.bangumi_status = 'unmatched' OR ` +
       ANIME_MISSING_CHARS + ')'
     )

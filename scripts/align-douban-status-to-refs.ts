@@ -1,6 +1,6 @@
 /**
  * scripts/align-douban-status-to-refs.ts — DROP-prep 对齐：applied douban ref 但 douban_status 欠计
- * ADR-216 META-56 / SEQ-20260627-01
+ * ADR-219 META-56 / SEQ-20260627-01
  *
  * 背景：identity 子系统先写 applied douban ref（auto_matched/manual_confirmed primary），
  *   MetadataEnrichService 重跑按自身判据覆写 douban_status='unmatched' → 存量漂移
@@ -9,7 +9,7 @@
  *
  * 方向与 fix-douban-status-consistency.ts 相反：那脚本修「matched 虚标无 catalog」（虚高 → 降级），
  *   本卡修「applied-ref 但列非 matched」（欠计 → 升 matched）。判据 = videoRefAppliedSql
- *   （DC-216-1 单一真源：is_primary + match_status IN auto_matched/manual_confirmed），禁再造判据。
+ *   （DC-219-1 单一真源：is_primary + match_status IN auto_matched/manual_confirmed），禁再造判据。
  *
  * 用法：node --env-file=.env.local --import tsx scripts/align-douban-status-to-refs.ts [--limit N] [--dry-run]
  *   --dry-run：仅圈定 + 打印拟变更（不写 DB）
@@ -68,7 +68,7 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  process.stdout.write('对齐：applied douban ref 但 douban_status 欠计 → matched（ADR-216 META-56 DROP-prep）\n')
+  process.stdout.write('对齐：applied douban ref 但 douban_status 欠计 → matched（ADR-219 META-56 DROP-prep）\n')
   if (limit) process.stdout.write(`限制行数：${limit}\n`)
   if (dryRun) process.stdout.write('模式：dry-run（仅圈定，不写 DB）\n')
 

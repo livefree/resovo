@@ -150,6 +150,21 @@ describe('VideoCard', () => {
       expect(screen.getByText('2025 · 24集')).toBeTruthy()
     })
 
+    it('playCount>0 渲染格式化播放次数（STATS-05-A）', () => {
+      render(<VideoCard video={makeVideo({ playCount: 12345 })} />)
+      expect(screen.getByTestId('video-card-play-count').textContent).toContain('1.2万')
+    })
+
+    it('playCount=0 无条件显示 0（不隐藏；无统计行显示 0）', () => {
+      render(<VideoCard video={makeVideo({ playCount: 0 })} />)
+      expect(screen.getByTestId('video-card-play-count').textContent).toContain('0')
+    })
+
+    it('playCount 缺失（ES 搜索卡片 VideoCardType 可选）→ ?? 0 兜底显示 0', () => {
+      render(<VideoCard video={makeVideo()} />)
+      expect(screen.getByTestId('video-card-play-count').textContent).toContain('0')
+    })
+
     it('rating 为 null 时不渲染评分', () => {
       render(<VideoCard video={makeVideo({ rating: null })} />)
       expect(screen.queryByText(/★/)).toBeNull()

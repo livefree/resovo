@@ -106,7 +106,7 @@ describe('listAdminVideos (CHG-209)', () => {
     expect(sql).toContain('::text[]')
     expect(sql).toContain('mc.country = ANY($')
     expect(sql).toContain('mc.status = ANY($')
-    // META-58-B-1 / ADR-216 D-216-10：douban 多值迁 video 级 4 态谓词 OR 组合（内联非参数化），bangumi 暂留列（D-216-11）
+    // META-58-B-1 / ADR-219 D-219-10：douban 多值迁 video 级 4 态谓词 OR 组合（内联非参数化），bangumi 暂留列（D-219-11）
     expect(sql).toContain("ver.provider = 'douban'")
     expect(sql).not.toContain('v.douban_status = ANY($')
     expect(sql).toContain('v.bangumi_status = ANY($')
@@ -122,7 +122,7 @@ describe('listAdminVideos (CHG-209)', () => {
     // 数组以 JS array 形态作为参数（pg 参数化，非字符串拼接）
     expect(params).toContainEqual(types)
     expect(params).toContainEqual(country)
-    // douban 多值迁内联谓词（不再参数化）；bangumi 仍参数化（D-216-11）
+    // douban 多值迁内联谓词（不再参数化）；bangumi 仍参数化（D-219-11）
     expect(params).not.toContainEqual(doubanStatus)
     expect(params).toContainEqual(bangumiStatus)
     expect(params).toContain(2000)

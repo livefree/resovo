@@ -1,8 +1,8 @@
 /**
- * enrich-status-guard.test.ts — ADR-216 D-216-3 / META-57 守卫
+ * enrich-status-guard.test.ts — ADR-219 D-219-3 / META-57 守卫
  *
  * 验证 guardEnrichStatusAgainstAppliedRef 仅守 unmatched 降级（已有 applied ref → matched）
- * + hasAppliedVideoRef 复用 findPrimaryVideoExternalRef + isVideoRefApplied（同源 DC-216-1，
+ * + hasAppliedVideoRef 复用 findPrimaryVideoExternalRef + isVideoRefApplied（同源 DC-219-1，
  * 强制 is_primary + auto/confirmed 阈值）。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'

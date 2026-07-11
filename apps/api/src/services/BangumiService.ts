@@ -158,7 +158,7 @@ export class BangumiService {
     }
 
     if (resolved === null) {
-      // META-57 / ADR-216 D-216-3：已有 applied bangumi ref 时不把列降为 unmatched（防御性同构）
+      // META-57 / ADR-219 D-219-3：已有 applied bangumi ref 时不把列降为 unmatched（防御性同构）
       const guarded = await guardEnrichStatusAgainstAppliedRef(this.db, videoId, 'bangumi', 'unmatched')
       await this.writeBangumiStatus(videoId, guarded)
       return { matched: 'none', reason: matches.length > 0 ? 'low_confidence' : 'no_local_match' }
@@ -596,7 +596,7 @@ export class BangumiService {
         notes: JSON.stringify(breakdown),
       })
       // ADR-170 R-3：status 写入与 catalog+ref 同事务（消除「已提交但 status 未写」窗口）
-      // META-57 / ADR-216 D-216-3：conflict→unmatched 时若已有 applied bangumi ref 则守为 matched
+      // META-57 / ADR-219 D-219-3：conflict→unmatched 时若已有 applied bangumi ref 则守为 matched
       // （事务内 client 查 EXISTS，本次写的 candidate ref 非 primary 不影响 applied 判定）。
       const bangumiStatus = conflict
         ? await guardEnrichStatusAgainstAppliedRef(client, videoId, 'bangumi', 'unmatched')

@@ -181,7 +181,7 @@ export class MetadataEnrichService {
 
     metaQuality.enriched_at = new Date().toISOString()
 
-    // META-57 / ADR-216 D-216-3：已有 applied douban ref 时不把列降为 unmatched（消除
+    // META-57 / ADR-219 D-219-3：已有 applied douban ref 时不把列降为 unmatched（消除
     // ref(linked_at) ≤ enriched_at 覆写竞态；仅守 unmatched 降级，列仍随 refs 演进）。
     const guardedDoubanStatus = await guardEnrichStatusAgainstAppliedRef(
       this.db, videoId, 'douban', doubanStatus,

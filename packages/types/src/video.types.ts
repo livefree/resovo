@@ -296,6 +296,7 @@ export interface Video {
   cast: string[]           // 演员/声优列表
   writers: string[]        // 编剧列表
   sourceCount: number      // 可用播放源数量（冗余字段）
+  playCount: number        // 累计播放次数（video_play_totals.total_play_count，无统计为 0；ADR-216 STATS-05-A）
   subtitleLangs: string[]  // 已有字幕语言列表，BCP 47
   // 类型判定辅助字段（Migration 013）
   sourceContentType: string | null  // 爬虫原样写入的源站类型字符串
@@ -358,7 +359,13 @@ export type VideoCard = Pick<
   'coverUrl' | 'posterBlurhash' | 'posterStatus' |
   'type' | 'rating' | 'year' | 'status' |
   'episodeCount' | 'sourceCount' | 'subtitleLangs'
->
+> & {
+  /**
+   * 累计播放次数。PG 读路径（mapVideoCard）提供真值；ES 搜索卡片暂无（STATS-06 补 ES play fields）
+   * → 可选，前台 `?? 0` 兜底。Video.playCount 为必填（PG 详情读路径总有）。
+   */
+  playCount?: number
+}
 
 // ── 播放源 ───────────────────────────────────────────────────────
 

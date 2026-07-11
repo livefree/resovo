@@ -48,7 +48,7 @@ describe('listPendingQueue — year/decade/enrichmentStatus 过滤（MODUX-P3-1-
     await listPendingQueue(makeMockDb(calls), { enrichmentStatus: 'complete' }, 'actor')
     const sql = mainOf(calls).sql
     expect(sql).toContain("meta_quality->>'enriched_at') IS NOT NULL")
-    // META-58-A / ADR-216 D-216-2：douban「已富集」从 douban_status 列迁 video-ref-applied 谓词
+    // META-58-A / ADR-219 D-219-2：douban「已富集」从 douban_status 列迁 video-ref-applied 谓词
     expect(sql).toContain("ver.provider = 'douban'")
     expect(sql).toContain("ver.match_status IN ('auto_matched', 'manual_confirmed')")
     expect(sql).not.toContain("v.douban_status = 'matched'")

@@ -26,6 +26,7 @@ export interface DbVideoRow {
   created_at: string
   updated_at: string
   source_count: string     // COUNT() 子查询
+  play_count?: string      // COALESCE(video_play_totals.total_play_count, 0)（VIDEO_FULL_SELECT；ADR-216 STATS-05-A）
   subtitle_langs: string[] | null
   source_category: string | null  // 爬虫原始分类字符串（Migration 019）
   // Migration 013 字段
@@ -120,6 +121,7 @@ export function mapVideoRow(row: DbVideoRow): Video {
     languages: row.languages ?? [],
     tags: row.tags ?? [],
     sourceCount: parseInt(row.source_count ?? '0'),
+    playCount: parseInt(row.play_count ?? '0', 10),
     subtitleLangs: row.subtitle_langs ?? [],
     sourceContentType: row.source_content_type ?? null,
     normalizedType: row.normalized_type ?? null,
@@ -163,6 +165,7 @@ export function mapVideoCard(row: DbVideoRow): VideoCard {
     status: row.status,
     episodeCount: row.episode_count,
     sourceCount: parseInt(row.source_count ?? '0'),
+    playCount: parseInt(row.play_count ?? '0', 10),
     posterBlurhash: row.poster_blurhash ?? null,
     posterStatus: row.poster_status ?? null,
     subtitleLangs: row.subtitle_langs ?? [],
@@ -226,8 +229,12 @@ export const SUBTITLE_LANGS_SUBQUERY = `(
   WHERE video_id = v.id AND deleted_at IS NULL
 )`
 
-/** 标准 JOIN：videos + media_catalog */
-export const VIDEO_JOIN = `FROM videos v JOIN media_catalog mc ON mc.id = v.catalog_id`
+/**
+ * 标准 JOIN：videos + media_catalog（+ 播放统计累计表，ADR-216 STATS-05-A）。
+ * LEFT JOIN video_play_totals 为 additive（PK video_id，一对零/一）→ 不改行数 / COUNT，
+ * 一处接入即覆盖全部用 VIDEO_JOIN 的前台读路径；无统计行 → VIDEO_FULL_SELECT COALESCE 0。
+ */
+export const VIDEO_JOIN = `FROM videos v JOIN media_catalog mc ON mc.id = v.catalog_id LEFT JOIN video_play_totals vpt ON vpt.video_id = v.id`
 
 /**
  * 标准 SELECT 列列表（用于返回完整 DbVideoRow）
@@ -249,5 +256,6 @@ export const VIDEO_FULL_SELECT = `
   mc.douban_id, mc.imdb_id, mc.tmdb_id, mc.bangumi_subject_id, mc.title_normalized, mc.metadata_source,
   mc.poster_blurhash, mc.poster_status,
   mc.backdrop_blurhash, mc.backdrop_status,
-  mc.logo_url, mc.logo_status
+  mc.logo_url, mc.logo_status,
+  COALESCE(vpt.total_play_count, 0) AS play_count
 `

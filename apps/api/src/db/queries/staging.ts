@@ -6,7 +6,7 @@
 
 import type { Pool } from 'pg'
 import type { VideoType } from '@/types'
-// META-58-A / ADR-216 D-216-2：requireDoubanMatched 就绪判定迁 video-ref-applied 谓词（非 douban_status 列）。
+// META-58-A / ADR-219 D-219-2：requireDoubanMatched 就绪判定迁 video-ref-applied 谓词（非 douban_status 列）。
 import { videoRefAppliedSql } from './video-ref-applied'
 
 // ── 类型 ─────────────────────────────────────────────────────────

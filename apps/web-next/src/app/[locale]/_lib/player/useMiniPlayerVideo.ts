@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useLocale } from 'next-intl'
 import { usePlayerStore } from '@/stores/playerStore'
 import { apiClient } from '@/lib/api-client'
+import { createQualifiedPlayDetector, reportVideoPlayEvent } from '@/lib/play-stats'
 import { saveProgress } from '@/components/player/ResumePrompt'
 import { buildLineKey } from '@/lib/line-display-name'
 import type { Video, VideoSource, ApiResponse, ApiListResponse } from '@resovo/types'
@@ -50,6 +52,7 @@ export function useMiniPlayerVideo(
   const setIsMutedStore = usePlayerStore((s) => s.setIsMuted)
   const volumeStore = usePlayerStore((s) => s.volume)
   const setVolumeStore = usePlayerStore((s) => s.setVolume)
+  const locale = useLocale()
 
   const [activeSrc, setActiveSrc] = useState<string | null>(null)
   const [videoStatus, setVideoStatus] = useState<VideoStatus>('no-src')
@@ -72,12 +75,45 @@ export function useMiniPlayerVideo(
   const volumeRef = useRef(volumeStore)
   // P0-2: HLS instance ref
   const hlsRef = useRef<import('hls.js').default | null>(null)
+  // STATS-03-B（ADR-216）：mini 独立 <video> 也能跨 qualified 阈值上报。
+  // detector 累计真实观看时长（排除 seek/续播跳跃）；reportedRef 同步去重；activeSourceIdRef 存当前线路源 id。
+  // playSessionId 与 full 共享（store）→ 同会话同集后端双防线只计一次。
+  const playDetectorRef = useRef(createQualifiedPlayDetector())
+  const playReportedRef = useRef<Set<string>>(new Set())
+  const activeSourceIdRef = useRef<string | null>(null)
+  const localeRef = useRef(locale)
 
   useEffect(() => { shortIdRef.current = shortId }, [shortId])
   useEffect(() => { currentEpisodeRef.current = currentEpisode }, [currentEpisode])
   useEffect(() => { setCurrentTimeRef.current = setCurrentTime }, [setCurrentTime])
   useEffect(() => { isMutedRef.current = isMutedStore }, [isMutedStore])
   useEffect(() => { volumeRef.current = volumeStore }, [volumeStore])
+  useEffect(() => { localeRef.current = locale }, [locale])
+  // 切集 / 切视频重置观看累计（新的 qualified 判定窗口）
+  useEffect(() => { playDetectorRef.current.reset() }, [shortId, currentEpisode])
+
+  // mini 天然非 preview（preview 的 PlayerShell 内嵌详情页、不 enter 全局 host，故 mini host 不承载 preview 视频）。
+  const maybeReportMiniQualifiedPlay = useCallback((currentTime: number, rawDuration: number) => {
+    const sid = shortIdRef.current
+    if (!sid) return
+    const duration = Number.isFinite(rawDuration) && rawDuration > 0 ? rawDuration : null
+    const { watchSeconds, qualified } = playDetectorRef.current.track(currentTime, duration)
+    if (!qualified) return
+    const ep = currentEpisodeRef.current
+    const sessionId = usePlayerStore.getState().ensurePlaySessionId(sid)
+    const dedupeKey = `${sessionId}|${sid}|${ep}`
+    if (playReportedRef.current.has(dedupeKey)) return
+    playReportedRef.current.add(dedupeKey) // 同步写入，防 async 竞态/请求风暴
+    void reportVideoPlayEvent(apiClient, {
+      shortId: sid,
+      sourceId: activeSourceIdRef.current,
+      episodeNumber: ep,
+      playSessionId: sessionId,
+      watchSeconds,
+      durationSeconds: duration,
+      locale: localeRef.current,
+    })
+  }, [])
 
   const updateVideoStatus = useCallback((status: VideoStatus) => {
     videoStatusRef.current = status
@@ -133,7 +169,9 @@ export function useMiniPlayerVideo(
         const matched = activeLineKey
           ? sources.find((s) => buildLineKey(s) === activeLineKey)
           : undefined
-        const url = (matched ?? sources[0])?.sourceUrl ?? null
+        const chosen = matched ?? sources[0]
+        const url = chosen?.sourceUrl ?? null
+        activeSourceIdRef.current = chosen?.id ?? null // STATS-03-B：上报当前线路源 id
         setActiveSrc(url)
         if (!url) updateVideoStatus('no-src')
         // keep 'loading' until canplay fires
@@ -299,8 +337,9 @@ export function useMiniPlayerVideo(
       const sid = shortIdRef.current
       const ep = currentEpisodeRef.current
       if (sid) saveProgress(sid, ep, t)
+      maybeReportMiniQualifiedPlay(t, video.duration) // STATS-03-B：mini qualified play 上报
     }
-  }, [videoRef])
+  }, [videoRef, maybeReportMiniQualifiedPlay])
 
   const handleVideoLoadedMetadata = useCallback(() => {
     const video = videoRef.current

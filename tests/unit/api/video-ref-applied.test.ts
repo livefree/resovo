@@ -1,5 +1,5 @@
 /**
- * video-ref-applied.test.ts — ADR-216 DC-216-1 谓词契约守护
+ * video-ref-applied.test.ts — ADR-219 DC-219-1 谓词契约守护
  *
  * 验证 videoRefAppliedSql / isVideoRefApplied 单一真源（共享 VIDEO_REF_APPLIED_MATCH_STATUSES）
  * + is_primary 强制（Codex r2 C-1 invariant）+ 阈值含 auto_matched（等价旧 matched）
@@ -95,7 +95,7 @@ describe('videoRefAppliedSql — SQL 谓词', () => {
   })
 })
 
-// ── video 级 douban 4 态过滤谓词（ADR-216 D-216-10/13 / META-58-B-1）──────────
+// ── video 级 douban 4 态过滤谓词（ADR-219 D-219-10/13 / META-58-B-1）──────────
 
 const DOUBAN_STATES: readonly DoubanStatus[] = ['matched', 'candidate', 'unmatched', 'pending']
 
@@ -111,7 +111,7 @@ function allInputs(): DoubanRefStateInput[] {
   return out
 }
 
-describe('matchesDoubanRefState — 穷尽四分 + 互斥（D-216-10/13）', () => {
+describe('matchesDoubanRefState — 穷尽四分 + 互斥（D-219-10/13）', () => {
   it('任意 input 恰好命中 1 态（穷尽互斥，无 gap/重叠）', () => {
     for (const input of allInputs()) {
       const hits = DOUBAN_STATES.filter((s) => matchesDoubanRefState(s, input))
@@ -159,7 +159,7 @@ describe('doubanRefStateSql — SQL 谓词结构（JS↔SQL 对拍铁律）', ()
     expect(doubanRefStateSql('matched')).not.toContain('NOT ')
   })
 
-  it('candidate 含 match_status=candidate，且 candidate-ref 子查询 **不含 is_primary**（D-216-10 恒空 bug 守护）', () => {
+  it('candidate 含 match_status=candidate，且 candidate-ref 子查询 **不含 is_primary**（D-219-10 恒空 bug 守护）', () => {
     const sql = doubanRefStateSql('candidate')
     expect(sql).toContain("ver.match_status = 'candidate'")
     const candidateExists = sql.slice(sql.lastIndexOf('EXISTS'))

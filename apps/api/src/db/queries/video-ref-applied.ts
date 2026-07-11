@@ -1,7 +1,7 @@
 /**
- * video-ref-applied.ts — video 级「外部条目是否已落地绑定」谓词契约（ADR-216 DC-216-1）
+ * video-ref-applied.ts — video 级「外部条目是否已落地绑定」谓词契约（ADR-219 DC-219-1）
  *
- * 语义边界（ADR-216 D-216-2，**禁混用**）：
+ * 语义边界（ADR-219 D-219-2，**禁混用**）：
  *   - 本谓词（`videoRefAppliedSql` / `isVideoRefApplied`）= **「该 video 是否已和某 <provider>
  *     外部条目落地绑定」** = video 级 identity 事实，服务「是否匹配 / 发布门禁 / 富集完成」。
  *   - `metadata-status.derive.ts` 的 `METADATA_STATUS_JOIN_SQL` overall = **catalog-first 运营优先级**，
@@ -12,7 +12,7 @@
  * 阈值（含 `auto_matched`）：等价旧 `videos.douban_status='matched'`（enrich auto 也写 matched），
  *   不含 candidate / rejected。`VIDEO_REF_APPLIED_MATCH_STATUSES` 是 SQL 与 JS 两侧的**单一真源**。
  *
- * `is_primary`：**强制**（ADR-216 DC-216-1 裁定 / Codex r2 C-1）。041 仅约束「每 (video,provider)
+ * `is_primary`：**强制**（ADR-219 DC-219-1 裁定 / Codex r2 C-1）。041 仅约束「每 (video,provider)
  *   ≤1 primary」，未约束「applied ⟹ is_primary」；实测 live applied ref 全 is_primary（2026-06-27，0 边角），
  *   该 invariant 由 `video-ref-applied.test.ts` 契约测试守护，DB 数据层持续守护见 META-58 诊断。
  */
@@ -55,7 +55,7 @@ export function videoRefAppliedSql(provider: ExternalRefProvider, videoAlias = '
     ` AND ver.match_status IN (${statusList}))`
 }
 
-// ── video 级 douban 4 态过滤谓词（ADR-216 D-216-10/13 / META-58-B-1）──────────
+// ── video 级 douban 4 态过滤谓词（ADR-219 D-219-10/13 / META-58-B-1）──────────
 //
 // 旧 `videos.douban_status` 列（migration 032，4 态 pending|matched|candidate|unmatched）退役，
 // **过滤侧**迁 video 级谓词。**douban 真源信号分两源**（与 `videoRefAppliedSql` 纯 refs 契约差异）：
@@ -63,7 +63,7 @@ export function videoRefAppliedSql(provider: ExternalRefProvider, videoAlias = '
 //   - unmatched / pending → `meta_quality.douban_match_status`（**越出纯 refs 边界**：refs 无记录的
 //     「已 enrich 未命中」vs「从未 enrich」无法仅由 refs 区分，须读 meta_quality 信号列）
 //
-// **穷尽四分（D-216-13，Codex BLOCK 修正 D-216-10 非穷尽 pending）**：matched > candidate 后，
+// **穷尽四分（D-219-13，Codex BLOCK 修正 D-219-10 非穷尽 pending）**：matched > candidate 后，
 // NOT matched ∧ NOT candidate 之下按 douban_match_status 二分——`='unmatched'` → unmatched，
 // **其余（含 NULL=never enrich / auto_matched/candidate/manual_confirmed 等中间态）→ pending 兜底**
 // （`IS DISTINCT FROM 'unmatched'` NULL-safe）。保证旧列每行迁移后恰好一态、四态穷尽互斥，杜绝
@@ -71,27 +71,27 @@ export function videoRefAppliedSql(provider: ExternalRefProvider, videoAlias = '
 //
 // **投影迁移整体延 META-60**（不在本卡）：旧 `SELECT v.douban_status` 派生（moderation 队列投影 /
 // VIDEO_FULL_SELECT / videos.status 列表投影）与 derive `statusColumnState` 兜底耦合，须与 derive 列
-// 兜底清理统一处理，详见 ADR-216 D-216-13。本卡仅迁**过滤侧**，投影侧暂留旧列（存量漂移行过滤-投影
+// 兜底清理统一处理，详见 ADR-219 D-219-13。本卡仅迁**过滤侧**，投影侧暂留旧列（存量漂移行过滤-投影
 // 瞬时不一致由 META-57 守卫止新血 + META-56 回填消除）。
 //
-// bangumi 无对等 meta_quality 信号（D-216-11，grep 零命中 bangumi_match_status），不提供 bangumi
+// bangumi 无对等 meta_quality 信号（D-219-11，grep 零命中 bangumi_match_status），不提供 bangumi
 // 4 态谓词，`bangumi_status` 暂留、退役另起 META-61。
 
 /**
  * douban 4 态 JS 判定输入（refs 事实 + meta_quality 信号，诚实暴露越界依赖）。
- * 由 DbVideoRow / `MetadataStatusSourceRow` 投影得出，供 JS↔SQL 对拍（D-216-12 铁律）。
+ * 由 DbVideoRow / `MetadataStatusSourceRow` 投影得出，供 JS↔SQL 对拍（D-219-12 铁律）。
  */
 export interface DoubanRefStateInput {
   /** video 有 applied primary douban ref（`isVideoRefApplied` 聚合真值）。 */
   hasApplied: boolean
-  /** video 有任意 candidate douban ref（**非 primary**：D-216-10，candidate ref 默认 is_primary=false）。 */
+  /** video 有任意 candidate douban ref（**非 primary**：D-219-10，candidate ref 默认 is_primary=false）。 */
   hasCandidate: boolean
   /** `meta_quality.douban_match_status`（无 meta_quality 或字段缺省时 null = never enrich，归 pending 兜底）。 */
   doubanMatchStatus: DoubanMatchQualityStatus | null
 }
 
 /**
- * douban 单态 JS 谓词（逐态独立 boolean，与 `doubanRefStateSql` 逐分支对拍 / D-216-12）。
+ * douban 单态 JS 谓词（逐态独立 boolean，与 `doubanRefStateSql` 逐分支对拍 / D-219-12）。
  * 漂移中间态 4 态皆 false（与 SQL 一致，保守不归虚假态）。
  */
 export function matchesDoubanRefState(state: DoubanStatus, input: DoubanRefStateInput): boolean {
@@ -110,7 +110,7 @@ export function matchesDoubanRefState(state: DoubanStatus, input: DoubanRefState
   }
 }
 
-/** candidate ref 存在性子查询（**不加 is_primary**：D-216-10，candidate 默认非 primary）。 */
+/** candidate ref 存在性子查询（**不加 is_primary**：D-219-10，candidate 默认非 primary）。 */
 function doubanCandidateExistsSql(videoAlias: string): string {
   return `EXISTS (SELECT 1 FROM video_external_refs ver` +
     ` WHERE ver.video_id = ${videoAlias}.id` +
@@ -119,7 +119,7 @@ function doubanCandidateExistsSql(videoAlias: string): string {
 }
 
 /**
- * douban 单态 SQL 谓词（与 `matchesDoubanRefState` 逐分支对拍 / D-216-12）。
+ * douban 单态 SQL 谓词（与 `matchesDoubanRefState` 逐分支对拍 / D-219-12）。
  * unmatched/pending 引用 `meta_quality` 信号列（越出纯 refs 边界，见模块上方说明）。
  * 仅拼硬编码字面量（与 `videoRefAppliedSql` 同安全约定，不拼用户输入）。
  */

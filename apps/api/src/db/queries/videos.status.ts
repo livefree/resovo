@@ -178,7 +178,7 @@ export async function listPendingReviewVideos(
     )`)
   }
   if (params.doubanStatus) {
-    // META-58-B-1 / ADR-216 D-216-10：douban 状态过滤迁 video 级 4 态谓词（refs + meta_quality 真源）
+    // META-58-B-1 / ADR-219 D-219-10：douban 状态过滤迁 video 级 4 态谓词（refs + meta_quality 真源）
     conditions.push(doubanRefStateSql(params.doubanStatus, 'v'))
   }
   if (params.sourceCheckStatus) {

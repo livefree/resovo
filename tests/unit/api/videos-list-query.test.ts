@@ -97,3 +97,48 @@ describe('listVideos — genre / lang 维筛选 SQL 生成（HANDOFF-38）', () 
     expect(countCall!.values).toContain('日语')
   })
 })
+
+describe('listVideos — sort=hot 改用 video_hot_scores 物化热度真源（STATS-05-B / ADR-216 D-216-3）', () => {
+  it('sort=hot：LEFT JOIN video_hot_scores + 统一排序口径，不再用 active source count 占位', async () => {
+    const { db, calls } = makePool()
+    await listVideos(db, { sort: 'hot', page: 1, limit: 20 })
+
+    const rows = rowsCall(calls)
+    // hot 物化表 LEFT JOIN（PK video_id additive）
+    expect(rows.text).toContain('LEFT JOIN video_hot_scores vhs ON vhs.video_id = v.id')
+    // 统一排序口径（D-216-3）：hot_score DESC NULLS LAST → play_count_7d → total_play_count → updated_at
+    expect(rows.text).toContain('vhs.hot_score DESC NULLS LAST')
+    expect(rows.text).toContain('vhs.play_count_7d DESC NULLS LAST')
+    expect(rows.text).toContain('vpt.total_play_count DESC NULLS LAST')
+    expect(rows.text).toMatch(/ORDER BY[\s\S]*v\.updated_at DESC/)
+    // 不再用活跃源计数排序（占位已替换）
+    expect(rows.text).not.toMatch(/ORDER BY\s*\(\s*SELECT COUNT/)
+  })
+
+  it('非 hot 排序（rating/latest/updated）：不引入无谓 video_hot_scores join', async () => {
+    for (const sort of ['rating', 'latest', 'updated'] as const) {
+      const { db, calls } = makePool()
+      await listVideos(db, { sort, page: 1, limit: 20 })
+      const rows = rowsCall(calls)
+      expect(rows.text).not.toContain('video_hot_scores')
+    }
+  })
+
+  it('sort 缺省（latest）：不引入 video_hot_scores join', async () => {
+    const { db, calls } = makePool()
+    await listVideos(db, { page: 1, limit: 20 })
+    const rows = rowsCall(calls)
+    expect(rows.text).not.toContain('video_hot_scores')
+    expect(rows.text).toContain('v.created_at DESC')
+  })
+
+  it('sort=hot：COUNT 查询不附加 hot join（LEFT JOIN 不影响计数）', async () => {
+    const { db, calls } = makePool()
+    await listVideos(db, { sort: 'hot', page: 1, limit: 20 })
+    // 注：rows 查询的 source_count 子查询也含 COUNT(*) → 用「无 ORDER BY」区分真正的计数查询
+    const countCall = calls.find((c) => !/ORDER BY/.test(c.text))
+    expect(countCall).toBeDefined()
+    expect(countCall!.text).toContain('SELECT COUNT(*)')
+    expect(countCall!.text).not.toContain('video_hot_scores')
+  })
+})

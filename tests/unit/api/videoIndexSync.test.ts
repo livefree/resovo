@@ -39,6 +39,11 @@ const VIDEO_ROW = {
   imdb_id: null,
   tmdb_id: null,
   created_at: '2024-01-01T00:00:00.000Z',
+  // STATS-06-A：v.updated_at（同源 tiebreak）+ play 聚合（node-pg BIGINT/NUMERIC 返 string）
+  updated_at: '2024-06-01T12:00:00.000Z',
+  total_play_count: '1234',
+  play_count_7d: '56',
+  hot_score: '78.5',
 }
 
 function makeDb(rows: unknown[] = [VIDEO_ROW]) {
@@ -150,6 +155,101 @@ describe('VideoIndexSyncService.syncVideo', () => {
     const doc = (es.index as ReturnType<typeof vi.fn>).mock.calls[0][0].document
     expect(doc.is_published).toBe(false)
     expect(doc.visibility_status).toBe('internal')
+  })
+})
+
+// ── Tests: STATS-06-A play 字段投影 + syncVideoStrict ──────────────
+
+describe('VideoIndexSyncService — STATS-06-A play 字段投影（ADR-216 D-216-3）', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('有聚合行：buildDocument 携带 play_count_total/play_count_7d/hot_score（string→Number）', async () => {
+    const db = makeDb()
+    const es = makeEs()
+    const svc = new VideoIndexSyncService(db, es)
+
+    await svc.syncVideo('vid-1')
+
+    const doc = (es.index as ReturnType<typeof vi.fn>).mock.calls[0][0].document
+    expect(doc.play_count_total).toBe(1234)
+    expect(doc.play_count_7d).toBe(56)
+    expect(doc.hot_score).toBe(78.5)
+  })
+
+  it('Codex BLOCK 2：无聚合行（LEFT JOIN 返 null）→ play 排序字段保留 null（禁 ?? 0，对齐 PG NULLS LAST）', async () => {
+    const db = makeDb([{ ...VIDEO_ROW, total_play_count: null, play_count_7d: null, hot_score: null }])
+    const es = makeEs()
+    const svc = new VideoIndexSyncService(db, es)
+
+    await svc.syncVideo('vid-1')
+
+    const doc = (es.index as ReturnType<typeof vi.fn>).mock.calls[0][0].document
+    expect(doc.play_count_total).toBeNull()
+    expect(doc.play_count_7d).toBeNull()
+    expect(doc.hot_score).toBeNull()
+    // 关键：必须是 null 而非 0——「无聚合行」≠「真实 0」，否则破坏跨 surface NULLS LAST 等价
+    expect(doc.play_count_total).not.toBe(0)
+    expect(doc.hot_score).not.toBe(0)
+  })
+
+  it('真实 0 聚合行：保留 0（与 null 区分——0 排在 null 之前）', async () => {
+    const db = makeDb([{ ...VIDEO_ROW, total_play_count: '0', play_count_7d: '0', hot_score: '0' }])
+    const es = makeEs()
+    const svc = new VideoIndexSyncService(db, es)
+
+    await svc.syncVideo('vid-1')
+
+    const doc = (es.index as ReturnType<typeof vi.fn>).mock.calls[0][0].document
+    expect(doc.play_count_total).toBe(0)
+    expect(doc.hot_score).toBe(0)
+  })
+
+  it('Codex BLOCK 3：updated_at = videos.updated_at（同源 tiebreak），非索引时间 new Date()', async () => {
+    const db = makeDb()
+    const es = makeEs()
+    const svc = new VideoIndexSyncService(db, es)
+
+    await svc.syncVideo('vid-1')
+
+    const doc = (es.index as ReturnType<typeof vi.fn>).mock.calls[0][0].document
+    expect(doc.updated_at).toBe('2024-06-01T12:00:00.000Z')
+  })
+})
+
+describe('VideoIndexSyncService.syncVideoStrict（STATS-06-A / Codex HIGH 5）', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('成功：返回 synced，调用 es.index', async () => {
+    const db = makeDb()
+    const es = makeEs()
+    const svc = new VideoIndexSyncService(db, es)
+
+    const outcome = await svc.syncVideoStrict('vid-1')
+
+    expect(outcome).toBe('synced')
+    expect(es.index).toHaveBeenCalledTimes(1)
+  })
+
+  it('视频不存在：返回 skipped，不调用 es.index', async () => {
+    const db = makeDb([])
+    const es = makeEs()
+    const svc = new VideoIndexSyncService(db, es)
+
+    const outcome = await svc.syncVideoStrict('vid-missing')
+
+    expect(outcome).toBe('skipped')
+    expect(es.index).not.toHaveBeenCalled()
+  })
+
+  it('ES 写入失败：**抛出**（区别于 syncVideo warn-only，供 reindex 真实计数防假收敛）', async () => {
+    const db = makeDb()
+    const es = {
+      index: vi.fn().mockRejectedValue(new Error('connection refused')),
+      delete: vi.fn(),
+    } as unknown as import('@elastic/elasticsearch').Client
+    const svc = new VideoIndexSyncService(db, es)
+
+    await expect(svc.syncVideoStrict('vid-1')).rejects.toThrow('connection refused')
   })
 })
 

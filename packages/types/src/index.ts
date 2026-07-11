@@ -23,6 +23,7 @@ export {
   canModerate,
 } from './user.types'
 export type * from './video.types'
+export type * from './video-play-stats.types'
 export type * from './search.types'
 export type * from './list.types'
 export type * from './player.types'

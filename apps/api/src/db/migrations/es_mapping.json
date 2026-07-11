@@ -179,6 +179,15 @@
       "rating_votes": {
         "type": "integer"
       },
+      "play_count_total": {
+        "type": "long"
+      },
+      "play_count_7d": {
+        "type": "long"
+      },
+      "hot_score": {
+        "type": "double"
+      },
       "runtime_minutes": {
         "type": "integer"
       },

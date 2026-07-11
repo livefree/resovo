@@ -9,7 +9,7 @@ import { deriveAggregateState } from '@resovo/types'
 import type { DoubanStatus, BangumiStatus, SourceCheckStatus, VideoMetaQuality, EnrichmentStatus } from '@resovo/types'
 // META-12-A / ADR-170 AMENDMENT：复用 admin 路径同一投影逻辑（单一真源，禁止异源重复实现）
 import { buildEnrichmentSummary } from './videos.internal'
-// META-58-A / ADR-216 D-216-2：「已富集 douban」判定迁 video-ref-applied 谓词（非 douban_status 列），
+// META-58-A / ADR-219 D-219-2：「已富集 douban」判定迁 video-ref-applied 谓词（非 douban_status 列），
 // 止血 60 漂移行（持 applied ref 但列 unmatched）。
 import { doubanRefStateSql, videoRefAppliedSql } from './video-ref-applied'
 
@@ -96,7 +96,7 @@ export interface PendingQueueFilters {
   limit?: number
   type?: string
   sourceCheckStatus?: string
-  // META-58-B-1 / ADR-216 D-216-10：route :32 已 z.enum(DOUBAN_STATUSES) 校验 → 收窄为闭集枚举（喂 doubanRefStateSql）
+  // META-58-B-1 / ADR-219 D-219-10：route :32 已 z.enum(DOUBAN_STATUSES) 校验 → 收窄为闭集枚举（喂 doubanRefStateSql）
   doubanStatus?: DoubanStatus
   hasStaffNote?: boolean
   needsManualReview?: boolean
@@ -111,7 +111,7 @@ export interface PendingQueueFilters {
 // MODUX-P3-1-B：富集状态派生 SQL 片段（真源语义 = admin-moderation.types.ts ENRICHMENT_STATUSES /
 //   docs/architecture.md §5.12）。**零用户输入零注入**（固定字符串，枚举值由 z.enum 上游校验）。
 //   raw：videos.meta_quality->>'enriched_at' / video_external_refs(douban applied，via videoRefAppliedSql，
-//        ADR-216 D-216-2，替代旧 videos.douban_status='matched') / media_catalog.bangumi_subject_id /
+//        ADR-219 D-219-2，替代旧 videos.douban_status='matched') / media_catalog.bangumi_subject_id /
 //        media_catalog.douban_id·tmdb_id·imdb_id。partial = NOT complete AND NOT missing（互斥穷尽）。
 const ENRICH_COMPLETE_SQL = `((v.meta_quality->>'enriched_at') IS NOT NULL AND (${videoRefAppliedSql('douban', 'v')} OR mc.bangumi_subject_id IS NOT NULL))`
 const ENRICH_MISSING_SQL = `((v.meta_quality->>'enriched_at') IS NULL AND mc.douban_id IS NULL AND mc.tmdb_id IS NULL AND mc.imdb_id IS NULL AND mc.bangumi_subject_id IS NULL)`
@@ -218,7 +218,7 @@ export async function listPendingQueue(
     params.push(filters.sourceCheckStatus)
   }
   if (filters.doubanStatus) {
-    // META-58-B-1 / ADR-216 D-216-10：douban 状态过滤迁 video 级 4 态谓词（refs + meta_quality 真源，非 douban_status 列）
+    // META-58-B-1 / ADR-219 D-219-10：douban 状态过滤迁 video 级 4 态谓词（refs + meta_quality 真源，非 douban_status 列）
     conditions.push(doubanRefStateSql(filters.doubanStatus, 'v'))
   }
   if (filters.hasStaffNote === true) {

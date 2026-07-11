@@ -207,6 +207,25 @@ describe('HomeService.topTen()', () => {
     expect(result.items.every((item) => item.isPinned)).toBe(true)
   })
 
+  it('置顶超过 size（12 个）→ 截断到 10，rank 连续 1..10，不补位（FIX-HOME-TOP10-CAP 回归）', async () => {
+    const pinned = Array.from({ length: 12 }, (_, i) => makeVideoCard(`pin-${i}`, 9.0))
+    mockListActiveHomeModules.mockResolvedValueOnce(
+      pinned.map((v, i) => makeTopModule(v.id, i + 1)),
+    )
+    mockListVideoCardsByIds.mockResolvedValueOnce(pinned)
+
+    const svc = new HomeService(mockDb, mockRedis)
+    const result = await svc.topTen(null)
+
+    // 硬上限：无论置顶配置多少，items 不溢出 size
+    expect(result.items).toHaveLength(10)
+    // rank 连续 1..10，无 11/12 溢出编号
+    expect(result.items.map((item) => item.rank)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    // 截断后仍全为置顶项，且 fillCount ≤ 0 不触发补位查询
+    expect(result.items.every((item) => item.isPinned)).toBe(true)
+    expect(mockListVideosByRatingDesc).not.toHaveBeenCalled()
+  })
+
   it('置顶 video 已下线（listVideoCardsByIds 不返回）→ 自动丢弃，补位填充', async () => {
     const onlinePin = makeVideoCard('online-pin', 9.5)
     const offlinePinId = 'offline-pin-id'

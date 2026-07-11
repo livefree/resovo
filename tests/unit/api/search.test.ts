@@ -201,11 +201,25 @@ describe('GET /v1/search', () => {
     expect(res.statusCode).toBe(422)
   })
 
-  it('sort=hot：不 422 且映射 rating_votes 排序（人气代理）', async () => {
+  it('STATS-06-A：sort=hot 改用 ES play 真源 4-key 链（hot_score→play_count_7d→play_count_total→updated_at），不再用 rating_votes', async () => {
     const res = await app.inject({ method: 'GET', url: '/v1/search?q=巨人&sort=hot' })
     expect(res.statusCode).toBe(200)
     const esBody = mockEs.search.mock.calls[0][0] as Record<string, unknown>
-    expect(JSON.stringify(esBody)).toContain('rating_votes')
+    const sort = esBody.sort as Array<Record<string, { order: string; missing?: string }>>
+    // 精确断言 4-key 链顺序（与 /videos?sort=hot orderBy 逐字段对齐，D-216-3）
+    expect(sort.map((s) => Object.keys(s)[0])).toEqual([
+      'hot_score',
+      'play_count_7d',
+      'play_count_total',
+      'updated_at',
+    ])
+    // 前 3 个 play 字段 missing:_last（≡ PG NULLS LAST）；updated_at 为 tiebreak（无 missing）
+    expect(sort[0].hot_score).toMatchObject({ order: 'desc', missing: '_last' })
+    expect(sort[1].play_count_7d).toMatchObject({ order: 'desc', missing: '_last' })
+    expect(sort[2].play_count_total).toMatchObject({ order: 'desc', missing: '_last' })
+    expect(sort[3].updated_at).toMatchObject({ order: 'desc' })
+    // rating_votes 占位已退役
+    expect(JSON.stringify(esBody)).not.toContain('rating_votes')
   })
 
   it('sort=latest/rating 仍生效（统一排序集合）', async () => {
