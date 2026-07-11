@@ -3638,6 +3638,21 @@
 - **自审**：[AI-CHECK] 全 NO/NA；dup_logic=NO（类型名收敛 videoType 单一真源，反去重）。无结构劣化，streak 不 +1。
 - **门禁**：typecheck=0 / lint=0 / test:changed（Header.test 6 passed）/ test:e2e:search 21 passed。
 
+## [SEARCH-BE-1-20260710] suggest 人名聚合 Lucene regexp include 转义（SEQ-20260710-01）
+- **完成时间**：2026-07-10
+- **记录时间**：2026-07-10 17:12
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（后端单点稳健性，未触 schema / 端点契约 / 新 route）
+- **修改文件**：
+  - `apps/api/src/services/SearchService.ts`（新增 module 级 `escapeLuceneRegex`〔转义 Lucene 保留字符 `. ? + * | { } [ ] ( ) " \ # @ & < > ~`〕；suggest 人名聚合改用 `.*${escapeLuceneRegex(q)}.*` 作 include，directors/cast/writers 三维共用 `includePattern`）
+  - `tests/unit/api/search.test.ts`（+2 用例：q=`a(b.*` → include=`.*a\(b\.\*.*`；纯中文 q 不受转义影响）
+- **问题**：suggest 人名聚合 `include: \`.*${q}.*\`` 把用户输入 q（zod min1/max50）直拼进 ES terms aggregation 的 Lucene regexp——含元字符时 ① 未配对括号/方括号 → regexp 语法错误 → ES 抛异常 → suggest 500；② `.* ? +` 被当通配 → 意外宽匹配/高开销扫描（潜在 DoS 面）。
+- **方案**：转义 Lucene 保留字符后再拼 include。ES regexp 为 DFA-based（automaton），无 PCRE 回溯型 ReDoS，本次主要消除语法错误 500 + 意外宽匹配。
+- **验证**：search.test.ts 23 passed（含新增 2 转义断言 + 既有 21 全回归）。既有中文 q 用例不受影响（无保留字符→原样）。
+- **范围声明**：Service 层单点；端点契约/响应形态零变更（verify:adr-contracts 不涉及）；无新 route。后端无 UI，e2e N/A。
+- **自审**：[AI-CHECK] 全 NO/NA；dup_logic=NO（includePattern 提取复用 3 处，去重）。无结构劣化，streak 不 +1。
+- **门禁**：typecheck=0 / lint=0 / test:changed（search.test.ts 23 passed）。
+
 ## [SEARCH-FE-3-20260710] 搜索加载骨架对齐结果布局 + SearchCircularReveal 联动兑现（SEQ-20260710-01）
 - **完成时间**：2026-07-10
 - **记录时间**：2026-07-10 17:10

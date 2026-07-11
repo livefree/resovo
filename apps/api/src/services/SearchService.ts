@@ -18,6 +18,15 @@ function makeSearchParams(index: string, body: EsBody): Parameters<Client['searc
   return { index, ...body } as Parameters<Client['search']>[0]
 }
 
+// ES terms aggregation `include` 是 Lucene regexp——用户输入须转义保留字符，否则：
+// ① 未配对括号/方括号等 → regexp 语法错误 → ES 抛异常 → suggest 500；
+// ② `.* ? +` 等被当通配 → 意外宽匹配 / 高开销扫描（潜在 DoS 面）。
+// Lucene regexp 保留字符集：. ? + * | { } [ ] ( ) " \ # @ & < > ~
+const LUCENE_REGEX_RESERVED = /[.?+*|{}[\]()"\\#@&<>~]/g
+function escapeLuceneRegex(input: string): string {
+  return input.replace(LUCENE_REGEX_RESERVED, '\\$&')
+}
+
 // ── SearchService ────────────────────────────────────────────────
 
 export interface SearchFilters {
@@ -195,7 +204,8 @@ export class SearchService {
       suggestions.push({ type: 'video', text: src.title })
     })
 
-    // 人名聚合联想（正则包含匹配）
+    // 人名聚合联想（Lucene regexp 包含匹配）——q 转义防语法错误 / 意外宽匹配（见 escapeLuceneRegex）
+    const includePattern = `.*${escapeLuceneRegex(q)}.*`
     const peopleBody: EsBody = {
       query: {
         bool: {
@@ -208,9 +218,9 @@ export class SearchService {
         },
       },
       aggs: {
-        directors: { terms: { field: 'director.keyword', include: `.*${q}.*`, size: 2 } },
-        cast: { terms: { field: 'cast.keyword', include: `.*${q}.*`, size: 2 } },
-        writers: { terms: { field: 'writers.keyword', include: `.*${q}.*`, size: 2 } },
+        directors: { terms: { field: 'director.keyword', include: includePattern, size: 2 } },
+        cast: { terms: { field: 'cast.keyword', include: includePattern, size: 2 } },
+        writers: { terms: { field: 'writers.keyword', include: includePattern, size: 2 } },
       },
       size: 0,
     }

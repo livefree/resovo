@@ -293,4 +293,33 @@ describe('GET /v1/search/suggest', () => {
     const res = await app.inject({ method: 'GET', url: '/v1/search/suggest' })
     expect(res.statusCode).toBe(422)
   })
+
+  // SEARCH-BE-1：人名聚合 include 是 Lucene regexp，用户输入的元字符必须转义
+  it('q 含 Lucene 正则元字符 → include 被转义（防语法错误 500 / 意外宽匹配）', async () => {
+    mockEs.search
+      .mockResolvedValueOnce(makeEsResponse([]))
+      .mockResolvedValueOnce(makePeopleEsResponse([], [], []))
+
+    await app.inject({ method: 'GET', url: '/v1/search/suggest?q=' + encodeURIComponent('a(b.*') })
+
+    // 第 2 次 ES 调用 = 人名聚合 body（第 1 次为标题联想）
+    const peopleBody = mockEs.search.mock.calls[1][0] as {
+      aggs: { directors: { terms: { include: string } } }
+    }
+    // q=`a(b.*` → 转义 ( . * → `a\(b\.\*` → include=`.*a\(b\.\*.*`
+    expect(peopleBody.aggs.directors.terms.include).toBe('.*a\\(b\\.\\*.*')
+  })
+
+  it('q 为纯中文（无元字符）→ include 不受转义影响', async () => {
+    mockEs.search
+      .mockResolvedValueOnce(makeEsResponse([]))
+      .mockResolvedValueOnce(makePeopleEsResponse([], [], []))
+
+    await app.inject({ method: 'GET', url: '/v1/search/suggest?q=' + encodeURIComponent('宫崎') })
+
+    const peopleBody = mockEs.search.mock.calls[1][0] as {
+      aggs: { cast: { terms: { include: string } } }
+    }
+    expect(peopleBody.aggs.cast.terms.include).toBe('.*宫崎.*')
+  })
 })
