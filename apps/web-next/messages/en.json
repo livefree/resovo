@@ -122,9 +122,14 @@
     "groupSuggestions": "Related searches",
     "noResults": "No matching content",
     "viewAll": "View all results for “{query}” →",
-    "noResultsRecommend": "No results found. You might like:",
-    "recommendedTitle": "Recommended",
-    "hotTitle": "Trending now",
+    "noResultsTitle": "No results for “{query}”",
+    "noResultsGeneric": "No results for the current filters",
+    "noResultsHint": "Try a different keyword or adjust your filters.",
+    "clearFilters": "Clear filters",
+    "clearQuery": "Clear & restart",
+    "mayLike": "You might like",
+    "hotSearches": "Trending searches",
+    "discover": "Discover",
     "overlayAriaLabel": "Search quick results"
   },
   "miniPlayer": {

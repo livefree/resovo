@@ -22,16 +22,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { useRouter, useSearchParams, usePathname, useParams } from 'next/navigation'
-import Link from 'next/link'
 import { apiClient } from '@/lib/api-client'
-import { ChipType } from '@/components/primitives/chip-type'
-import { SafeImage } from '@/components/media'
 import { Pagination } from '@/components/primitives/pagination'
 import { SearchEmptyState } from '@/components/search/SearchEmptyState'
-import { parseHighlight } from '@/lib/parse-highlight'
-import { getVideoDetailHref } from '@/lib/video-route'
+import { SearchResultRow } from '@/components/search/SearchResultRow'
 import { FilterArea } from '@/components/shared/filter/FilterArea'
 import { GridSortBar } from '@/components/shared/filter/GridSortBar'
+import { FILTER_KEYS, hasFacet } from '@/components/search/search-params'
 import type { SearchResult, ApiListResponse, VideoType } from '@resovo/types'
 import { ALL_CATEGORIES } from '@/lib/categories'
 
@@ -40,164 +37,10 @@ import { ALL_CATEGORIES } from '@/lib/categories'
 /** type 维选项值集合（派生自 ALL_CATEGORIES，ADR-048 前台 SSOT；注入共享 FilterArea） */
 const TYPE_OPTIONS: readonly VideoType[] = ALL_CATEGORIES.map((c) => c.videoType as VideoType)
 
-/**
- * /search 透传的筛选维度。写入方：FilterArea 写 type/genre/country/lang/year；
- * 详情页 MetaChip 写 director/actor/writer/genre/year/country。后端 /search 全部支持
- * 精确过滤（director/actor/writer 走 .keyword），q 可选——facet-only 亦可检索。
- */
-const FILTER_KEYS = ['type', 'genre', 'country', 'lang', 'year', 'director', 'actor', 'writer'] as const
-
 /** doSearch 透传给后端 /search 的全部维度（筛选维 + GridSortBar 的 sort/order 双参，40A 后端已支持）。 */
 const FORWARDED_FILTERS = [...FILTER_KEYS, 'sort', 'order'] as const
 
-/** URL 是否带任一筛选维——无 q 但有 facet（如 MetaChip 的 director）时也应发搜索请求。 */
-function hasFacet(sp: URLSearchParams): boolean {
-  return FILTER_KEYS.some((k) => !!sp.get(k))
-}
-
 const PAGE_SIZE = 20
-
-// ── SearchResultRow ──────────────────────────────────────────────────────────
-
-interface SearchResultRowProps {
-  result: SearchResult
-  locale: string
-}
-
-function SearchResultRow({ result, locale }: SearchResultRowProps) {
-  const t = useTranslations('search')
-  const detailHref = getVideoDetailHref(result)
-  const watchSlug = result.slug ? `${result.slug}-${result.shortId}` : result.shortId
-  const watchHref = `/${locale}/watch/${watchSlug}?ep=1`
-
-  const displayTitle = result.highlight?.title
-    ? parseHighlight(result.highlight.title)
-    : result.title
-
-  return (
-    <article
-      data-testid="search-result-row"
-      style={{
-        display: 'flex',
-        gap: 'var(--search-result-padding)',
-        padding: 'var(--search-result-padding)',
-        borderRadius: 'var(--radius-base)',
-        background: 'var(--bg-surface)',
-        border: '1px solid var(--border-subtle)',
-      }}
-    >
-      {/* 封面 */}
-      <Link href={detailHref} style={{ flexShrink: 0, display: 'block' }}>
-        <div
-          style={{
-            width: 'var(--search-result-cover-w)',
-            aspectRatio: '2/3',
-            borderRadius: 'var(--radius-sm)',
-            overflow: 'hidden',
-          }}
-        >
-          <SafeImage
-            src={result.coverUrl ?? undefined}
-            blurHash={result.posterBlurhash ?? undefined}
-            aspect="2:3"
-            width={120}
-            height={180}
-            alt={result.title}
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-          />
-        </div>
-      </Link>
-
-      {/* 信息区 */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {/* 标题（含高亮） */}
-        <h3
-          style={{
-            fontSize: '16px',
-            fontWeight: 600,
-            color: 'var(--fg-default)',
-            lineHeight: 1.4,
-            margin: 0,
-          }}
-        >
-          {displayTitle}
-          {result.titleEn && (
-            <span
-              style={{
-                display: 'block',
-                fontSize: '13px',
-                fontWeight: 400,
-                color: 'var(--fg-muted)',
-                marginTop: '2px',
-              }}
-            >
-              {result.titleEn}
-            </span>
-          )}
-        </h3>
-
-        {/* meta 行：类型 Chip + 年份 + 评分 */}
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-          <ChipType type={result.type} size="sm" />
-          {result.year && (
-            <span style={{ fontSize: '13px', color: 'var(--fg-muted)' }}>{result.year}</span>
-          )}
-          {result.rating !== null && (
-            <span style={{ fontSize: '13px', color: 'var(--gold)', fontWeight: 500 }}>
-              ★ {result.rating.toFixed(1)}
-            </span>
-          )}
-        </div>
-
-        {/* CTA 按钮 */}
-        <div
-          style={{
-            display: 'flex',
-            gap: 'var(--search-cta-gap)',
-            marginTop: 'auto',
-            paddingTop: '4px',
-          }}
-        >
-          <Link
-            href={watchHref}
-            data-testid="search-row-watch"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              padding: '6px 14px',
-              borderRadius: 'var(--radius-sm)',
-              background: 'var(--accent-default)',
-              color: 'var(--fg-on-accent)',
-              fontSize: '13px',
-              fontWeight: 500,
-              textDecoration: 'none',
-            }}
-          >
-            {t('watchNow')}
-          </Link>
-          <Link
-            href={detailHref}
-            data-testid="search-row-detail"
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              padding: '6px 14px',
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--border-default)',
-              background: 'transparent',
-              color: 'var(--fg-default)',
-              fontSize: '13px',
-              fontWeight: 400,
-              textDecoration: 'none',
-            }}
-          >
-            {t('details')}
-          </Link>
-        </div>
-      </div>
-    </article>
-  )
-}
 
 // ── SearchPage ────────────────────────────────────────────────────────────────
 

@@ -121,6 +121,12 @@ test.describe('搜索页基础', () => {
     await expect(page.getByTestId('search-empty-state')).toBeVisible()
   })
 
+  // SEARCH-FE-4：空态展示可点击热搜词 chips（区别分类页矩阵，terms 降级保证非空）
+  test('空态展示热门搜索词 chips', async ({ page }) => {
+    await page.goto('/en/search')
+    await expect(page.getByTestId('search-hot-terms')).toBeVisible()
+  })
+
   test('URL 带 ?q= 时输入框预填关键词', async ({ page }) => {
     await mockSearchApiEmpty(page)
     await page.goto('/en/search?q=测试关键词')
@@ -175,6 +181,14 @@ test.describe('搜索输入行为', () => {
     await mockSearchApiEmpty(page)
     await page.goto('/en/search?q=不存在的内容xyzabc')
     await expect(page.getByTestId('search-empty-state')).toBeVisible()
+  })
+
+  // SEARCH-FE-4：无结果态提供可操作补救（清空重搜），而非仅甩热门
+  test('无结果态显示「清空重搜」补救按钮', async ({ page }) => {
+    await mockSearchApiEmpty(page)
+    await page.goto('/en/search?q=不存在的内容xyzabc')
+    await expect(page.getByTestId('search-empty-state')).toBeVisible()
+    await expect(page.getByTestId('search-clear-all')).toBeVisible()
   })
 })
 

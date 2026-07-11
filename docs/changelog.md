@@ -3670,3 +3670,24 @@
 - **范围声明**：纯 web-next UI 层；颜色零硬编码（Skeleton 原语走 CSS var）；未触 Props 契约；Nav 改动为纯加性 sessionStorage 写（不改导航逻辑）。
 - **自审**：[AI-CHECK] 全 NO/NA；dup_logic=NO（骨架复用 Skeleton 原语 + SearchPageSkeleton 复用 SearchEmptyState.Skeleton，反去重）；side_effect=NO（storeSearchRevealOrigin catch 含 return 非空块）。无结构劣化，streak 不 +1。
 - **门禁**：typecheck=0 / lint=0 / test:changed（Header.test 6 passed）/ test:e2e:search 21 passed。
+
+## [SEARCH-FE-4-20260710] 搜索页空/无结果态重构（补救 + list 推荐 + 热搜真实化）（SEQ-20260710-01）
+- **完成时间**：2026-07-10
+- **记录时间**：2026-07-10 17:50
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（SearchResultRow 提取为搜索模块内组件〔结果+推荐 2 处复用，未达跨 3+ 全局共享层门槛〕；SearchResult extends VideoCard 类型现成，无新契约）
+- **修改文件**：
+  - 新 `apps/web-next/src/components/search/SearchResultRow.tsx`（从 SearchPage 提取，结果区 + 推荐区复用；trending VideoCard[] 可直接喂）
+  - 新 `apps/web-next/src/hooks/useHotSearchTerms.ts`（fetch `/videos/trending?period=week&limit=8` → `{ terms, videos }`；trending 空/失败降级静态 `nav.hotSearchTerms`）
+  - 新 `apps/web-next/src/components/search/search-params.ts`（`FILTER_KEYS`/`hasFacet` 从 SearchPage 提取，SearchPage + SearchEmptyState 复用）
+  - `apps/web-next/src/components/search/SearchEmptyState.tsx`（重写：**无结果态** = 查询回显「没找到"X"」+ 补救按钮〔清除筛选〔有 facet〕/ 清空重搜〕+「你可能想看」list 推荐〔SearchResultRow × trending〕；**空态** = 热搜 chips〔点击即搜〕+「为你发现」热门内容 grid；拆 NoResultsState/EmptyPromptState/SectionHeading 子组件）
+  - `apps/web-next/src/app/[locale]/search/_components/SearchPage.tsx`（删内联 SearchResultRow + 改 import 共享组件/常量）
+  - `apps/web-next/messages/{en,zh-CN}.json`（`search` 段：删废弃 noResultsRecommend/recommendedTitle/hotTitle，加 noResultsTitle{query}/noResultsGeneric/noResultsHint/clearFilters/clearQuery/mayLike/hotSearches/discover）
+  - `tests/e2e-next/search-page.spec.ts`（+2：空态热搜 chips 可见 / 无结果态「清空重搜」按钮可见）
+- **问题**（用户反馈）：① 空 q + 全部类型时显示分类页同款 VideoGrid 网格矩阵（与结果 list 突变、无搜索页身份感）；② 无结果时只甩全站周热门 grid，无补救、"为你推荐"名不副实；③ 热门数据硬编码占位、与真实内容库无关。
+- **方案**（用户 2026-07-10 选定设计）：无结果态 = 补救优先 + list 推荐（与结果同布局）；空态 = 热搜 chips（接真实周热门、点击即搜）+ 热门内容发现区；热门数据接站内 `/videos/trending`。
+- **视觉验证**（Playwright 桌面 1280）：空态热搜 chips 渲染为**真实站内内容标题**（欢乐集结号/爱情保卫战2026/冰湖重生…，与 Discover grid 封面一致）；结果态 list 行正常（SearchResultRow 提取后含 Watch/Details）。
+- **偏离登记**：搜索页存在既有 hydration mismatch，定位在 `FilterArea` 的 `FilterRowItem dim=country`（Region 维，疑 formatCountryName SSR/client 本地化差异），**非本卡引入**（本卡未触 FilterArea）→ 登记 task-queue follow-up。
+- **范围声明**：纯 web-next UI 层；前端走 apiClient 不直接 fetch；颜色零硬编码；SearchResultRow 为搜索模块内复用（非全局共享契约）。后端零改动。
+- **自审**：[AI-CHECK] 全 NO/NA；dup_logic=NO（FILTER_KEYS 提取共享 + SearchResultRow 提取复用，反去重）；side_effect=NO（useHotSearchTerms catch 有落地赋值）。SearchEmptyState 拆子组件（各 <80 行 / 文件 <500）。无结构劣化，streak 不 +1。
+- **门禁**：typecheck=0 / lint=0 / test:changed（无关联单测，纯 UI/hook）/ test:e2e:search 23 passed（含新增 2 用例）。
