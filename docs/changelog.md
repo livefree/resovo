@@ -3569,7 +3569,7 @@
   - `apps/api/src/services/SourceService.ts`（`listLineMatrix` 复用 listSources JS reduce）
   - `apps/api/src/routes/sources.ts`（`view=matrix` 分支 + zod refine）
   - `apps/web-next/src/lib/line-display-name.ts`（`buildLineKey` 定义 → re-export `@resovo/types`，HIGH-1 真源迁移）
-  - `docs/decisions.md`（ADR-217）
+  - `docs/decisions.md`（ADR-218）
   - `tests/unit/types/line-matrix.test.ts`（新，聚合 12 测）+ `tests/unit/api/sources.test.ts`（view=matrix 路由 5 测）
 - **问题**：CHG-366 止血消了 >2MB 缓存报错，但 SSR 仍把 ~9MB 全集源经 RSC 送客户端（1265 集×11 线=17385 源）。
 - **根因**：契约缺「线路优先」精简 DTO——全集源全量下发是载荷根因。
@@ -3577,11 +3577,11 @@
 - **契约红线落实**：BLOCKER-1 内联 focusEpisode + 每线 focusEpisodeSource（完整可播放）；BLOCKER-2 Service JS reduce 禁 SQL GROUP BY（复用 route-scoring 权威评分 + 熔断分桶，不另立真源）；HIGH-1 分组纯逻辑沉淀 @resovo/types 跨端唯一真源（方案 A 移动 buildLineKey，web-next re-export 零改消费方）；HIGH-2 复用端点 + zod view/episode 组合、与 preview 正交。
 - **Codex 对抗审吸收**（arch-reviewer 裁决）：
   - Finding 2 [MEDIUM] REVISE：`LineRepresentative` 移除 `sourceUrl`+`type`（可播放定位字段），收敛为纯 label/health 投影，结构上堵死 -B/-C 误播 representative。
-  - Finding 1 [HIGH] UPHOLD：LineKey 维持 siteDisplayName（非权威 source_site_key）——继承现网 buildLineMatrix 同口径、非本次引入；改 source_site_key 会引爆跨 mini↔full 粘性断裂，权威化需全栈迁移。固化为 ADR-217「已知限制」+ follow-up。
+  - Finding 1 [HIGH] UPHOLD：LineKey 维持 siteDisplayName（非权威 source_site_key）——继承现网 buildLineMatrix 同口径、非本次引入；改 source_site_key 会引爆跨 mini↔full 粘性断裂，权威化需全栈迁移。固化为 ADR-218「已知限制」+ follow-up。
 - **-B/-C 消费约束（登记）**：representative 不再供 sourceUrl/type，label 派生仅用 name/quality/effectiveScore/audioLanguage；-B/-C 迁移应把 `RawSourceForTheme.sourceUrl/type` 降为可选（label 层本就不消费）。
 - **Follow-up 登记**：task-queue `PLAYER-13 线路权威身份收敛：source_site_key 全栈化`（Finding 1 UPHOLD 强制项，跨 3+ 消费方，卡内 Opus 子代理）。
 - **范围声明**：packages/types + apps/api + ADR + web-next line-display-name re-export（HIGH-1 真源迁移必要面，arch-reviewer 方案 A 正式纳入）；**不改** PlayerShell/SSR wiring（-B/-C 范围）。默认 `GET sources` list 形态零回归（view 省略即原行为）。
-- **门禁**：typecheck=0 / lint=0 / test:changed 613 文件 8354 测全过 / verify:adr-contracts=0 / verify:endpoint-adr=0（137 ADR 端点，含 ADR-217）。
+- **门禁**：typecheck=0 / lint=0 / test:changed 613 文件 8354 测全过 / verify:adr-contracts=0 / verify:endpoint-adr=0（137 ADR 端点，含 ADR-218）。
 
 ## [PLAYER-12-B-20260701] fetchLineMatrix + SSR 双供给 + DetailHero 切消费矩阵骨架（SEQ-20260630-01 根治层）
 - **完成时间**：2026-07-01
@@ -3721,3 +3721,16 @@
 - **范围声明**：单文件消费侧改动；未改 formatCountryName（共享工具）/ CURATED 常量 / Props 契约破坏（新增可选 prop）。MetaChip 详情页 country chip 同用 formatCountryName（zh-CN），同源风险登记 follow-up（未报错、本卡未触）。
 - **自审**：[AI-CHECK] 全 NO/NA。无结构劣化，streak 不 +1。
 - **门禁**：typecheck=0 / lint=0 / test:changed（FilterArea.test 14 passed）/ test:e2e:search 23 passed / Playwright hydration error 消失。
+
+## [CHG-368-20260710] ADR-217 编号撞车重编（dev PLAYER-12 → ADR-218，合并 dev→main 前置）
+- **完成时间**：2026-07-10
+- **记录时间**：2026-07-10 20:25
+- **执行模型**：claude-opus-4-8（主循环）
+- **子代理**：无（纯编号协调，非新架构决策）
+- **修改文件**：`docs/decisions.md`（ADR 标题 217→218 + D-217-N→D-218-N + 重编溯源注）、`docs/changelog.md`（PLAYER-12-A/-B 条目引用重编）、`docs/task-queue.md`（PLAYER-12/-13 卡引用重编）、`docs/audit/adr-d-status.json`（审计产物 217→218）
+- **问题**：合并 dev→main 时发现 ADR-217 编号撞车——dev 的 PLAYER-12-A「VideoLineMatrix 矩阵契约」（SEQ-20260630-01）与 main 的 STATS-07-ADR「后台视频播放分析端点契约」（SEQ-20260624-02）各自独立占用 ADR-217，内容完全不同（并行 track 编号未协调：main ADR-216 定稿时 dev 的 217 尚不存在）。直接 merge 会致 decisions.md 双 ADR-217、verify 失败、引用混乱。
+- **方案**：dev 的 PLAYER-12 ADR-217 → **ADR-218**（更晚 6/30、未上 main、代码零引用；不动 main 已交付且 verify:endpoint-adr 强绑的 STATS ADR-217）。全局重编 21 处（decisions 8 + changelog 3 + task-queue 2 + adr-d-status 8），代码零引用（git grep 已核）；ADR-218 两侧空闲。
+- **验证**：重编后 dev docs `grep ADR-217/D-217`（活跃引用）= 0 处；`verify:adr-contracts` EXIT=0；typecheck=0 / lint=0（纯文档无副作用）。
+- **范围声明**：dev 侧文档编号协调；不改任何代码 / 不动 main 的 STATS ADR-217。合并 dev→main 前置 BLOCKER 处置。
+- **自审**：[AI-CHECK] 全 NO/NA（纯文档编号迁移，无代码/结构变更）。
+- **门禁**：verify:adr-contracts=0 / typecheck=0 / lint=0 / test:changed（docs-only 自动跳过）。

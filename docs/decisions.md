@@ -24246,7 +24246,9 @@ META-58-B-1 实现完成（门禁：typecheck=0 / lint=0 / test:changed 1202 全
 
 ---
 
-## ADR-217：线路优先矩阵契约 — `VideoLineMatrix` 精简 DTO + `?view=matrix` 端点 + 服务端 JS reduce 聚合（消 >2MB Next data cache 报错 + RSC 载荷瘦身）（SEQ-20260630-01 / PLAYER-12-A）
+## ADR-218：线路优先矩阵契约 — `VideoLineMatrix` 精简 DTO + `?view=matrix` 端点 + 服务端 JS reduce 聚合（消 >2MB Next data cache 报错 + RSC 载荷瘦身）（SEQ-20260630-01 / PLAYER-12-A）
+
+> **编号溯源（CHG-368，2026-07-10）**：本 ADR 原起草为 ADR-217，与 main 并行 track 的 STATS-07-ADR（后台视频播放分析端点契约，SEQ-20260624-02）撞号。合并 dev→main 前重编为 **ADR-218**（本 ADR 更晚 + 未上 main + 代码零引用；STATS ADR-217 已交付且 verify:endpoint-adr 强绑，保留）。D-217-N 同步重编为 D-218-N。
 
 **状态**：**Accepted**（2026-07-01；契约经 arch-reviewer claude-opus-4-8 **三轮**背书〔母契约 CONDITIONAL PASS + concrete 落地 CONDITIONAL PASS + Codex findings 裁决〕+ Codex 对抗审 needs-attention 已吸收）。**关系**：根治 CHG-366 止血未覆盖的 RSC 载荷；PLAYER-LINE-BOUND-EP「线路优先」模型的服务端契约化。**设计背书**：arch-reviewer claude-opus-4-8（BLOCKER-1/-2 + HIGH-1/-2 + D1-b 投影红线 + Codex Finding 2 REVISE / Finding 1 UPHOLD 裁决）。
 
@@ -24256,21 +24258,21 @@ META-58-B-1 实现完成（门禁：typecheck=0 / lint=0 / test:changed 1202 全
 
 ### 决策
 
-- **D-217-1（DTO 形态·`VideoLineMatrix`）**：精简矩阵 `{ focusEpisode: number, episodeNumbers: number[]（全线路并集升序去重）, lines: VideoLineEntry[]（首现序）}`。`VideoLineEntry = { key, sourceName, siteDisplayName, episodeNumbers（per-line 升序去重）, representative, focusEpisodeSource }`。JSON 可序列化——**不含 `Map`**（web-next 内存 `VideoLine.episodes: Map` 是 -C 消费方形态，非线上 DTO）。删除 `totalEpisodes` 冗余字段（可从 `episodeNumbers` 派生；「声明总集数」属 video 实体非矩阵）。
+- **D-218-1（DTO 形态·`VideoLineMatrix`）**：精简矩阵 `{ focusEpisode: number, episodeNumbers: number[]（全线路并集升序去重）, lines: VideoLineEntry[]（首现序）}`。`VideoLineEntry = { key, sourceName, siteDisplayName, episodeNumbers（per-line 升序去重）, representative, focusEpisodeSource }`。JSON 可序列化——**不含 `Map`**（web-next 内存 `VideoLine.episodes: Map` 是 -C 消费方形态，非线上 DTO）。删除 `totalEpisodes` 冗余字段（可从 `episodeNumbers` 派生；「声明总集数」属 video 实体非矩阵）。
 
-- **D-217-2（BLOCKER-1 + D1-b 投影红线·representative 与 focusEpisodeSource 类型级区分）**：
+- **D-218-2（BLOCKER-1 + D1-b 投影红线·representative 与 focusEpisodeSource 类型级区分）**：
   - `focusEpisodeSource: VideoSource | null`——focusEpisode 该线路的**完整可播放源**（PlayerShell activeSrc/看门狗/兜底环扫需 id/sourceUrl/type 全字段）；线路缺该集 → `null`（BLOCKER-1 内联当前集源，非仅 representative）。
   - `representative: LineRepresentative`——该线路 effectiveScore **最高集源的纯 label/health 投影**（`{ sourceName, siteDisplayName, quality, effectiveScore?, audioLanguage?, episodeNumber }`），**结构上不可播放**，仅喂 SourceBar 主题标签 / dead / pending / 语言后缀 / 画质。**刻意剔除 `sourceUrl` + `type`**（可播放定位的最小充分集，Codex Finding 2 REVISE / arch-reviewer 裁决）：TS 结构化，携带则下游「只需 URL+type」代码可误播 representative（错集）；移除后类型即文档地保证不可播放，堵死 -B/-C 误用面（防重蹈 line-display-name.ts:241「用最高分集误判当前集健康」覆辙）。**-B/-C 消费方约束**：既有 `buildThemedLines` 从 representative 建 `RawSourceForTheme` 需 sourceUrl/type，但 label 层实际不消费（line-matrix.ts:99）——迁移时应把 `RawSourceForTheme.sourceUrl/type` 降为可选，而非给 representative 加回字段（-B/-C 卡范围）。
 
-- **D-217-3（HIGH-2·`?view=matrix` 复用端点 + zod 正交）**：`view=matrix` 复用 `GET /videos/:id/sources`（**不新增 route**）。zod 扩 `view: z.literal('matrix').optional()` + `.refine(q => q.view!=='matrix' || q.episode!==undefined)`（**view=matrix 时 episode 必需**）；`view` 与 `preview` 两独立 optional 天然正交。response 形态按 `view` 分歧：`view=matrix` → `{ data: VideoLineMatrix }`，省略 → `{ data: VideoSource[] }`（**默认路径零回归**，显式 opt-in）。
+- **D-218-3（HIGH-2·`?view=matrix` 复用端点 + zod 正交）**：`view=matrix` 复用 `GET /videos/:id/sources`（**不新增 route**）。zod 扩 `view: z.literal('matrix').optional()` + `.refine(q => q.view!=='matrix' || q.episode!==undefined)`（**view=matrix 时 episode 必需**）；`view` 与 `preview` 两独立 optional 天然正交。response 形态按 `view` 分歧：`view=matrix` → `{ data: VideoLineMatrix }`，省略 → `{ data: VideoSource[] }`（**默认路径零回归**，显式 opt-in）。
 
-- **D-217-4（BLOCKER-2·服务端 JS reduce 禁 SQL GROUP BY）**：`SourceService.listLineMatrix(shortId, focusEpisode, options?)` 调 `listSources(shortId, undefined, options)` 取全集排序源 → `groupSourcesIntoLineMatrix` JS reduce 聚合。**禁 SQL GROUP BY**——SQL 无法复现 `effectiveScore` 公式（双时钟新鲜度衰减 + priority 通道）+ 熔断分桶，用 GROUP BY 会**另立评分真源**、打破「线路名逐字一致」。Route→Service→Queries 分层不破（Route 仅 view 分支 + 调 Service，Queries 不动）。
+- **D-218-4（BLOCKER-2·服务端 JS reduce 禁 SQL GROUP BY）**：`SourceService.listLineMatrix(shortId, focusEpisode, options?)` 调 `listSources(shortId, undefined, options)` 取全集排序源 → `groupSourcesIntoLineMatrix` JS reduce 聚合。**禁 SQL GROUP BY**——SQL 无法复现 `effectiveScore` 公式（双时钟新鲜度衰减 + priority 通道）+ 熔断分桶，用 GROUP BY 会**另立评分真源**、打破「线路名逐字一致」。Route→Service→Queries 分层不破（Route 仅 view 分支 + 调 Service，Queries 不动）。
 
-- **D-217-5（HIGH-1·分组纯逻辑跨端沉淀·方案 A 移动真源）**：`buildLineKey`（分组键，U+0000 分隔 / siteDisplayName 降级）+ `groupSourcesIntoLineMatrix`（聚合）+ DTO 均落 `packages/types/src/line-matrix.ts`，apps/api（Service）与 apps/web-next（原 line-matrix / MiniPlayer）**双端共用唯一真源**。`buildLineKey` 从 web-next `line-display-name.ts` 迁出 → 原处改 `export { buildLineKey } from '@resovo/types'` re-export（既有两消费方 import 路径零改）。**不搬**主题系统（`THEME_*`/`buildThemedSources`/`applyThemeLabels`，web-next 渲染层专属、跨端无消费方，搬即过度沉淀）。选方案 A 非「复制 + golden fixture」：价值排序②边界与复用 > ⑤改动收敛，双实现是「同一分组键算法双真源」靶心违规，且迁移成本仅 1 文件改定义 + re-export（不构成 HIGH-1 逃生口的「短期不沉淀正当理由」）。
+- **D-218-5（HIGH-1·分组纯逻辑跨端沉淀·方案 A 移动真源）**：`buildLineKey`（分组键，U+0000 分隔 / siteDisplayName 降级）+ `groupSourcesIntoLineMatrix`（聚合）+ DTO 均落 `packages/types/src/line-matrix.ts`，apps/api（Service）与 apps/web-next（原 line-matrix / MiniPlayer）**双端共用唯一真源**。`buildLineKey` 从 web-next `line-display-name.ts` 迁出 → 原处改 `export { buildLineKey } from '@resovo/types'` re-export（既有两消费方 import 路径零改）。**不搬**主题系统（`THEME_*`/`buildThemedSources`/`applyThemeLabels`，web-next 渲染层专属、跨端无消费方，搬即过度沉淀）。选方案 A 非「复制 + golden fixture」：价值排序②边界与复用 > ⑤改动收敛，双实现是「同一分组键算法双真源」靶心违规，且迁移成本仅 1 文件改定义 + re-export（不构成 HIGH-1 逃生口的「短期不沉淀正当理由」）。
 
-- **D-217-6（错误码语义·越界与空矩阵）**：`view=matrix` 缺 episode → **422 VALIDATION_ERROR**（不默认首集掩盖前端 bug）。**越界 focusEpisode**（无任何线路提供该集）→ **矩阵骨架 + 各线 focusEpisodeSource=null**（`episodeNumbers` 全并集仍返回，前端据此渲染剧集选择器提示「本集无源，请选其他集」；**非 404**——404 语义保留给「视频不存在」，listSources 抛 NotFoundError 沿用）。空输入（视频零源）→ `{ focusEpisode, episodeNumbers: [], lines: [] }`（-B/-C 消费方须防御空矩阵，非 error）。
+- **D-218-6（错误码语义·越界与空矩阵）**：`view=matrix` 缺 episode → **422 VALIDATION_ERROR**（不默认首集掩盖前端 bug）。**越界 focusEpisode**（无任何线路提供该集）→ **矩阵骨架 + 各线 focusEpisodeSource=null**（`episodeNumbers` 全并集仍返回，前端据此渲染剧集选择器提示「本集无源，请选其他集」；**非 404**——404 语义保留给「视频不存在」，listSources 抛 NotFoundError 沿用）。空输入（视频零源）→ `{ focusEpisode, episodeNumbers: [], lines: [] }`（-B/-C 消费方须防御空矩阵，非 error）。
 
-- **D-217-7（范围·-A 契约后端层，-B/-C 消费迁移延后）**：-A 仅落契约（types）+ 端点（api）+ ADR，**correct-first 不预置优化**——`listLineMatrix` 每次全量 load 全集算 representative 全局最高分（负载与今日单次 SSR load 等价），埋 `PLAYER-12-C 优化点`注释锚点（切集重取放大 = MEDIUM-1，representative 缓存/切片分离待 -C 评估，不在 -A 写优化码）。-B 双供给（新增 initialMatrix 不删 initialSources，MEDIUM-2 独立回滚）；-C PlayerShell「全集常驻」→「骨架 + 当前集全线路切片」重构 + 删旧 initialSources（MEDIUM-1）。
+- **D-218-7（范围·-A 契约后端层，-B/-C 消费迁移延后）**：-A 仅落契约（types）+ 端点（api）+ ADR，**correct-first 不预置优化**——`listLineMatrix` 每次全量 load 全集算 representative 全局最高分（负载与今日单次 SSR load 等价），埋 `PLAYER-12-C 优化点`注释锚点（切集重取放大 = MEDIUM-1，representative 缓存/切片分离待 -C 评估，不在 -A 写优化码）。-B 双供给（新增 initialMatrix 不删 initialSources，MEDIUM-2 独立回滚）；-C PlayerShell「全集常驻」→「骨架 + 当前集全线路切片」重构 + 删旧 initialSources（MEDIUM-1）。
 
 ### 端点契约（response 形态按 view 分歧登记）
 
